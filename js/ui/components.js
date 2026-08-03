@@ -66,8 +66,8 @@ function field(label, inputHtml) {
   return `<label class="field"><span class="field-label">${label}</span>${inputHtml}</label>`;
 }
 
-function textInput({ id, value = "", placeholder = "", type = "text" }) {
-  return `<input class="text-input" id="${id}" type="${type}" value="${value}" placeholder="${placeholder}" />`;
+function textInput({ id, value = "", placeholder = "", type = "text", min = null }) {
+  return `<input class="text-input" id="${id}" type="${type}" value="${value}" placeholder="${placeholder}" ${min !== null ? `min="${min}"` : ""} />`;
 }
 
 // ---- Catalog typeahead — the name field for items/assets. Typing surfaces

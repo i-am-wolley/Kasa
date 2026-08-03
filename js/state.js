@@ -66,7 +66,40 @@ function subscribe(fn) {
   return () => listeners.delete(fn);
 }
 
+// Real, passive time-based depletion — opt-in per item via the "Auto-
+// deplete on this schedule" toggle in Stock's edit sheet (2026-08-03, user
+// request: a day/week/month rate should be able to actually count qty down,
+// not just feed the "~N days left" estimate). Runs lazily on every
+// getState() read rather than a timer/interval — cheap no-op once caught up
+// (elapsedDays <= 0 short-circuits), and correct regardless of how long the
+// tab was closed, since it's driven by real elapsed wall-clock time against
+// each item's own lastDepletedAt checkpoint rather than a running clock.
+let applyingDepletion = false;
+function applyAutoDepletion() {
+  if (applyingDepletion) return; // reentrancy guard — notify() below can loop back into getState()
+  const now = Date.now();
+  let changed = false;
+  for (const item of state.items) {
+    if (!item.autoDeplete || !item.burnRate || !item.lastDepletedAt) continue;
+    const elapsedDays = (now - new Date(item.lastDepletedAt).getTime()) / 86400000;
+    if (elapsedDays <= 0) continue;
+    const newQty = Math.max(0, item.qty - item.burnRate * elapsedDays);
+    if (newQty !== item.qty) {
+      item.qty = newQty;
+      item.status = item.qty <= 0 ? "out" : item.qty <= item.parLevel ? "low" : "ok";
+      changed = true;
+    }
+    item.lastDepletedAt = new Date(now).toISOString();
+  }
+  if (changed) {
+    applyingDepletion = true;
+    notify();
+    applyingDepletion = false;
+  }
+}
+
 function getState() {
+  applyAutoDepletion();
   return state;
 }
 

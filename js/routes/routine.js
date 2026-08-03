@@ -140,12 +140,19 @@ function openRoutineEditor({ routine = null, defaultSpaceId = null } = {}) {
   });
 
   // Switching rooms resets the stock selection rather than carrying over
-  // ids that won't exist in the new room's filtered list.
+  // ids that won't exist in the new room's filtered list — but only on an
+  // actual change. Bug fix (2026-08-03, user report: "Uses this stock"
+  // clicking/unclicking "not normal"): this used to fire on every click
+  // inside the Space chip-group, including re-clicking the space that was
+  // already selected, silently wiping whatever the user had just checked
+  // under "Uses this stock" for no visible reason.
+  let currentSpaceId = routine?.spaceId ?? defaultSpaceId;
   root.querySelector('[data-field="spaceId"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
-    if (!btn) return;
+    if (!btn || btn.dataset.value === currentSpaceId) return;
+    currentSpaceId = btn.dataset.value;
     const container = root.querySelector("#requires-items-field");
-    container.innerHTML = requiresItemsFieldHtml(btn.dataset.value, []);
+    container.innerHTML = requiresItemsFieldHtml(currentSpaceId, []);
     wireChipGroup(root, "requiresItemIds");
   });
 

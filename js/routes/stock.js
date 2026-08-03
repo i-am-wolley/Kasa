@@ -160,15 +160,19 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
         ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
         <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
           ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
-          ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1 }))}
-          ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1 }))}
+          ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1, min: 0 }))}
+          ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1, min: 0 }))}
           ${field(
             "Consumption rate (optional)",
             `<div style="display:flex;gap:6px;">
               <div style="width:70px;flex-shrink:0;">${textInput({ id: "f-burnrate", type: "number", value: initialRateValue, placeholder: "0.5" })}</div>
               <div class="rate-period-group" style="flex:1;min-width:0;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }, { value: "usage", label: "/usage" }], value: initialPeriod })}</div>
             </div>
-            <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">"/usage" = units used each time a linked routine's "Uses this stock" completes — not a day rate.</p>`,
+            <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">"/usage" = units used each time a linked routine's "Uses this stock" completes — not a day rate.</p>
+            <div id="auto-deplete-row" style="margin-top:8px;display:${initialPeriod === "usage" ? "none" : "block"};">
+              <button type="button" class="chip" id="auto-deplete-toggle" aria-pressed="${item?.autoDeplete ? "true" : "false"}">${Icon("refresh", { size: 12 })} Auto-deplete on this schedule</button>
+              <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">When on, quantity actually counts down over time at this rate — not just the "~days left" estimate. Requires a day/week/month rate filled in.</p>
+            </div>`,
           )}
         </div>
         <div id="binary-field" style="display:${isBinary ? "block" : "none"};">
@@ -200,6 +204,8 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
   // "/usage" isn't a time unit, so switching into or out of it never
   // tries to convert the number — it just changes what it means.
   let currentPeriod = initialPeriod;
+  const autoDepleteRow = root.querySelector("#auto-deplete-row");
+  const autoDepleteToggle = root.querySelector("#auto-deplete-toggle");
   root.querySelectorAll('[data-field="burnPeriod"] [data-value]').forEach((btn) => {
     btn.addEventListener("click", () => {
       const newPeriod = btn.dataset.value;
@@ -210,7 +216,16 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
         if (raw) rateInput.value = round2(fromPerDay(toPerDay(raw, currentPeriod), newPeriod));
       }
       currentPeriod = newPeriod;
+      // Auto-deplete only makes sense against a day/week/month rate —
+      // "/usage" already depletes automatically via routine completion.
+      const isUsage = newPeriod === "usage";
+      autoDepleteRow.style.display = isUsage ? "none" : "block";
+      if (isUsage) autoDepleteToggle.setAttribute("aria-pressed", "false");
     });
+  });
+
+  autoDepleteToggle.addEventListener("click", () => {
+    autoDepleteToggle.setAttribute("aria-pressed", autoDepleteToggle.getAttribute("aria-pressed") === "true" ? "false" : "true");
   });
 
   const nameInput = root.querySelector("#f-item-name");
@@ -247,20 +262,35 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
     }
 
     const binary = readChipGroup(root, "trackMode") === "binary";
-    let qty, parLevel, burnRate, perUseQty, status;
+    // Never negative — clamped here for direct typing into the field (the
+    // stepper and auto-deplete already clamp their own paths, but a typed
+    // "-5" bypassed both, 2026-08-03 user report).
+    let qty, parLevel, burnRate, perUseQty, autoDeplete, lastDepletedAt, status;
     if (binary) {
       qty = readChipGroup(root, "binaryInStock") === "yes" ? 1 : 0;
       parLevel = 1;
       burnRate = 0;
       perUseQty = 0;
+      autoDeplete = false;
+      lastDepletedAt = null;
       status = qty <= 0 ? "out" : "ok";
     } else {
-      qty = Number(root.querySelector("#f-qty").value) || 0;
-      parLevel = Number(root.querySelector("#f-par").value) || 1;
+      qty = Math.max(0, Number(root.querySelector("#f-qty").value) || 0);
+      parLevel = Math.max(0, Number(root.querySelector("#f-par").value) || 1);
       const rateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
       const period = readChipGroup(root, "burnPeriod") || "day";
       burnRate = period !== "usage" && rateRaw ? toPerDay(rateRaw, period) : 0;
       perUseQty = period === "usage" ? rateRaw : 0;
+
+      autoDeplete = autoDepleteToggle.getAttribute("aria-pressed") === "true";
+      if (autoDeplete && (period === "usage" || !rateRaw)) {
+        showToast("Auto-deplete needs a day/week/month rate filled in first");
+        return;
+      }
+      // Fresh baseline when just turning it on (or on a new item); keep the
+      // existing checkpoint if it was already running so an unrelated edit
+      // doesn't reset how much time has "counted" toward depletion.
+      lastDepletedAt = autoDeplete ? (item?.autoDeplete && item?.lastDepletedAt ? item.lastDepletedAt : new Date().toISOString()) : null;
       status = qty <= 0 ? "out" : qty <= parLevel ? "low" : "ok";
     }
     const fields = {
@@ -274,6 +304,8 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
       parLevel,
       burnRate,
       perUseQty,
+      autoDeplete,
+      lastDepletedAt,
       expiryDate: root.querySelector("#f-expiry").value || null,
       status,
     };
