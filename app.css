@@ -102,6 +102,24 @@ h1, h2, h3, p { margin: 0; }
   color: var(--ink);
 }
 
+.app-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 4px 9px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.app-more-btn:active { transform: scale(0.96); }
+
 @media (min-width: 600px) {
   .app-mark { padding: 10px 24px 0; }
 }
@@ -280,6 +298,75 @@ h1, h2, h3, p { margin: 0; }
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+}
+
+/* ---- Insights — health score card, week trend --------------------------- */
+
+.insight-score-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 20px;
+  text-align: center;
+}
+
+.insight-score-value {
+  font-family: var(--font-mono);
+  font-size: 48px;
+  font-weight: var(--fw-bold);
+  color: var(--gold);
+  line-height: 1;
+}
+
+.insight-score-label {
+  margin-top: 6px;
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-emphasis);
+  color: var(--ink);
+}
+
+.insight-score-explain {
+  margin-top: 4px;
+  font-size: var(--fs-meta);
+  color: var(--ink-muted);
+}
+
+.week-trend {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  height: 90px;
+  padding: 0 4px;
+}
+
+.week-trend-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.week-trend-count {
+  font-size: var(--fs-micro);
+  color: var(--ink-muted);
+  height: 14px;
+}
+
+.week-trend-bar {
+  width: 100%;
+  max-width: 22px;
+  border-radius: 4px 4px 0 0;
+  background: var(--gold-soft);
+}
+
+.week-trend-bar.today { background: var(--gold); }
+
+.week-trend-label {
+  font-size: var(--fs-micro);
+  color: var(--ink-faint);
 }
 
 /* ---- Occurrence row — the core swipeable list item ----------------------- */
@@ -477,6 +564,7 @@ h1, h2, h3, p { margin: 0; }
   box-shadow: var(--shadow-card);
   text-align: center;
   cursor: pointer;
+  overflow: hidden; /* safety net — a too-wide child (e.g. a long stepper value) clips instead of spilling outside the rounded card */
 }
 
 .tile-icon {
@@ -741,6 +829,24 @@ h1, h2, h3, p { margin: 0; }
   font-weight: var(--fw-emphasis);
   margin-bottom: 12px;
 }
+
+/* ---- Habit grid — 72 small squares, reading order --------------------- */
+
+.habit-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  max-width: 260px;
+}
+
+.habit-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--surface-sunk);
+}
+
+.habit-cell.done { background: var(--done); }
+.habit-cell.today { box-shadow: 0 0 0 1.5px var(--gold); }
 
 /* ---- Skeleton loading shimmer ------------------------------------------- */
 

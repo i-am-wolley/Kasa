@@ -51,10 +51,16 @@ function listRow({ icon, title, meta, right = "", dataAttrs = "" }) {
 }
 
 function stepper(value, { min = 0, dataAttrs = "" } = {}) {
+  // Rounded to 2dp for display only — auto-depleting items accumulate long
+  // floating-point tails (e.g. 0.9384291452777778) that were overflowing
+  // the tile's fixed width and pushing the −/+ buttons outside the card
+  // (2026-08-03, caught during testing). The stored value keeps full
+  // precision; only what's shown here is trimmed.
+  const displayValue = Math.round(value * 100) / 100;
   return `
     <div class="stepper" ${dataAttrs}>
       <button class="stepper-btn" data-step="-1" ${value <= min ? "disabled" : ""}>−</button>
-      <span class="stepper-value font-num">${value}</span>
+      <span class="stepper-value font-num">${displayValue}</span>
       <button class="stepper-btn" data-step="1">+</button>
     </div>
   `;

@@ -4,31 +4,36 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
+import { openSheet, closeSheet } from "./ui/components.js";
 import { mount as mountToday } from "./routes/today.js";
 import { mount as mountHouse } from "./routes/house.js";
 import { mount as mountStock } from "./routes/stock.js";
+import { mount as mountInsights } from "./routes/insights.js";
+import { mount as mountWishlist } from "./routes/wishlist.js";
 import { mount as mountPeople } from "./routes/people.js";
 import { mount as mountAssets } from "./routes/assets.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
 
+// Wishlist takes the 5th tab slot that "More" used to occupy — More moved
+// to a top-left header button instead (2026-08-03, user request), freeing
+// the slot for a primary, frequently-visited feature rather than a menu.
 const TABS = [
   { id: "today", icon: "today", label: "Today" },
   { id: "house", icon: "house", label: "House" },
   { id: "stock", icon: "stock", label: "Stock" },
   { id: "insights", icon: "insights", label: "Insights" },
-  { id: "more", icon: "more", label: "More" },
+  { id: "wishlist", icon: "wishlist", label: "Wishlist" },
 ];
 
-// Screens reachable from "More" that aren't primary tabs (memo §8.1: only
-// 5 tabs; People/Modes/Packs/etc. live one level down).
+// Screens reachable from the header's More button — not primary tabs
+// (memo §8.1: 5-tab limit; People/Assets/onboarding live one level down).
 const MORE_ITEMS = [
   { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
-  { id: "people", icon: "person", label: "People", meta: "Members, help, leave" },
+  { id: "people", icon: "person", label: "People", meta: "Members, help, leave, habits" },
   { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the house from six questions" },
 ];
 
 let activeTab = "today";
-let activeScreen = "today";
 
 function renderTabBar(el) {
   el.innerHTML = TABS.map(
@@ -52,34 +57,36 @@ function renderPlaceholder(el, title, note) {
   `;
 }
 
-function renderMoreMenu(el) {
-  el.innerHTML = `
-    <div class="topbar"><h1>More</h1></div>
-    <div class="today-section">
-      ${MORE_ITEMS.map(
-        (item) => `
-        <div class="list-row" data-more-item="${item.id}">
-          <div class="occ-row-icon">${Icon(item.icon, { size: 18 })}</div>
-          <div class="occ-row-body">
-            <div class="occ-row-title">${item.label}</div>
-            <div class="occ-row-meta">${item.meta}</div>
+function openMoreSheet() {
+  openSheet({
+    title: "More",
+    bodyHtml: `
+      <div>
+        ${MORE_ITEMS.map(
+          (item) => `
+          <div class="list-row" data-more-item="${item.id}" style="margin-bottom:8px;">
+            <div class="occ-row-icon">${Icon(item.icon, { size: 18 })}</div>
+            <div class="occ-row-body">
+              <div class="occ-row-title">${item.label}</div>
+              <div class="occ-row-meta">${item.meta}</div>
+            </div>
+            ${Icon("chevronRight", { size: 16 })}
           </div>
-          ${Icon("chevronRight", { size: 16 })}
-        </div>
-      `,
-      ).join("")}
-    </div>
-    <div class="today-section">
-      <p style="color:var(--ink-muted);font-size:var(--fs-meta);">Modes, packs, notifications, and export live here in a later phase.</p>
-    </div>
-  `;
-  el.querySelectorAll("[data-more-item]").forEach((row) => {
-    row.addEventListener("click", () => mountScreen(row.dataset.moreItem));
+        `,
+        ).join("")}
+      </div>
+      <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-top:4px;">Modes, notifications, and export live here in a later phase.</p>
+    `,
+  });
+  document.querySelectorAll("[data-more-item]").forEach((row) => {
+    row.addEventListener("click", () => {
+      closeSheet();
+      mountScreen(row.dataset.moreItem);
+    });
   });
 }
 
 function mountScreen(screenId) {
-  activeScreen = screenId;
   const screenEl = document.getElementById("screen-mount");
   switch (screenId) {
     case "today":
@@ -92,16 +99,16 @@ function mountScreen(screenId) {
       mountStock(screenEl);
       break;
     case "insights":
-      renderPlaceholder(screenEl, "Insights", "Insights isn't built yet — the health score and card library land in build-plan Phase 6.");
+      mountInsights(screenEl);
       break;
-    case "more":
-      renderMoreMenu(screenEl);
+    case "wishlist":
+      mountWishlist(screenEl);
       break;
     case "people":
-      mountPeople(screenEl, { onBack: () => switchTab("more") });
+      mountPeople(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     case "assets":
-      mountAssets(screenEl, { onBack: () => switchTab("more") });
+      mountAssets(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     case "onboard":
       mountOnboard(screenEl, { onDone: () => switchTab("today") });
@@ -121,6 +128,7 @@ function boot() {
   loadPacks(); // fire-and-forget — cached for roomTemplates.js's sync reads
   renderTabBar(document.getElementById("tabbar"));
   mountScreen("today");
+  document.getElementById("app-more-btn").addEventListener("click", openMoreSheet);
 }
 
 boot();

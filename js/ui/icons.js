@@ -16,6 +16,8 @@ const PATHS = {
   house: `<path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9"/>`,
   stock: `<rect x="4" y="4" width="16" height="16" rx="2"/><line x1="4" y1="10" x2="20" y2="10"/><line x1="4" y1="15" x2="20" y2="15"/>`,
   insights: `<line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="16"/>`,
+  wishlist: `<path d="M12 3.5l2.6 5.5 6 .9-4.3 4.3 1 6-5.3-2.9-5.3 2.9 1-6-4.3-4.3 6-.9z" stroke-linejoin="round"/>`,
+  flame: `<path d="M12 2.5c1.2 3-2.5 4.2-2.5 8a2.5 2.5 0 1 0 5 0c1 1.2 1.5 2.8 1.5 4.2a4.5 4.5 0 1 1-9 0C7 10 12 8 12 2.5z" stroke-linejoin="round"/>`,
   more: `<circle cx="5" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="19" cy="12" r="1.1" fill="currentColor"/>`,
 
   // ---- spaces ---------------------------------------------------------

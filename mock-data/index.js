@@ -10,3 +10,6 @@ export { routines } from "./routines.js";
 export { ledger } from "./ledger.js";
 export { people } from "./people.js";
 export { modes } from "./modes.js";
+export { wishlist } from "./wishlist.js";
+export { habits } from "./habits.js";
+export { habitLog } from "./habitLog.js";

@@ -3,7 +3,7 @@
 // "Mark leave" here is the entry point to the Help-on-leave hero feature,
 // which isn't built yet (build-plan Phase 7).
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, addHabit, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
 
@@ -55,6 +55,36 @@ function leaveListHtml(person) {
     .join("");
 }
 
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Habits are personal, not household (2026-08-04, user request) — managed
+// from inside a person's own edit sheet rather than a separate screen,
+// since there's no per-person detail view elsewhere in the app to hang
+// this off of. "Mark done" just toggles today; the 72-day grid view lives
+// in Insights, not repeated here.
+function habitsListHtml(person, state) {
+  const list = state.habits.filter((h) => h.personId === person.id);
+  if (!list.length) return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No habits yet.</p>`;
+  return list
+    .map((h) => {
+      const doneToday = isHabitDoneOn(h.id, todayStr());
+      const streak = habitStreak(h.id);
+      return `
+      <div class="list-row" style="margin-bottom:6px;">
+        <div class="occ-row-icon">${Icon("flame", { size: 16 })}</div>
+        <div class="occ-row-body">
+          <div class="occ-row-title">${h.title}</div>
+          <div class="occ-row-meta">${streak > 0 ? `${streak} day streak` : "No streak yet"}</div>
+        </div>
+        <button type="button" class="chip" data-toggle-habit="${h.id}" aria-pressed="${doneToday}">${doneToday ? "Done today" : "Mark done"}</button>
+        <button type="button" class="stepper-btn" data-delete-habit="${h.id}">${Icon("trash", { size: 14 })}</button>
+      </div>`;
+    })
+    .join("");
+}
+
 function openPersonSheet(person) {
   const isHelp = person?.kind === "help";
   openSheet({
@@ -79,6 +109,16 @@ function openPersonSheet(person) {
             <button type="button" class="btn btn-ghost" id="add-leave-btn" style="margin-top:8px;">Add leave</button>
           </div>
         ` : ""}
+        ${person ? `
+          <div class="field">
+            <span class="field-label">Habits (personal)</span>
+            <div id="habits-list">${habitsListHtml(person, getState())}</div>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <div style="flex:1;">${textInput({ id: "f-new-habit", placeholder: "e.g. Meditate" })}</div>
+              <button type="button" class="btn btn-ghost" id="add-habit-btn">Add</button>
+            </div>
+          </div>
+        ` : ""}
       </form>
       ${sheetActions({ saveLabel: person ? "Save changes" : "Add person", showDelete: !!person })}
     `,
@@ -87,6 +127,31 @@ function openPersonSheet(person) {
   const root = document.getElementById("sheet-root");
   wireChipGroup(root, "kind");
   wireChipGroup(root, "scheduleDays");
+
+  function rewireHabits() {
+    root.querySelector("#habits-list").innerHTML = habitsListHtml(person, getState());
+    root.querySelectorAll("[data-toggle-habit]").forEach((btn) => {
+      btn.addEventListener("click", () => { toggleHabitToday(btn.dataset.toggleHabit); rewireHabits(); });
+    });
+    root.querySelectorAll("[data-delete-habit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        if (!confirm("Delete this habit?")) return;
+        deleteHabit(btn.dataset.deleteHabit);
+        rewireHabits();
+      });
+    });
+  }
+  if (person) {
+    rewireHabits();
+    root.querySelector("#add-habit-btn").addEventListener("click", () => {
+      const input = root.querySelector("#f-new-habit");
+      const title = input.value.trim();
+      if (!title) return;
+      addHabit({ personId: person.id, title });
+      input.value = "";
+      rewireHabits();
+    });
+  }
 
   root.querySelector('[data-field="kind"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");

@@ -3,7 +3,7 @@
 // in-memory, same read shape Firestore reads will produce in Phase 4 so
 // route/engine code doesn't change when the data source swaps.
 
-import { household, spaces, items, assets, routines, ledger, people, modes } from "../mock-data/index.js";
+import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog } from "../mock-data/index.js";
 import { generateOccurrences } from "./engine.js";
 import { getOrCreate } from "./catalog.js";
 
@@ -32,6 +32,9 @@ const state = {
   routines: routines.map((r) => ({ ...r })),
   ledger: ledger.map((l) => ({ ...l })),
   occurrences: [],
+  wishlist: wishlist.map((w) => ({ ...w })),
+  habits: habits.map((h) => ({ ...h })),
+  habitLog: habitLog.map((l) => ({ ...l })),
 };
 
 // Re-run the engine over current state, only creating occurrences for
@@ -384,6 +387,120 @@ function toggleRoutineActive(id) {
   notify();
 }
 
+// ---- wishlist CRUD (2026-08-04, user request) ---------------------------
+// "An area for a household to improve their ways of life" — ideas that
+// aren't yet real: a thing to buy (asset or stock item, catalog-linked so
+// it resolves through the same getOrCreate() every other add flow uses)
+// or a bigger one-off project with no catalog entry to link to (repaint a
+// room, re-tile a bathroom). Deliberately NOT routines/habits — those are
+// recurring; a wishlist entry is a one-time thing you're moving toward,
+// then it's done.
+
+function addWishlistItem(fields) {
+  const entry = {
+    id: genId("wl"), catalogKey: null, icon: "wishlist", spaceId: null,
+    priority: "someday", estimatedCost: null, notes: "", status: "idea",
+    createdAt: new Date().toISOString(), acquiredAt: null, ...fields,
+  };
+  state.wishlist.push(entry);
+  notify();
+  return entry;
+}
+
+function updateWishlistItem(id, patch) {
+  const entry = byId(state.wishlist, id);
+  if (entry) Object.assign(entry, patch);
+  notify();
+}
+
+function deleteWishlistItem(id) {
+  state.wishlist = state.wishlist.filter((w) => w.id !== id);
+  notify();
+}
+
+// Marks an idea real. Asset/item types create the actual tracked record
+// (through the same addAsset/addItem paths every other screen uses, so it
+// shows up on House/Stock exactly like anything added there) and return
+// its id; project types have nothing to create, just a completion mark.
+function markWishlistAcquired(id, { spaceId } = {}) {
+  const entry = byId(state.wishlist, id);
+  if (!entry) return null;
+  const targetSpaceId = spaceId || entry.spaceId;
+  let createdId = null;
+  if (entry.type === "asset" && targetSpaceId) {
+    const catalogEntry = entry.catalogKey ? { key: entry.catalogKey, icon: entry.icon } : getOrCreate(entry.title, "asset");
+    createdId = addAsset({ name: entry.title, catalogKey: catalogEntry.key, icon: entry.icon || catalogEntry.icon, spaceId: targetSpaceId }).id;
+  } else if (entry.type === "item" && targetSpaceId) {
+    const catalogEntry = entry.catalogKey ? { key: entry.catalogKey, icon: entry.icon } : getOrCreate(entry.title, "item");
+    addItem({ name: entry.title, catalogKey: catalogEntry.key, icon: entry.icon || catalogEntry.icon, spaceId: targetSpaceId, qty: 1, parLevel: 1 });
+  }
+  entry.status = "acquired";
+  entry.acquiredAt = new Date().toISOString();
+  notify();
+  return createdId;
+}
+
+// ---- habit CRUD (2026-08-04, user request) -------------------------------
+// Personal, not household — belongs to exactly one person, no space, no
+// engine trigger. Just "did I do this today," logged sparsely (a row per
+// day it WAS done, same pattern as the ledger — silence means not done,
+// not an explicit "false" row for every day that ever existed).
+
+function addHabit({ personId, title }) {
+  const habit = { id: genId("hb"), personId, title, createdAt: new Date().toISOString() };
+  state.habits.push(habit);
+  notify();
+  return habit;
+}
+
+function updateHabit(id, patch) {
+  const habit = byId(state.habits, id);
+  if (habit) Object.assign(habit, patch);
+  notify();
+}
+
+function deleteHabit(id) {
+  state.habits = state.habits.filter((h) => h.id !== id);
+  state.habitLog = state.habitLog.filter((l) => l.habitId !== id);
+  notify();
+}
+
+function todayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isHabitDoneOn(habitId, dateStr) {
+  return state.habitLog.some((l) => l.habitId === habitId && l.date === dateStr);
+}
+
+// Toggles TODAY only — habits are logged forward from the moment you check
+// them, not backfilled (matches the memo's own "no gaming the system"
+// spirit for routines, applied here too).
+function toggleHabitToday(habitId) {
+  const date = todayStr();
+  const existing = state.habitLog.find((l) => l.habitId === habitId && l.date === date);
+  if (existing) {
+    state.habitLog = state.habitLog.filter((l) => l !== existing);
+  } else {
+    state.habitLog.push({ id: genId("hlg"), habitId, date });
+  }
+  notify();
+}
+
+// Current streak of consecutive done-days ending today or yesterday (a
+// miss today doesn't zero out a streak until the day is actually over —
+// checks yesterday first if today isn't logged yet).
+function habitStreak(habitId) {
+  let count = 0;
+  const d = new Date();
+  if (!isHabitDoneOn(habitId, todayStr())) d.setDate(d.getDate() - 1);
+  while (isHabitDoneOn(habitId, d.toISOString().slice(0, 10))) {
+    count += 1;
+    d.setDate(d.getDate() - 1);
+  }
+  return count;
+}
+
 export {
   getState,
   subscribe,
@@ -412,5 +529,15 @@ export {
   updateRoutine,
   deleteRoutine,
   toggleRoutineActive,
+  addWishlistItem,
+  updateWishlistItem,
+  deleteWishlistItem,
+  markWishlistAcquired,
+  addHabit,
+  updateHabit,
+  deleteHabit,
+  isHabitDoneOn,
+  toggleHabitToday,
+  habitStreak,
   byId,
 };

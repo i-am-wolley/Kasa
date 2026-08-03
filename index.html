@@ -19,7 +19,7 @@
 <body>
   <div id="app">
     <div class="app-shell">
-      <header class="app-mark" aria-hidden="true">
+      <header class="app-mark">
         <!-- Kasa's mark, take two — a roofline read as "another house icon"
              (2026-08-03 feedback: "too cliched"). Redrawn as one rounded
              square — the app's own dominant shape, the same silhouette as
@@ -28,11 +28,22 @@
              throughout the app. Reads as "one tracked thing, watched," and
              ties the mark to Kasa's actual UI vocabulary instead of a
              generic home pictogram. -->
-        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="4" y="4" width="16" height="16" rx="5.5" />
           <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
         </svg>
         <span class="app-wordmark">kasa</span>
+        <!-- More moved here from the bottom tab bar (2026-08-03, user
+             request) so Wishlist could take its slot as a primary tab.
+             Wired up in boot.js. -->
+        <button class="app-more-btn" id="app-more-btn" aria-label="More">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+            <circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+          </svg>
+          More
+        </button>
       </header>
       <div class="app-body">
         <nav class="tabbar" id="tabbar" aria-label="Primary"></nav>
