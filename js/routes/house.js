@@ -36,25 +36,13 @@ let unsubscribe = null;
 let view = "grid";
 let selectedSpaceId = null;
 
-function spaceCountsHtml(space, state) {
-  const routineCount = state.routines.filter((r) => r.spaceId === space.id && r.active).length;
-  const itemCount = state.items.filter((i) => i.spaceId === space.id).length;
-  const assetCount = state.assets.filter((a) => a.spaceId === space.id).length;
-  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  return `${plural(routineCount, "routine")} · ${itemCount} stock · ${plural(assetCount, "asset")}`;
-}
-
 function gridHtml(state) {
   const cards = state.spaces
     .map(
       (sp) => `
-    <div class="list-row" data-space-id="${sp.id}">
-      <div class="occ-row-icon">${Icon(sp.icon || "house", { size: 18 })}</div>
-      <div class="occ-row-body">
-        <div class="occ-row-title named">${sp.name}</div>
-        <div class="occ-row-meta">${spaceCountsHtml(sp, state)}</div>
-      </div>
-      ${Icon("chevronRight", { size: 16 })}
+    <div class="tile" data-space-id="${sp.id}">
+      <div class="tile-icon">${Icon(sp.icon || "house", { size: 18 })}</div>
+      <div class="tile-title named">${sp.name}</div>
     </div>
   `,
     )
@@ -66,7 +54,7 @@ function gridHtml(state) {
       <button class="btn btn-tinted" id="add-space-btn">${Icon("plus", { size: 16 })} Space</button>
     </div>
     <div class="today-section">
-      ${cards || emptyState({ message: "No spaces yet.", actionLabel: null })}
+      ${cards ? `<div class="tile-grid">${cards}</div>` : emptyState({ message: "No spaces yet.", actionLabel: null })}
     </div>
   `;
 }
@@ -217,8 +205,24 @@ function openRoomTemplateSheet(space, template) {
     root.querySelectorAll('[data-asset-index][aria-pressed="true"]').forEach((btn) => {
       const entry = assetEntries[Number(btn.dataset.assetIndex)];
       if (!entry) return;
-      addAsset({ name: entry.name, catalogKey: entry.key, icon: entry.icon, spaceId: space.id, serviceIntervalDays: entry.serviceIntervalDays ?? null, expectedLifeYears: entry.expectedLifeYears ?? null });
+      const createdAsset = addAsset({ name: entry.name, catalogKey: entry.key, icon: entry.icon, spaceId: space.id, serviceIntervalDays: entry.serviceIntervalDays ?? null, expectedLifeYears: entry.expectedLifeYears ?? null });
       added += 1;
+
+      // Same catalog entry, same suggestedRoutines the standalone Add Asset
+      // flow offers pre-checked — this room-template path skipped that
+      // until now, which is exactly the gap the user flagged (2026-08-03:
+      // "those assets are not having the standard routines already checked
+      // in"). Auto-add them here rather than a second layer of toggles.
+      for (const tmpl of entry.suggestedRoutines || []) {
+        const requiresItemIds = (tmpl.requiresItemKeys || [])
+          .map((k) => getState().items.find((it) => it.catalogKey === k)?.id)
+          .filter(Boolean);
+        addRoutine({
+          title: tmpl.title, spaceId: space.id, assetId: createdAsset.id, trigger: tmpl.trigger,
+          effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass, requiresItemIds,
+        });
+        added += 1;
+      }
     });
 
     root.querySelectorAll('[data-item-index][aria-pressed="true"]').forEach((btn) => {

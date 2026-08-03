@@ -365,7 +365,7 @@ function getOrCreate(name, type) {
   const entry = {
     key: `${type === "asset" ? "AST" : "ITM"}-CUSTOM-${customSeq}`,
     name: trimmed,
-    icon: type === "asset" ? "warranty" : "stock",
+    icon: type === "asset" ? "customAsset" : "customItem",
     category: "custom",
     custom: true,
   };

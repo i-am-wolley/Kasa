@@ -73,9 +73,28 @@ h1, h2, h3, p { margin: 0; }
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   max-width: var(--content-max-w);
   margin: 0 auto;
   width: 100%;
+}
+
+/* Slim brand strip, own row above every screen's own topbar — kept
+   separate from each route's topbar (mode chip / +Add buttons already live
+   at top-right there) so the mark never collides with an action button.
+   Left-aligned, minimal padding — a corner mark, not a full bar (2026-08-03,
+   user feedback: too much empty space across the row and too much gap
+   before the title below it). */
+.app-mark {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 14px 0;
+  color: var(--gold);
+}
+
+@media (min-width: 600px) {
+  .app-mark { padding: 10px 24px 0; }
 }
 
 .app-body {
@@ -87,7 +106,8 @@ h1, h2, h3, p { margin: 0; }
 
 .screen {
   flex: 1;
-  padding: var(--space, 16px) 16px calc(var(--nav-height, 84px) + 16px);
+  min-height: 0;
+  padding: 12px 14px calc(var(--nav-height, 84px) + 16px);
   overflow-y: auto;
 }
 
@@ -152,18 +172,22 @@ h1, h2, h3, p { margin: 0; }
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 16px 4px;
+  padding: 6px 14px 4px;
 }
 
 @media (min-width: 600px) {
-  .topbar { padding: 24px 24px 4px; }
+  .topbar { padding: 10px 24px 4px; }
 }
 
 .topbar h1 {
-  font-size: var(--fs-title);
+  font-size: var(--fs-heading);
   font-weight: var(--fw-heavy);
   letter-spacing: var(--ls-tight);
   line-height: var(--lh-tight);
+}
+
+@media (min-width: 600px) {
+  .topbar h1 { font-size: var(--fs-title); }
 }
 
 .mode-chip {
@@ -180,51 +204,61 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 
-/* ---- House Line ---------------------------------------------------------
-   30 daily ticks, hairline baseline, tick height = effort load, tick colour
-   = heaviest consequence tier due that day. The only ornamental element in
-   the app, made entirely of information (memo §9.3). */
+/* ---- Stat row --------------------------------------------------------
+   Overdue / Due today / This week / Completed this week — replaced the
+   original 30-tick House Line bar chart (2026-08-03, user feedback: it
+   read as decorative rather than informative). 2x2 grid on phones, one
+   row from tablet width up. Overdue/Due today tap-scroll to their list
+   below; This week/Completed are counts only. */
 
-.house-line {
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
   padding: 4px 16px 12px;
 }
 
-@media (min-width: 600px) { .house-line { padding: 4px 24px 16px; } }
-
-.house-line-track {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 40px;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 1px;
+@media (min-width: 600px) {
+  .stat-row { grid-template-columns: repeat(4, 1fr); padding: 4px 24px 16px; gap: 12px; }
 }
 
-.house-line-tick {
-  flex: 1;
-  min-width: 2px;
-  border-radius: 2px 2px 0 0;
-  background: var(--line);
-  cursor: pointer;
-  transition: opacity var(--dur-fast) var(--ease-std);
+.stat-tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 9px 8px;
+  text-align: center;
 }
 
-.house-line-tick:hover { opacity: 0.7; }
+.stat-tile[role="button"] { cursor: pointer; }
+.stat-tile[role="button"]:hover { border-color: var(--ink-faint); }
 
-.house-line-caption {
-  margin-top: 8px;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: var(--fs-sm);
+.stat-tile-value {
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  line-height: 1.1;
+}
+
+.stat-tile-label {
+  margin-top: 2px;
+  font-size: 10px;
   color: var(--ink-muted);
+}
+
+@media (min-width: 600px) {
+  .stat-tile { padding: 12px 10px; }
+  .stat-tile-value { font-size: var(--fs-stat); }
+  .stat-tile-label { font-size: var(--fs-micro); }
 }
 
 /* ---- Today sections ------------------------------------------------------ */
 
-.today-section { padding: 20px 16px 0; }
+.today-section { padding: 16px 14px 0; }
 @media (min-width: 600px) { .today-section { padding: 24px 24px 0; } }
 
-.today-section + .today-section { padding-top: 8px; }
+.today-section + .today-section { padding-top: 6px; }
 
 .section-head {
   display: flex;
@@ -239,7 +273,11 @@ h1, h2, h3, p { margin: 0; }
   position: relative;
   border-radius: var(--radius-card);
   overflow: hidden;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+@media (min-width: 600px) {
+  .occ-row-wrap { margin-bottom: 8px; }
 }
 
 .occ-row-actions {
@@ -267,9 +305,9 @@ h1, h2, h3, p { margin: 0; }
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: var(--tap-min);
-  padding: 14px 16px;
+  padding: 11px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -285,7 +323,7 @@ h1, h2, h3, p { margin: 0; }
 
 .occ-row-icon {
   flex-shrink: 0;
-  width: 36px; height: 36px;
+  width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-chip);
   background: var(--surface-sunk);
@@ -295,7 +333,7 @@ h1, h2, h3, p { margin: 0; }
 .occ-row-body { flex: 1; min-width: 0; }
 
 .occ-row-title {
-  font-size: var(--fs-body);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
   color: var(--ink);
   overflow: hidden;
@@ -305,8 +343,15 @@ h1, h2, h3, p { margin: 0; }
 
 .occ-row-meta {
   margin-top: 2px;
-  font-size: var(--fs-meta);
+  font-size: var(--fs-micro);
   color: var(--ink-muted);
+}
+
+@media (min-width: 600px) {
+  .occ-row { gap: 12px; padding: 14px 16px; }
+  .occ-row-icon { width: 36px; height: 36px; }
+  .occ-row-title { font-size: var(--fs-body); }
+  .occ-row-meta { font-size: var(--fs-meta); }
 }
 
 .occ-row-meta.overdue { color: var(--tier-damaging); font-weight: var(--fw-semibold); }
@@ -335,15 +380,19 @@ h1, h2, h3, p { margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  font-size: var(--fs-meta);
+  padding: 5px 10px;
+  font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
   border-radius: var(--radius-chip);
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink-muted);
   cursor: pointer;
-  min-height: var(--tap-min);
+  min-height: var(--tap-min); /* accessibility floor — don't shrink below this even on mobile */
+}
+
+@media (min-width: 600px) {
+  .chip { padding: 6px 12px; font-size: var(--fs-meta); }
 }
 
 .chip[aria-pressed="true"] {
@@ -357,15 +406,19 @@ h1, h2, h3, p { margin: 0; }
 .list-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-height: var(--tap-min);
-  padding: 14px 16px;
+  padding: 11px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   cursor: pointer;
+}
+
+@media (min-width: 600px) {
+  .list-row { gap: 12px; padding: 14px 16px; margin-bottom: 8px; }
 }
 
 .list-row-right {
@@ -373,6 +426,93 @@ h1, h2, h3, p { margin: 0; }
   font-size: var(--fs-meta);
   color: var(--ink-faint);
   text-align: right;
+}
+
+/* ---- Tile grid (House spaces, Stock items) ------------------------------
+   Square-ish rounded cards, replacing full-width list rows for a lighter,
+   more scannable "grid of things" read (2026-08-03, user request — "convert
+   each space to a square... simplify with squares"). House tiles are a
+   true 1:1 square (icon + name only — no routine/stock/asset count text,
+   the clutter the user specifically asked to drop); Stock tiles relax the
+   aspect ratio to fit the qty stepper without cramming it, but keep the
+   same rounded-square language. */
+
+.tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (min-width: 600px) {
+  .tile-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+}
+
+.tile {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow-card);
+  text-align: center;
+  cursor: pointer;
+}
+
+.tile-icon {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
+
+.tile-title {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tile-meta {
+  font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/* Stock tiles: same card language, but content needs a qty stepper below
+   the label, so this modifier gives up the strict 1:1 square for a taller
+   rounded card instead of forcing the stepper to overflow. */
+.tile-stock {
+  aspect-ratio: auto;
+  min-height: 132px;
+  justify-content: space-between;
+  padding: 12px 8px 10px;
+}
+
+.tile-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.tile-stepper { display: inline-flex; align-items: center; gap: 6px; }
+.tile-stepper .stepper-btn { width: 24px; height: 24px; font-size: 14px; }
+.tile-stepper .stepper-value { min-width: 20px; font-size: var(--fs-micro); }
+
+@media (min-width: 600px) {
+  .tile-icon { width: 40px; height: 40px; }
+  .tile-title { font-size: var(--fs-meta); }
+  .tile-meta { font-size: var(--fs-micro); }
 }
 
 /* ---- Stepper ------------------------------------------------------------- */
@@ -477,13 +617,17 @@ h1, h2, h3, p { margin: 0; }
   justify-content: center;
   gap: 8px;
   min-height: var(--tap-min);
-  padding: 12px 18px;
-  font-size: var(--fs-sm);
+  padding: 10px 14px;
+  font-size: var(--fs-meta);
   font-weight: var(--fw-bold);
   border-radius: var(--radius-pill);
   border: 1px solid transparent;
   cursor: pointer;
   transition: transform var(--dur-micro) var(--ease-std);
+}
+
+@media (min-width: 600px) {
+  .btn { padding: 12px 18px; font-size: var(--fs-sm); }
 }
 
 .btn:active { transform: scale(0.96); }

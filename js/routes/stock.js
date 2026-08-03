@@ -30,6 +30,20 @@ function projectedDaysLeft(item) {
   return Math.round(item.qty / item.burnRate);
 }
 
+// burnRate is always stored per-day (projectedDaysLeft etc. depend on that);
+// the period chips are purely a display/entry convenience (user request:
+// "can i select perday/week/month?").
+const PERIOD_DAYS = { day: 1, week: 7, month: 30 };
+function toPerDay(amount, period) {
+  return amount / (PERIOD_DAYS[period] || 1);
+}
+function fromPerDay(perDay, period) {
+  return perDay * (PERIOD_DAYS[period] || 1);
+}
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
 function isProjectedSoon(item) {
   const days = projectedDaysLeft(item);
   return days !== null && days <= REORDER_LEAD_DAYS;
@@ -44,28 +58,32 @@ function bucketOf(item) {
   return "ok";
 }
 
-function rowHtml(item, state) {
-  const space = byId(state.spaces, item.spaceId);
+// Square-ish tile, not a full row (2026-08-03, user request: "simplify with
+// squares... just for the look and feel") — same info as before (name, days
+// left, qty), just laid out in a grid instead of stacked rows. The space
+// name is dropped from the tile face (no room at this size); it's still
+// shown in the edit sheet.
+function tileHtml(item) {
   const daysLeft = projectedDaysLeft(item);
-  const projectedNote = daysLeft !== null && item.status !== "out" ? ` · ~${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : "";
+  const meta = item.status === "out" ? "Out" : daysLeft !== null ? `~${daysLeft}d left` : `${item.qty} ${item.unit}`;
   return `
-    <div class="list-row" data-item-id="${item.id}">
-      <div class="occ-row-icon">${Icon(item.icon || "stock", { size: 16 })}</div>
-      <div class="occ-row-body" data-open-item="${item.id}">
-        <div class="occ-row-title">${item.name}</div>
-        <div class="occ-row-meta">${space?.name || ""}${item.expiryDate ? ` · expires ${item.expiryDate}` : ""}${projectedNote}</div>
+    <div class="tile tile-stock" data-item-id="${item.id}">
+      <div class="tile-body" data-open-item="${item.id}">
+        <div class="tile-icon">${Icon(item.icon || "stock", { size: 16 })}</div>
+        <div class="tile-title">${item.name}</div>
+        <div class="tile-meta">${meta}</div>
       </div>
-      ${stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` })}
+      <div class="tile-stepper">${stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` })}</div>
     </div>
   `;
 }
 
-function sectionHtml(title, items, state) {
+function sectionHtml(title, items) {
   if (!items.length) return "";
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">${title} (${items.length})</span></div>
-      ${items.map((i) => rowHtml(i, state)).join("")}
+      <div class="tile-grid">${items.map(tileHtml).join("")}</div>
     </div>
   `;
 }
@@ -85,10 +103,10 @@ function render() {
     <div class="today-section" style="padding-top:4px;">
       <button class="btn btn-solid" id="build-list-btn" style="width:100%;">${Icon("receipt", { size: 16 })} Build shopping list</button>
     </div>
-    ${sectionHtml("Out", buckets.out, state)}
-    ${sectionHtml("Low", buckets.low, state)}
-    ${sectionHtml("Expiring", buckets.expiring, state)}
-    ${sectionHtml("OK", buckets.ok, state)}
+    ${sectionHtml("Out", buckets.out)}
+    ${sectionHtml("Low", buckets.low)}
+    ${sectionHtml("Expiring", buckets.expiring)}
+    ${sectionHtml("OK", buckets.ok)}
     ${!state.items.length ? emptyState({ message: "Nothing tracked yet.", actionLabel: null }) : ""}
   `;
 
@@ -114,7 +132,13 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
         ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
         ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1 }))}
         ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1 }))}
-        ${field("Consumption rate — units/day (optional)", textInput({ id: "f-burnrate", type: "number", value: item?.burnRate || "", placeholder: "e.g. 0.05" }))}
+        ${field(
+          "Consumption rate (optional)",
+          `<div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;">${textInput({ id: "f-burnrate", type: "number", value: item?.burnRate || "", placeholder: "e.g. 0.5" })}</div>
+            <div style="flex:1;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }], value: "day" })}</div>
+          </div>`,
+        )}
         ${field("Expiry date (optional)", textInput({ id: "f-expiry", type: "date", value: item?.expiryDate ?? "" }))}
       </form>
       ${item?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:8px;">Catalog key: <span class="font-num">${item.catalogKey}</span></p>` : ""}
@@ -123,6 +147,21 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
   });
   const root = document.getElementById("sheet-root");
   ["itemSpaceId", "unit"].forEach((n) => wireChipGroup(root, n));
+  wireChipGroup(root, "burnPeriod");
+
+  // Re-express the entered number when the period chip changes, so
+  // switching /day -> /week doesn't silently change what will be saved.
+  let currentPeriod = "day";
+  root.querySelectorAll('[data-field="burnPeriod"] [data-value]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const newPeriod = btn.dataset.value;
+      if (newPeriod === currentPeriod) return;
+      const rateInput = root.querySelector("#f-burnrate");
+      const raw = Number(rateInput.value);
+      if (raw) rateInput.value = round2(fromPerDay(toPerDay(raw, currentPeriod), newPeriod));
+      currentPeriod = newPeriod;
+    });
+  });
 
   const nameInput = root.querySelector("#f-item-name");
   if (item?.catalogKey) nameInput.dataset.catalogKey = item.catalogKey;
@@ -145,7 +184,8 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
     if (!entry) return;
     const qty = Number(root.querySelector("#f-qty").value) || 0;
     const parLevel = Number(root.querySelector("#f-par").value) || 1;
-    const burnRate = Number(root.querySelector("#f-burnrate").value) || 0;
+    const burnRateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
+    const burnRate = burnRateRaw ? toPerDay(burnRateRaw, readChipGroup(root, "burnPeriod") || "day") : 0;
     const fields = {
       name: entry.name,
       catalogKey: entry.key,

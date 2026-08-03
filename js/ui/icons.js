@@ -172,6 +172,15 @@ const PATHS = {
   adminSupply: `<rect x="5" y="2" width="14" height="20" rx="2"/><line x1="8" y1="7" x2="16" y2="7"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>`,
   electronicsAccessory: `<rect x="3" y="14" width="18" height="4" rx="1"/><line x1="6" y1="14" x2="6" y2="10"/><line x1="10" y1="14" x2="10" y2="10"/><line x1="14" y1="14" x2="14" y2="10"/><line x1="18" y1="14" x2="18" y2="10"/>`,
 
+  // ---- unmatched-catalog fallbacks (2026-08-03) — getOrCreate() in
+  // catalog.js hands these to any typed-in asset/item name that doesn't
+  // match an existing entry, so a custom entry reads as "not yet a real
+  // icon" rather than borrowing warranty's/stock's shape (those are real
+  // icons used elsewhere and looked misleading on a custom entry). Dashed
+  // outline is the "unidentified" cue; asset gets a box, item gets a tag.
+  customAsset: `<rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 2.5"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/>`,
+  customItem: `<path d="M13 4h4a2 2 0 0 1 2 2v4a2 2 0 0 1-.6 1.4l-8 8a2 2 0 0 1-2.8 0l-4-4a2 2 0 0 1 0-2.8l8-8A2 2 0 0 1 13 4z" stroke-dasharray="3 2.5"/><circle cx="16.5" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>`,
+
   // ---- reusable generic glyphs, ported verbatim from Miso ------------------
   sparkle: `<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.5 5.5l2.5 2.5M16 16l2.5 2.5M18.5 5.5L16 8M8 16l-2.5 2.5"/>`,
   refresh: `<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>`,

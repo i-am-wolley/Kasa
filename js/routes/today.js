@@ -8,9 +8,6 @@ import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet } from "../ui/components.js";
 
 const TIER_RANK = { safety: 4, damaging: 3, degrading: 2, cosmetic: 1 };
-const TIER_WEIGHT = { safety: 4, damaging: 2.5, degrading: 1.5, cosmetic: 1 };
-const HOUSE_LINE_PAST_DAYS = 6;
-const HOUSE_LINE_FUTURE_DAYS = 23;
 
 let effortOnly = false;
 let mountEl = null;
@@ -74,54 +71,67 @@ function sectionHtml(title, rows) {
     if (rankDiff !== 0) return rankDiff;
     return b.days - a.days;
   });
+  const sectionId = title === "Overdue" ? "section-overdue" : "section-due";
   return `
-    <div class="today-section">
+    <div class="today-section" id="${sectionId}">
       <div class="section-head"><span class="eyebrow">${title}</span></div>
       ${sorted.map(rowHtml).join("")}
     </div>
   `;
 }
 
-function houseLineHtml(state) {
+// Replaced the 30-tick House Line with a 4-tile stat row (2026-08-03, user
+// feedback: "the top graph is confusing... suggest something more
+// important"). Same underlying data (open occurrences + ledger), just read
+// as counts instead of a bar chart. Overdue/Due today tap-scroll to their
+// section below since those two already have visible lists; This week and
+// Completed this week are counts only — no matching section to jump to.
+function statRowHtml(state) {
   const activeModeKey = state.household.activeMode;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const byDate = {};
-  for (const occ of state.occurrences) {
-    if (occ.state === "done" || occ.state === "snoozed") continue;
-    const routine = byId(state.routines, occ.routineId);
-    if (!routine || isPausedNow(routine, activeModeKey)) continue;
-    const d = new Date(occ.dueAt);
+  const openRows = state.occurrences
+    .filter((occ) => occ.state !== "done" && occ.state !== "snoozed")
+    .map((occ) => enrich(occ, state))
+    .filter((r) => r.routine && !isPausedNow(r.routine, activeModeKey));
+
+  const overdueCount = openRows.filter((r) => r.state === "overdue").length;
+  const dueTodayCount = openRows.filter((r) => r.state === "due").length;
+
+  const weekCount = openRows.filter((r) => {
+    const d = new Date(r.occ.dueAt);
     d.setHours(0, 0, 0, 0);
     const offset = Math.round((d - today) / 86400000);
-    if (offset < -HOUSE_LINE_PAST_DAYS || offset > HOUSE_LINE_FUTURE_DAYS) continue;
-    const key = offset;
-    if (!byDate[key]) byDate[key] = { points: 0, tier: "cosmetic" };
-    byDate[key].points += routine.effort * TIER_WEIGHT[routine.consequence];
-    if (TIER_RANK[routine.consequence] > TIER_RANK[byDate[key].tier]) {
-      byDate[key].tier = routine.consequence;
-    }
-  }
+    return offset >= 0 && offset <= 6;
+  }).length;
 
-  const maxPoints = Math.max(4, ...Object.values(byDate).map((d) => d.points));
-  const ticks = [];
-  for (let offset = -HOUSE_LINE_PAST_DAYS; offset <= HOUSE_LINE_FUTURE_DAYS; offset++) {
-    const day = byDate[offset];
-    const height = day ? Math.max(4, Math.round((day.points / maxPoints) * 40)) : 3;
-    const color = day && day.tier !== "cosmetic" ? `var(--tier-${day.tier})` : "var(--line)";
-    const isToday = offset === 0;
-    const d = new Date(today.getTime() + offset * 86400000);
-    ticks.push(
-      `<div class="house-line-tick" style="height:${height}px;background:${isToday ? "var(--gold)" : color};" title="${d.toDateString()}"></div>`,
-    );
-  }
+  const completedCount = state.ledger.filter((entry) => {
+    const d = new Date(entry.doneAt);
+    d.setHours(0, 0, 0, 0);
+    const offset = Math.round((today - d) / 86400000);
+    return offset >= 0 && offset <= 6;
+  }).length;
 
-  const monthLabel = today.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const tiles = [
+    { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, jump: "section-overdue" },
+    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, jump: "section-due" },
+    { id: "this-week", value: weekCount, label: "This week", tone: null, jump: null },
+    { id: "completed-week", value: completedCount, label: "Completed this week", tone: "var(--done)", jump: null },
+  ];
+
   return `
-    <div class="house-line">
-      <div class="house-line-track">${ticks.join("")}</div>
-      <div class="house-line-caption">${monthLabel} — the house, at a glance</div>
+    <div class="stat-row">
+      ${tiles
+        .map(
+          (t) => `
+        <div class="stat-tile" ${t.jump ? `data-jump="${t.jump}" role="button" tabindex="0"` : ""}>
+          <div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div>
+          <div class="stat-tile-label">${t.label}</div>
+        </div>
+      `,
+        )
+        .join("")}
     </div>
   `;
 }
@@ -156,7 +166,7 @@ function render() {
 
   mountEl.innerHTML = `
     ${topbarHtml(state)}
-    ${houseLineHtml(state)}
+    ${statRowHtml(state)}
     <div class="today-section" style="padding-top:4px;">
       ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
     </div>
@@ -191,6 +201,12 @@ function wireEvents() {
   });
 
   mountEl.querySelectorAll(".occ-row").forEach((row) => attachSwipe(row));
+
+  mountEl.querySelectorAll("[data-jump]").forEach((tile) => {
+    tile.addEventListener("click", () => {
+      document.getElementById(tile.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
 }
 
 const SWIPE_THRESHOLD = 90;
