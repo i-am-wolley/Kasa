@@ -112,12 +112,18 @@ function completeOccurrence(occId, doneBy = null) {
 
   // Consume linked stock (memo's requiresItemIds field, wired up 2026-08-03,
   // user request: "routines can consume an item which can as well go out of
-  // stock"). Simplification: 1 unit per linked item per completion,
-  // regardless of unit type (piece/ml/kg) — not undone by the 5s undo toast,
-  // only the occurrence/ledger are restored (see undoLast).
+  // stock"). Amount is the item's own perUseQty if it's tracked "/usage"
+  // (2026-08-03, follow-up request: "automated reduction... based on the
+  // routine frequency" — this completion IS that automation, scaled by
+  // however much this item is actually used per completion instead of a
+  // flat 1). Falls back to 1 for items without perUseQty set. Not undone
+  // by the 5s undo toast, only the occurrence/ledger are restored (see
+  // undoLast).
   const routine = byId(state.routines, occ.routineId);
   for (const itemId of routine?.requiresItemIds || []) {
-    adjustItemQty(itemId, -1);
+    const linkedItem = byId(state.items, itemId);
+    const amount = linkedItem?.perUseQty > 0 ? linkedItem.perUseQty : 1;
+    adjustItemQty(itemId, -amount);
   }
 
   notify();

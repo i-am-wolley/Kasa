@@ -30,9 +30,20 @@ function projectedDaysLeft(item) {
   return Math.round(item.qty / item.burnRate);
 }
 
+// Parallel projection for items tracked "/usage" instead of a day-rate
+// (2026-08-03, user request) — "how many more times can this be used
+// before it runs out," for items that deplete per-event (a routine
+// completing) rather than continuously over time.
+function projectedUsesLeft(item) {
+  if (!item.perUseQty || item.perUseQty <= 0) return null;
+  return Math.floor(item.qty / item.perUseQty);
+}
+
 // burnRate is always stored per-day (projectedDaysLeft etc. depend on that);
-// the period chips are purely a display/entry convenience (user request:
-// "can i select perday/week/month?").
+// the day/week/month chips are purely a display/entry convenience (user
+// request: "can i select perday/week/month?"). "/usage" is a different
+// axis entirely — not a time rate, so it's never run through this
+// conversion — see openItemSheet's period-switch handler.
 const PERIOD_DAYS = { day: 1, week: 7, month: 30 };
 function toPerDay(amount, period) {
   return amount / (PERIOD_DAYS[period] || 1);
@@ -46,7 +57,9 @@ function round2(n) {
 
 function isProjectedSoon(item) {
   const days = projectedDaysLeft(item);
-  return days !== null && days <= REORDER_LEAD_DAYS;
+  if (days !== null) return days <= REORDER_LEAD_DAYS;
+  const uses = projectedUsesLeft(item);
+  return uses !== null && uses <= 1;
 }
 
 // A rate-based early warning can flag "low" before the raw quantity number
@@ -65,9 +78,13 @@ function bucketOf(item) {
 // shown in the edit sheet.
 function tileHtml(item) {
   const daysLeft = projectedDaysLeft(item);
+  const usesLeft = projectedUsesLeft(item);
   const meta = item.binary
     ? item.qty > 0 ? "In stock" : "Out"
-    : item.status === "out" ? "Out" : daysLeft !== null ? `~${daysLeft}d left` : `${item.qty} ${item.unit}`;
+    : item.status === "out" ? "Out"
+    : usesLeft !== null ? `~${usesLeft} use${usesLeft === 1 ? "" : "s"} left`
+    : daysLeft !== null ? `~${daysLeft}d left`
+    : `${item.qty} ${item.unit}`;
   const control = item.binary
     ? `<button type="button" class="chip" data-item-toggle="${item.id}" aria-pressed="${item.qty > 0}">${item.qty > 0 ? "In stock" : "Mark in stock"}</button>`
     : stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` });
@@ -128,10 +145,15 @@ function lastRestockedLabel(item) {
 function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
   const state = getState();
   const isBinary = !!item?.binary;
+  // "/usage" means the number is "units consumed per completion of a
+  // linked routine" (item.perUseQty), not a time rate — a different field
+  // entirely from burnRate, so an item is in one mode or the other.
+  const initialPeriod = item?.perUseQty ? "usage" : "day";
+  const initialRateValue = initialPeriod === "usage" ? item.perUseQty : (item?.burnRate || "");
   openSheet({
     title: item ? "Edit item" : "Add item",
     bodyHtml: `
-      ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-bottom:10px;">${lastRestockedLabel(item)}${projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
+      ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-bottom:10px;">${lastRestockedLabel(item)}${projectedUsesLeft(item) !== null ? ` · ~${projectedUsesLeft(item)} uses left` : projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
       <form id="item-form">
         ${field("Name", catalogField({ id: "f-item-name", type: "item", value: item?.name ?? "", placeholder: "Start typing — e.g. Toilet cleaner" }))}
         ${field("Space", chipGroup({ name: "itemSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: item?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
@@ -142,10 +164,11 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
           ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1 }))}
           ${field(
             "Consumption rate (optional)",
-            `<div style="display:flex;gap:8px;">
-              <div style="width:84px;flex-shrink:0;">${textInput({ id: "f-burnrate", type: "number", value: item?.burnRate || "", placeholder: "0.5" })}</div>
-              <div style="flex:1;min-width:0;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }], value: "day" })}</div>
-            </div>`,
+            `<div style="display:flex;gap:6px;">
+              <div style="width:70px;flex-shrink:0;">${textInput({ id: "f-burnrate", type: "number", value: initialRateValue, placeholder: "0.5" })}</div>
+              <div class="rate-period-group" style="flex:1;min-width:0;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }, { value: "usage", label: "/usage" }], value: initialPeriod })}</div>
+            </div>
+            <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">"/usage" = units used each time a linked routine's "Uses this stock" completes — not a day rate.</p>`,
           )}
         </div>
         <div id="binary-field" style="display:${isBinary ? "block" : "none"};">
@@ -174,14 +197,18 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
 
   // Re-express the entered number when the period chip changes, so
   // switching /day -> /week doesn't silently change what will be saved.
-  let currentPeriod = "day";
+  // "/usage" isn't a time unit, so switching into or out of it never
+  // tries to convert the number — it just changes what it means.
+  let currentPeriod = initialPeriod;
   root.querySelectorAll('[data-field="burnPeriod"] [data-value]').forEach((btn) => {
     btn.addEventListener("click", () => {
       const newPeriod = btn.dataset.value;
       if (newPeriod === currentPeriod) return;
-      const rateInput = root.querySelector("#f-burnrate");
-      const raw = Number(rateInput.value);
-      if (raw) rateInput.value = round2(fromPerDay(toPerDay(raw, currentPeriod), newPeriod));
+      if (newPeriod !== "usage" && currentPeriod !== "usage") {
+        const rateInput = root.querySelector("#f-burnrate");
+        const raw = Number(rateInput.value);
+        if (raw) rateInput.value = round2(fromPerDay(toPerDay(raw, currentPeriod), newPeriod));
+      }
       currentPeriod = newPeriod;
     });
   });
@@ -220,17 +247,20 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
     }
 
     const binary = readChipGroup(root, "trackMode") === "binary";
-    let qty, parLevel, burnRate, status;
+    let qty, parLevel, burnRate, perUseQty, status;
     if (binary) {
       qty = readChipGroup(root, "binaryInStock") === "yes" ? 1 : 0;
       parLevel = 1;
       burnRate = 0;
+      perUseQty = 0;
       status = qty <= 0 ? "out" : "ok";
     } else {
       qty = Number(root.querySelector("#f-qty").value) || 0;
       parLevel = Number(root.querySelector("#f-par").value) || 1;
-      const burnRateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
-      burnRate = burnRateRaw ? toPerDay(burnRateRaw, readChipGroup(root, "burnPeriod") || "day") : 0;
+      const rateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
+      const period = readChipGroup(root, "burnPeriod") || "day";
+      burnRate = period !== "usage" && rateRaw ? toPerDay(rateRaw, period) : 0;
+      perUseQty = period === "usage" ? rateRaw : 0;
       status = qty <= 0 ? "out" : qty <= parLevel ? "low" : "ok";
     }
     const fields = {
@@ -243,6 +273,7 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
       qty,
       parLevel,
       burnRate,
+      perUseQty,
       expiryDate: root.querySelector("#f-expiry").value || null,
       status,
     };

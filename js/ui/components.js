@@ -102,9 +102,15 @@ function renderCatalogSuggestions(input, dropdown, type, onSelect) {
     )
     .join("");
   dropdown.style.display = "block";
+  // pointerdown, not mousedown/click (2026-08-03, user report: catalog
+  // selection "had issue in phone") — on real touch, mousedown's ordering
+  // relative to the input's own blur is inconsistent across mobile
+  // browsers, which is exactly the kind of thing that shows up as "usually
+  // works, sometimes doesn't." pointerdown is the unified pointer-events
+  // entry point and fires before blur when preventDefault is called on it.
   dropdown.querySelectorAll("[data-key]").forEach((btn, i) => {
-    btn.addEventListener("mousedown", (e) => {
-      e.preventDefault(); // fire before the input's blur hides the dropdown
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // stops the input from blurring before this runs
       const entry = matches[i];
       input.value = entry.name;
       input.dataset.catalogKey = entry.key;
@@ -123,8 +129,10 @@ function wireCatalogField(root, id, type, { onSelect } = {}) {
     renderCatalogSuggestions(input, dropdown, type, onSelect);
   });
   input.addEventListener("focus", () => renderCatalogSuggestions(input, dropdown, type, onSelect));
+  // Widened from 100ms — a bit more headroom for slower devices where the
+  // pointerdown->onSelect handler above hasn't finished before blur fires.
   input.addEventListener("blur", () => {
-    setTimeout(() => { dropdown.style.display = "none"; }, 100);
+    setTimeout(() => { dropdown.style.display = "none"; }, 180);
   });
 }
 
