@@ -1,0 +1,48 @@
+// Asset shapes per build memo §2.1.
+
+export const assets = [
+  {
+    id: "ast_geyser", name: "Geyser", spaceId: "sp_bath", category: "water_heater",
+    brand: "AO Smith", model: "HSE-SDS 15L", serial: null,
+    purchaseDate: "2019-06-10", purchasePrice: 12500,
+    warrantyUntil: "2024-06-10", amcUntil: null,
+    meter: null,
+    serviceIntervalDays: 365, serviceIntervalMeter: null,
+    lastServicedAt: "2025-11-02", nextServiceDue: "2026-11-02",
+    consumableItemIds: [], vendorName: "AO Smith service", vendorPhone: "tel:+919800000001",
+    docs: [], expectedLifeYears: 8, replacementDueAt: "2027-06-10",
+  },
+  {
+    id: "ast_ro", name: "RO unit", spaceId: "sp_utility", category: "water_purifier",
+    brand: "Kent", model: "Grand Plus", serial: null,
+    purchaseDate: "2022-03-15", purchasePrice: 18000,
+    warrantyUntil: "2023-03-15", amcUntil: "2026-03-15",
+    meter: { type: "litres", value: 4200, unit: "L", updatedAt: "2026-07-28" },
+    serviceIntervalDays: 180, serviceIntervalMeter: 3000, lastServiceMeterValue: 1000,
+    lastServicedAt: "2026-02-10", nextServiceDue: "2026-08-10",
+    consumableItemIds: [], vendorName: "Kent RO care", vendorPhone: "tel:+919800000002",
+    docs: [], expectedLifeYears: 7, replacementDueAt: "2029-03-15",
+  },
+  {
+    id: "ast_wm", name: "Washing machine", spaceId: "sp_utility", category: "appliance",
+    brand: "LG", model: "7kg front load", serial: null,
+    purchaseDate: "2021-01-20", purchasePrice: 32000,
+    warrantyUntil: "2023-01-20", amcUntil: null,
+    meter: { type: "cycles", value: 410, unit: "cycles", updatedAt: "2026-07-30" },
+    serviceIntervalDays: null, serviceIntervalMeter: 150, lastServiceMeterValue: 310,
+    lastServicedAt: "2026-04-01", nextServiceDue: "2026-09-15",
+    consumableItemIds: [], vendorName: "LG service", vendorPhone: "tel:+919800000003",
+    docs: [], expectedLifeYears: 10, replacementDueAt: "2031-01-20",
+  },
+  {
+    id: "ast_ac", name: "Split AC", spaceId: "sp_bed", category: "ac",
+    brand: "Daikin", model: "1.5T split", serial: null,
+    purchaseDate: "2020-04-01", purchasePrice: 38000,
+    warrantyUntil: "2025-04-01", amcUntil: null,
+    meter: null,
+    serviceIntervalDays: 180, serviceIntervalMeter: null,
+    lastServicedAt: "2026-03-05", nextServiceDue: "2026-09-05",
+    consumableItemIds: [], vendorName: "Daikin authorised", vendorPhone: "tel:+919800000004",
+    docs: [], expectedLifeYears: 10, replacementDueAt: "2030-04-01",
+  },
+];

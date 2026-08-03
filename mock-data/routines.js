@@ -1,0 +1,103 @@
+// Routine (Cycle) shapes per build memo §2.1. Deliberately covers all six
+// trigger types (§5.1) so engine.js has something real to compute against.
+
+export const routines = [
+  {
+    id: "rt_paysociety", title: "Pay society maintenance", spaceId: "sp_whole", assetId: null,
+    trigger: { type: "fixed_calendar", rrule: "FREQ=MONTHLY;BYMONTHDAY=5" },
+    effort: 1, consequence: "damaging", ownerClass: "member", defaultAssigneeId: "u_vinod",
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "admin", userEdited: false,
+  },
+  {
+    id: "rt_descale_showerhead", title: "Descale showerhead and taps", spaceId: "sp_bath", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 60 },
+    effort: 2, consequence: "degrading", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "bath", userEdited: false,
+  },
+  {
+    id: "rt_deepclean_bath", title: "Deep clean bathroom", spaceId: "sp_bath", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 14 },
+    effort: 3, consequence: "cosmetic", ownerClass: "help", defaultAssigneeId: "p_lakshmi",
+    requiresItemIds: ["itm_toiletcleaner"], modeFilters: { pauseIn: ["travel"], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "bath", userEdited: false,
+  },
+  {
+    id: "rt_service_ro", title: "Service RO unit", spaceId: "sp_utility", assetId: "ast_ro",
+    trigger: { type: "usage_meter", meterDelta: 3000 },
+    effort: 3, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "utility", userEdited: false,
+  },
+  {
+    id: "rt_reorder_lpg", title: "Reorder LPG cylinder", spaceId: "sp_utility", assetId: null,
+    trigger: { type: "condition", condition: { source: "item", itemId: "itm_lpg", op: "eq", value: "out" } },
+    effort: 1, consequence: "damaging", ownerClass: "member", defaultAssigneeId: "u_vinod",
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "utility", userEdited: false,
+  },
+  {
+    id: "rt_premonsoon_balcony", title: "Clear balcony drain before monsoon", spaceId: "sp_balcony", assetId: null,
+    trigger: { type: "seasonal", months: [5, 6], window: "pre_monsoon" },
+    effort: 2, consequence: "damaging", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "core", userEdited: false,
+  },
+  {
+    id: "rt_presummer_ac", title: "Pre-summer AC servicing", spaceId: "sp_bed", assetId: "ast_ac",
+    trigger: { type: "seasonal", months: [2, 3], window: "pre_summer" },
+    effort: 4, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "appliances", userEdited: false,
+  },
+  {
+    id: "rt_guest_deepclean", title: "Deep clean living room for guests", spaceId: "sp_living", assetId: null,
+    trigger: { type: "on_mode", mode: "guests_arriving" },
+    effort: 3, consequence: "cosmetic", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "living", userEdited: false,
+  },
+  {
+    id: "rt_clean_fans", title: "Clean ceiling fans", spaceId: "sp_living", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 45 },
+    effort: 2, consequence: "cosmetic", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "living", userEdited: false,
+  },
+  {
+    id: "rt_changesheets", title: "Change bedsheets", spaceId: "sp_bed", assetId: null,
+    trigger: { type: "fixed_calendar", rrule: "FREQ=WEEKLY;BYDAY=SU" },
+    effort: 1, consequence: "cosmetic", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: ["travel"], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "bedroom", userEdited: false,
+  },
+  {
+    id: "rt_service_wm", title: "Service washing machine", spaceId: "sp_utility", assetId: "ast_wm",
+    trigger: { type: "usage_meter", meterDelta: 150 },
+    effort: 3, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "laundry", userEdited: false,
+  },
+  {
+    id: "rt_watertank", title: "Clean overhead water tank", spaceId: "sp_utility", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 180 },
+    effort: 4, consequence: "safety", ownerClass: "vendor", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "utility", userEdited: false,
+  },
+  {
+    id: "rt_wipe_doormat", title: "Wipe entry doormat", spaceId: "sp_entry", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 30 },
+    effort: 1, consequence: "cosmetic", ownerClass: "either", defaultAssigneeId: null,
+    requiresItemIds: [], modeFilters: { pauseIn: ["travel"], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "entry", userEdited: false,
+  },
+  {
+    id: "rt_mop_living", title: "Mop living room", spaceId: "sp_living", assetId: null,
+    trigger: { type: "floating_since_last", intervalDays: 3 },
+    effort: 2, consequence: "cosmetic", ownerClass: "help", defaultAssigneeId: "p_lakshmi",
+    requiresItemIds: [], modeFilters: { pauseIn: ["travel"], boostIn: [] },
+    steps: [], notes: "", active: true, source: "pack", packId: "living", userEdited: false,
+  },
+];

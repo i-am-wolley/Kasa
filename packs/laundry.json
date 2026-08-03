@@ -1,0 +1,28 @@
+{
+  "packId": "laundry",
+  "version": 1,
+  "label": "Laundry",
+  "appliesWhen": { "spaces": ["utility"] },
+  "spaces": [
+    { "type": "utility", "name": "Utility" }
+  ],
+  "items": [
+    { "name": "Detergent", "spaceType": "utility", "unit": "kg", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.1 }
+  ],
+  "assets": [
+    {
+      "name": "Washing machine", "spaceType": "utility", "category": "appliance",
+      "serviceIntervalMeter": 150, "meterType": "cycles", "meterUnit": "cycles",
+      "expectedLifeYears": 10
+    }
+  ],
+  "routines": [
+    {
+      "title": "Service washing machine",
+      "spaceType": "utility",
+      "assetRef": "Washing machine",
+      "trigger": { "type": "usage_meter", "meterDelta": 150 },
+      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+    }
+  ]
+}

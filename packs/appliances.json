@@ -1,0 +1,44 @@
+{
+  "packId": "appliances",
+  "version": 1,
+  "label": "Appliances",
+  "appliesWhen": { "always": true },
+  "spaces": [
+    { "type": "utility", "name": "Utility" },
+    { "type": "bedroom", "name": "Bedroom" }
+  ],
+  "items": [],
+  "assets": [
+    {
+      "name": "RO unit", "spaceType": "utility", "category": "water_purifier",
+      "serviceIntervalDays": 180, "serviceIntervalMeter": 3000,
+      "meterType": "litres", "meterUnit": "L", "expectedLifeYears": 7
+    },
+    {
+      "name": "AC unit", "spaceType": "bedroom", "category": "ac",
+      "serviceIntervalDays": 180, "expectedLifeYears": 10
+    }
+  ],
+  "routines": [
+    {
+      "title": "Service RO unit",
+      "spaceType": "utility",
+      "assetRef": "RO unit",
+      "trigger": { "type": "usage_meter", "meterDelta": 3000 },
+      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+    },
+    {
+      "title": "Pre-summer AC servicing",
+      "spaceType": "bedroom",
+      "assetRef": "AC unit",
+      "trigger": { "type": "seasonal", "months": [2, 3] },
+      "effort": 4, "consequence": "degrading", "ownerClass": "vendor"
+    },
+    {
+      "title": "Clean overhead water tank",
+      "spaceType": "utility",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 4, "consequence": "safety", "ownerClass": "vendor"
+    }
+  ]
+}

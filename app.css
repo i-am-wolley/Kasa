@@ -1,0 +1,585 @@
+/* ============================================================================
+   KASA — APP STYLES
+   Consumes tokens.css only — no hardcoded hex outside that file (memo §12
+   acceptance test). Mobile-first: base rules target <600px single column;
+   600-1024px two-pane rules layer on top; >1024px three-pane deferred
+   (memo build-plan Phase 7).
+   ============================================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;1,9..144,500&display=swap");
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font-family: inherit; }
+button { touch-action: manipulation; }
+
+h1, h2, h3, p { margin: 0; }
+
+.font-num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+.named { font-family: var(--font-serif); font-style: italic; font-weight: 500; }
+
+.eyebrow {
+  font-size: var(--fs-label);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--gold);
+  outline-offset: 2px;
+  opacity: 0.9;
+}
+
+/* ---- App shell -------------------------------------------------------- */
+
+#app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: var(--content-max-w);
+  margin: 0 auto;
+  width: 100%;
+}
+
+.app-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.screen {
+  flex: 1;
+  padding: var(--space, 16px) 16px calc(var(--nav-height, 84px) + 16px);
+  overflow-y: auto;
+}
+
+@media (min-width: 600px) {
+  .screen { padding: 24px 24px calc(var(--nav-height, 84px) + 16px); }
+}
+
+/* ---- Bottom tab bar — mobile and tablet alike, see note below ----------- */
+
+.tabbar {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  box-shadow: var(--shadow-nav);
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 100;
+}
+
+.tabbar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: var(--tap-min);
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-pill);
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-std);
+}
+
+.tabbar-item[aria-current="page"] {
+  color: var(--gold);
+  font-weight: var(--fw-bold);
+}
+
+/* Bottom tab bar stays bottom at every breakpoint up to real desktop —
+   tablet apps that keep bottom tabs (Instagram/X on iPad) read as more
+   consistent than switching to a rail, and Kasa's core interaction (swipe
+   done/snooze in-hand) stays thumb-reachable either way. A left sidebar is
+   only worth its keep once a genuinely wide desktop layout exists — that's
+   build-plan Phase 7, not built yet, so no >1024px override here. */
+@media (min-width: 600px) {
+  .tabbar-item { max-width: 120px; }
+  .tabbar { justify-content: center; gap: 24px; }
+}
+
+/* ---- Top bar (mode chip, household name) -------------------------------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 4px;
+}
+
+@media (min-width: 600px) {
+  .topbar { padding: 24px 24px 4px; }
+}
+
+.topbar h1 {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-tight);
+}
+
+.mode-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: var(--gold-soft);
+  color: var(--gold);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  border: none;
+  cursor: pointer;
+}
+
+/* ---- House Line ---------------------------------------------------------
+   30 daily ticks, hairline baseline, tick height = effort load, tick colour
+   = heaviest consequence tier due that day. The only ornamental element in
+   the app, made entirely of information (memo §9.3). */
+
+.house-line {
+  padding: 4px 16px 12px;
+}
+
+@media (min-width: 600px) { .house-line { padding: 4px 24px 16px; } }
+
+.house-line-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1px;
+}
+
+.house-line-tick {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--line);
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-std);
+}
+
+.house-line-tick:hover { opacity: 0.7; }
+
+.house-line-caption {
+  margin-top: 8px;
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--fs-sm);
+  color: var(--ink-muted);
+}
+
+/* ---- Today sections ------------------------------------------------------ */
+
+.today-section { padding: 20px 16px 0; }
+@media (min-width: 600px) { .today-section { padding: 24px 24px 0; } }
+
+.today-section + .today-section { padding-top: 8px; }
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+/* ---- Occurrence row — the core swipeable list item ----------------------- */
+
+.occ-row-wrap {
+  position: relative;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.occ-row-actions {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+.occ-row-action {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  color: var(--surface);
+}
+
+.occ-row-action.done { background: var(--done); justify-content: flex-start; }
+.occ-row-action.snooze { background: var(--ink-muted); justify-content: flex-end; }
+
+.occ-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap-min);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--dur-fast) var(--ease-std);
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+.occ-row[data-tier="degrading"] { border-left: 3px solid var(--tier-degrading); }
+.occ-row[data-tier="damaging"]  { border-left: 3px solid var(--tier-damaging); }
+.occ-row[data-tier="safety"]    { border-left: 3px solid var(--tier-safety); }
+
+.occ-row-icon {
+  flex-shrink: 0;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-chip);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+}
+
+.occ-row-body { flex: 1; min-width: 0; }
+
+.occ-row-title {
+  font-size: var(--fs-body);
+  font-weight: var(--fw-semibold);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.occ-row-meta {
+  margin-top: 2px;
+  font-size: var(--fs-meta);
+  color: var(--ink-muted);
+}
+
+.occ-row-meta.overdue { color: var(--tier-damaging); font-weight: var(--fw-semibold); }
+.occ-row-meta.safety-overdue { color: var(--tier-safety); font-weight: var(--fw-bold); }
+
+.occ-row-effort {
+  flex-shrink: 0;
+  font-size: var(--fs-micro);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+}
+
+/* ---- Empty state ----------------------------------------------------- */
+
+.empty-state {
+  text-align: center;
+  padding: 32px 20px;
+  color: var(--ink-muted);
+}
+
+.empty-state p { margin-bottom: 12px; font-size: var(--fs-sm); }
+
+/* ---- Chip / pill ------------------------------------------------------ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  border-radius: var(--radius-chip);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-muted);
+  cursor: pointer;
+  min-height: var(--tap-min);
+}
+
+.chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+
+/* ---- Generic list row (House/Assets/People cards) ----------------------- */
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap-min);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.list-row-right {
+  flex-shrink: 0;
+  font-size: var(--fs-meta);
+  color: var(--ink-faint);
+  text-align: right;
+}
+
+/* ---- Stepper ------------------------------------------------------------- */
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stepper-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.stepper-value { min-width: 28px; text-align: center; font-weight: var(--fw-semibold); }
+
+/* ---- Sheet form fields --------------------------------------------------- */
+
+.field { display: block; margin-bottom: 16px; }
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  color: var(--ink-muted);
+}
+
+.text-input {
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 10px 14px;
+  font-size: var(--fs-body);
+  font-family: var(--font-sans);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.text-input:focus-visible { border-color: var(--gold); }
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---- Catalog typeahead dropdown ------------------------------------------ */
+
+.catalog-suggestions {
+  position: absolute;
+  left: 0; right: 0; top: calc(100% + 4px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  box-shadow: var(--shadow-pop);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.catalog-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.catalog-suggestion:last-child { border-bottom: none; }
+.catalog-suggestion:hover { background: var(--surface-sunk); }
+
+.sheet-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+/* ---- Buttons ----------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--tap-min);
+  padding: 12px 18px;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-bold);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform var(--dur-micro) var(--ease-std);
+}
+
+.btn:active { transform: scale(0.96); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn:disabled:active { transform: none; }
+
+.btn-solid { background: var(--ink); color: var(--surface); }
+.btn-accent { background: var(--gold); color: var(--surface); }
+.btn-tinted { background: var(--gold-soft); color: var(--gold); }
+.btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+
+/* ---- Toast --------------------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 96px);
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 10px 18px;
+  border-radius: var(--radius-chip);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  box-shadow: var(--shadow-pop);
+  z-index: 400;
+  animation: toast-in var(--dur-base) var(--ease-spring) forwards;
+  white-space: nowrap;
+}
+
+.toast.leaving { animation: toast-out var(--dur-fast) var(--ease-std) forwards; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translate(-50%, 0); }
+  to   { opacity: 0; transform: translate(-50%, 12px); }
+}
+
+/* ---- Sheet (bottom sheet on phone, centered modal on tablet+) ----------- */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  padding: 20px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  box-shadow: var(--shadow-pop);
+  animation: sheet-up var(--dur-base) var(--ease-spring) forwards;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@media (min-width: 600px) {
+  .sheet-backdrop { align-items: center; }
+  .sheet { border-radius: var(--radius-sheet); max-width: 480px; }
+  @keyframes sheet-up {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+}
+
+.sheet-title {
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-emphasis);
+  margin-bottom: 16px;
+}
+
+/* ---- Skeleton loading shimmer ------------------------------------------- */
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-sunk) 25%, var(--line) 37%, var(--surface-sunk) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  border-radius: var(--radius-chip);
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}

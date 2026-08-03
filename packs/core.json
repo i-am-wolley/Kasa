@@ -1,0 +1,47 @@
+{
+  "packId": "core",
+  "version": 1,
+  "label": "Core",
+  "appliesWhen": { "always": true },
+  "spaces": [
+    { "type": "living", "name": "Living room" },
+    { "type": "bedroom", "name": "Bedroom" },
+    { "type": "entry", "name": "Entry" },
+    { "type": "whole_home", "name": "Whole home" }
+  ],
+  "items": [],
+  "assets": [],
+  "routines": [
+    {
+      "title": "Pay society maintenance",
+      "spaceType": "whole_home",
+      "trigger": { "type": "fixed_calendar", "rrule": "FREQ=MONTHLY;BYMONTHDAY=5" },
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Change bedsheets",
+      "spaceType": "bedroom",
+      "trigger": { "type": "fixed_calendar", "rrule": "FREQ=WEEKLY;BYDAY=SU" },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Clean ceiling fans",
+      "spaceType": "living",
+      "trigger": { "type": "floating_since_last", "intervalDays": 45 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Wipe entry doormat",
+      "spaceType": "entry",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either",
+      "pauseIn": ["travel"]
+    },
+    {
+      "title": "Deep clean living room for guests",
+      "spaceType": "living",
+      "trigger": { "type": "on_mode", "mode": "guests_arriving" },
+      "effort": 3, "consequence": "cosmetic", "ownerClass": "either"
+    }
+  ]
+}

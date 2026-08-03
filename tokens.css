@@ -1,0 +1,138 @@
+/* ============================================================================
+   KASA — DESIGN TOKENS
+   Shared ground with Miso (Pantry-OS-App): same warm-paper mechanism, same
+   values where a value is genuinely shared (ground/ink/accent below are
+   copied from the real Miso design system — ~/.claude/skills/miso-design/ —
+   not re-guessed). Kasa is a separate deployment (own repo, own Firebase
+   project), so this file is a COPY of the shared values, not a symlink —
+   if Miso's tokens change, re-sync this file by hand.
+
+   Earth secondaries (terracotta/sand) and the consequence-tier system below
+   are Kasa-original — build-memo §9.2 authored these for Kasa specifically,
+   they don't correspond to anything in Miso's own palette to extract.
+   ============================================================================ */
+
+:root {
+  /* ---- ground — real Miso cream-100/white/cream-300/sand-300 ------------- */
+  --bg:            #F5F0EA;   /* warm cream paper */
+  --surface:       #FFFFFF;
+  --surface-sunk:  #ECE7E0;
+  --line:          #E2DCD5;
+
+  /* ---- ink — real Miso ink-900/stone-600/sand-500 ------------------------- */
+  --ink:           #18140F;
+  --ink-muted:     #6B6560;
+  --ink-faint:     #9E9890;
+
+  /* ---- accent — real Miso bronze-500, Kasa's "gold" -----------------------
+     In Miso this is the interactive accent (links, focus, active). Kasa's
+     memo calls it "gold" and gives it the same meaning: attention, not
+     alarm — it also carries the "degrading" consequence tier below. */
+  --gold:          #B8935A;
+  --gold-soft:     rgba(184,147,90,0.12);
+  --gold-glow:     rgba(184,147,90,0.30);
+
+  /* ---- earth secondaries — Kasa-original (memo §9.1) ---------------------- */
+  --terracotta:    #B5563C;
+  --sand:          #D9C7AE;
+
+  /* ---- consequence tiers — Kasa-original (memo §9.2) ----------------------
+     Derived from the earth family above, not generic status red/amber/green.
+     Cosmetic gets NO colour — most routines are cosmetic; if everything is
+     coloured, nothing reads as urgent. */
+  --tier-cosmetic:   transparent;
+  --tier-degrading:  var(--gold);
+  --tier-damaging:   var(--terracotta);
+  --tier-safety:     #7A3428;   /* deep ember — used ~3 times ever */
+
+  --done:            #6E7A56;   /* muted olive, completion state */
+  --done-soft:       rgba(110,122,86,0.12);
+
+  /* ---- type — real Miso Geist + Geist Mono, NOT Playfair/Karla -----------
+     (the memo's §9.1 fallback assumed Playfair Display SC + Karla; real
+     Miso ships Geist/Geist Mono + Fraunces italic for its one special-
+     occasion serif use. Corrected here per the memo's own instruction to
+     pull real values over fallback guesses.) Fraunces italic carries
+     Kasa's "named things get a serif italic" treatment — routine titles,
+     asset names — the direct equivalent of Miso reserving it for
+     Gourmet Weekend; used sparingly, not on every label. */
+  --font-sans:  "Geist", "Inter", "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono:  "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-serif: "Fraunces", "Georgia", "Times New Roman", serif;
+
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-emphasis: 650;
+  --fw-bold:     700;
+  --fw-heavy:    800;
+
+  --fs-display:  34px;
+  --fs-title:    22px;
+  --fs-heading:  17px;
+  --fs-body:     16px;
+  --fs-sm:       14px;
+  --fs-meta:     13px;
+  --fs-micro:    12px;
+  --fs-label:    11px;
+  --fs-stat:     28px;
+
+  --lh-tight:  1.22;   /* headings, per memo §9.1 */
+  --lh-normal: 1.65;   /* body, per memo §9.1 */
+  --lh-loose:  1.8;
+
+  --ls-tight: -0.01em; /* headings */
+  --ls-label:  0.12em;
+  --ls-wide:   0.18em;
+
+  /* ---- radius — Kasa-specific scale (memo §9.1), close to but distinct
+     from Miso's own (22px sheets vs Miso's 20px modals — deliberate) ------- */
+  --radius-sheet: 22px;
+  --radius-card:  16px;
+  --radius-pill:  14px;
+  --radius-chip:  10px;
+  --radius-full:  999px;
+
+  /* ---- motion — Kasa-specific (memo §9.1); note the spring curve is a
+     deliberate departure from Miso's own "no bounce" rule, authored for
+     Kasa's sheet/toast entrances specifically ------------------------------ */
+  --dur-micro: 120ms;
+  --dur-fast:  180ms;
+  --dur-base:  260ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-std:    cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- shadows — barely-there, same mechanism as Miso -------------------- */
+  --shadow-card:  0 2px 8px rgba(26,21,18,0.06);
+  --shadow-pop:   0 8px 32px rgba(0,0,0,0.18);
+  --shadow-nav:   0 -2px 16px rgba(0,0,0,0.08);
+  --shadow-focus: 0 0 0 2.5px var(--gold-glow);
+
+  /* ---- layout -------------------------------------------------------------
+     <600px single column, 600-1024px two-pane, >1024px three-pane (deferred) */
+  --tap-min: 44px;
+  --nav-height: 84px;
+  --content-max-w: 1024px;
+}
+
+[data-theme="dark"] {
+  --bg:            #0D0D0D;
+  --surface:       #181818;
+  --surface-sunk:  #1E1E1E;
+  --line:          #252525;
+
+  --ink:           #F2EDE8;
+  --ink-muted:     #6A6A6A;
+  --ink-faint:     #383838;
+
+  --gold:          #C8A96E;
+  --gold-soft:     rgba(200,169,110,0.14);
+  --gold-glow:     rgba(200,169,110,0.32);
+
+  --terracotta:    #C4664A;
+  --sand:          #8A7A64;
+
+  --tier-safety:   #A8503E;   /* lifted slightly for dark-surface contrast */
+  --done:          #8A9670;
+  --done-soft:     rgba(138,150,112,0.14);
+}

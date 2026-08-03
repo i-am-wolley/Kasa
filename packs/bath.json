@@ -1,0 +1,37 @@
+{
+  "packId": "bath",
+  "version": 1,
+  "label": "Bathrooms",
+  "appliesWhen": { "spaces": ["bath"] },
+  "spaces": [
+    { "type": "bath", "name": "Bathroom" }
+  ],
+  "items": [
+    { "name": "Toothpaste", "spaceType": "bath", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.012 },
+    { "name": "Toilet cleaner", "spaceType": "bath", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.03 },
+    { "name": "Handwash refill", "spaceType": "bath", "unit": "ml", "qty": 500, "parLevel": 100, "packSize": 500, "defaultBurnRate": 8 },
+    { "name": "Toilet paper", "spaceType": "bath", "unit": "roll", "qty": 4, "parLevel": 2, "packSize": 4, "defaultBurnRate": 0.2 },
+    { "name": "Naphthalene balls", "spaceType": "bath", "unit": "pack", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.01 }
+  ],
+  "assets": [
+    {
+      "name": "Geyser", "spaceType": "bath", "category": "water_heater",
+      "serviceIntervalDays": 365, "expectedLifeYears": 8, "consumables": ["Anode rod"]
+    }
+  ],
+  "routines": [
+    {
+      "title": "Descale showerhead and taps",
+      "spaceType": "bath",
+      "trigger": { "type": "floating_since_last", "intervalDays": 60 },
+      "effort": 2, "consequence": "degrading", "ownerClass": "either",
+      "regionalOverrides": { "hard_water_city": { "intervalDays": 30 } }
+    },
+    {
+      "title": "Deep clean bathroom",
+      "spaceType": "bath",
+      "trigger": { "type": "floating_since_last", "intervalDays": 14 },
+      "effort": 3, "consequence": "cosmetic", "ownerClass": "help"
+    }
+  ]
+}

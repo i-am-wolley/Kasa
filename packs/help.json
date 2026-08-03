@@ -1,0 +1,28 @@
+{
+  "packId": "help",
+  "version": 1,
+  "label": "Household help",
+  "appliesWhen": { "householdHelp": ["Maid", "Cook", "Both", "Maid+cook+driver"] },
+  "spaces": [
+    { "type": "living", "name": "Living room" },
+    { "type": "utility", "name": "Utility" }
+  ],
+  "items": [],
+  "assets": [],
+  "routines": [
+    {
+      "title": "Mop living room",
+      "spaceType": "living",
+      "trigger": { "type": "floating_since_last", "intervalDays": 3 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "help",
+      "pauseIn": ["travel"]
+    },
+    {
+      "title": "Iron and fold clothes",
+      "spaceType": "utility",
+      "trigger": { "type": "floating_since_last", "intervalDays": 7 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "help",
+      "pauseIn": ["travel"]
+    }
+  ]
+}
