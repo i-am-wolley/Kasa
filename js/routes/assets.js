@@ -188,8 +188,12 @@ function openAssetSheet({ asset = null, defaultSpaceId = null } = {}) {
     for (const i of checkedIndices) {
       const tmpl = currentSuggested[i];
       if (!tmpl) continue;
+      // Same-room only — an AC filter routine in the Bedroom shouldn't
+      // silently link to a filter item that happens to live in Utility
+      // (2026-08-03, user request, same principle as the manual routine
+      // builder's stock picker).
       const requiresItemIds = (tmpl.requiresItemKeys || [])
-        .map((k) => getState().items.find((it) => it.catalogKey === k)?.id)
+        .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === spaceId)?.id)
         .filter(Boolean);
       addRoutine({
         title: tmpl.title, spaceId, assetId, trigger: tmpl.trigger,

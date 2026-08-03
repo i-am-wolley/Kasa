@@ -20,14 +20,19 @@
   <div id="app">
     <div class="app-shell">
       <header class="app-mark" aria-hidden="true">
-        <!-- Kasa's mark: a roofline reduced to a single stroke, with a small
-             dot resting where the walls meet the roof — "a home, watched
-             over," the same house-plus-attention idea as the consequence
-             tiers, drawn abstractly rather than as a literal house glyph. -->
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 16.5 12 6l8 10.5" />
-          <circle cx="12" cy="6" r="1.3" fill="currentColor" stroke="none" />
+        <!-- Kasa's mark, take two — a roofline read as "another house icon"
+             (2026-08-03 feedback: "too cliched"). Redrawn as one rounded
+             square — the app's own dominant shape, the same silhouette as
+             every House/Stock tile — with a small solid dot resting inside
+             near a corner, the same "consequence dot" language used
+             throughout the app. Reads as "one tracked thing, watched," and
+             ties the mark to Kasa's actual UI vocabulary instead of a
+             generic home pictogram. -->
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="5.5" />
+          <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
         </svg>
+        <span class="app-wordmark">kasa</span>
       </header>
       <div class="app-body">
         <nav class="tabbar" id="tabbar" aria-label="Primary"></nav>

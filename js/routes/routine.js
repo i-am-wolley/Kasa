@@ -60,15 +60,25 @@ function triggerParamsHtml(routine) {
   `;
 }
 
+// Only items already in the routine's own room are offered — a routine in
+// the Bathroom shouldn't be able to consume Kitchen stock (2026-08-03,
+// user request). Re-rendered live if the Space chip changes.
+function requiresItemsFieldHtml(spaceId, selectedIds) {
+  const state = getState();
+  const items = state.items.filter((i) => i.spaceId === spaceId);
+  return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options: items.map((i) => ({ value: i.id, label: i.name })), value: selectedIds, multi: true }));
+}
+
 function bodyHtml(routine, spaceId) {
   const state = getState();
+  const initialSpaceId = routine?.spaceId ?? spaceId;
   return `
     <form id="routine-form">
       ${field("Title", textInput({ id: "f-title", value: routine?.title ?? "", placeholder: "e.g. Clean ceiling fans" }))}
-      ${field("Space", chipGroup({ name: "spaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: routine?.spaceId ?? spaceId }))}
+      ${field("Space", chipGroup({ name: "spaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: initialSpaceId }))}
       ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
       ${triggerParamsHtml(routine)}
-      ${field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options: state.items.map((i) => ({ value: i.id, label: i.name })), value: routine?.requiresItemIds ?? [], multi: true }))}
+      <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
       ${field("Effort", chipGroup({ name: "effort", options: EFFORT_OPTIONS, value: String(routine?.effort ?? 1) }))}
       ${field("If skipped, it", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
       ${field("Usually done by", chipGroup({ name: "ownerClass", options: OWNER_OPTIONS, value: routine?.ownerClass ?? "either" }))}
@@ -127,6 +137,16 @@ function openRoutineEditor({ routine = null, defaultSpaceId = null } = {}) {
   root.querySelector('[data-field="triggerType"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
     if (btn) showTriggerBlock(root, btn.dataset.value);
+  });
+
+  // Switching rooms resets the stock selection rather than carrying over
+  // ids that won't exist in the new room's filtered list.
+  root.querySelector('[data-field="spaceId"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn) return;
+    const container = root.querySelector("#requires-items-field");
+    container.innerHTML = requiresItemsFieldHtml(btn.dataset.value, []);
+    wireChipGroup(root, "requiresItemIds");
   });
 
   root.querySelector('[data-action="save"]').addEventListener("click", () => {

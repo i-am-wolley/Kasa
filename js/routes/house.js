@@ -201,6 +201,17 @@ function openRoomTemplateSheet(space, template) {
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     let added = 0;
 
+    // Items first, then assets/routines — a suggestedRoutines lookup below
+    // needs this room's items to already exist in state to link to them
+    // (e.g. an AC's "Clean filter" routine linking to this same template's
+    // suggested filter item), not just items that predate this save.
+    root.querySelectorAll('[data-item-index][aria-pressed="true"]').forEach((btn) => {
+      const entry = itemEntries[Number(btn.dataset.itemIndex)];
+      if (!entry) return;
+      addItem({ name: entry.name, catalogKey: entry.key, icon: entry.icon, spaceId: space.id, unit: entry.unit, qty: entry.parLevel, packSize: entry.packSize, parLevel: entry.parLevel, burnRate: entry.defaultBurnRate ?? 0 });
+      added += 1;
+    });
+
     root.querySelectorAll('[data-asset-index][aria-pressed="true"]').forEach((btn) => {
       const entry = assetEntries[Number(btn.dataset.assetIndex)];
       if (!entry) return;
@@ -212,9 +223,12 @@ function openRoomTemplateSheet(space, template) {
       // until now, which is exactly the gap the user flagged (2026-08-03:
       // "those assets are not having the standard routines already checked
       // in"). Auto-add them here rather than a second layer of toggles.
+      // Same-room only when resolving requiresItemKeys (2026-08-03, user
+      // request — routines shouldn't silently link to another room's item
+      // just because it shares a catalog key).
       for (const tmpl of entry.suggestedRoutines || []) {
         const requiresItemIds = (tmpl.requiresItemKeys || [])
-          .map((k) => getState().items.find((it) => it.catalogKey === k)?.id)
+          .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === space.id)?.id)
           .filter(Boolean);
         addRoutine({
           title: tmpl.title, spaceId: space.id, assetId: createdAsset.id, trigger: tmpl.trigger,
@@ -222,13 +236,6 @@ function openRoomTemplateSheet(space, template) {
         });
         added += 1;
       }
-    });
-
-    root.querySelectorAll('[data-item-index][aria-pressed="true"]').forEach((btn) => {
-      const entry = itemEntries[Number(btn.dataset.itemIndex)];
-      if (!entry) return;
-      addItem({ name: entry.name, catalogKey: entry.key, icon: entry.icon, spaceId: space.id, unit: entry.unit, qty: entry.parLevel, packSize: entry.packSize, parLevel: entry.parLevel, burnRate: entry.defaultBurnRate ?? 0 });
-      added += 1;
     });
 
     root.querySelectorAll('[data-routine-index][aria-pressed="true"]').forEach((btn) => {

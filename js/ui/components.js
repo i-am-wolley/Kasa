@@ -181,7 +181,8 @@ function wireChipGroup(root, name) {
 function sheetActions({ saveLabel = "Save", showDelete = false }) {
   return `
     <div class="sheet-actions">
-      ${showDelete ? `<button type="button" class="btn btn-ghost" data-action="delete">Delete</button>` : ""}
+      ${showDelete ? `<button type="button" class="btn btn-danger" data-action="delete">Delete</button>` : ""}
+      <button type="button" class="btn btn-ghost" data-action="cancel">Cancel</button>
       <button type="button" class="btn btn-solid" data-action="save" style="flex:1;">${saveLabel}</button>
     </div>
   `;
@@ -241,6 +242,9 @@ function openSheet({ title, bodyHtml }) {
   document.getElementById("sheet-backdrop").addEventListener("click", (e) => {
     if (e.target.id === "sheet-backdrop") closeSheet();
   });
+  // Generic — every sheetActions() include a Cancel button, wired once
+  // here instead of by each of the ~8 callers.
+  root.querySelector('[data-action="cancel"]')?.addEventListener("click", closeSheet);
 }
 
 function closeSheet() {

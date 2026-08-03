@@ -65,7 +65,12 @@ function bucketOf(item) {
 // shown in the edit sheet.
 function tileHtml(item) {
   const daysLeft = projectedDaysLeft(item);
-  const meta = item.status === "out" ? "Out" : daysLeft !== null ? `~${daysLeft}d left` : `${item.qty} ${item.unit}`;
+  const meta = item.binary
+    ? item.qty > 0 ? "In stock" : "Out"
+    : item.status === "out" ? "Out" : daysLeft !== null ? `~${daysLeft}d left` : `${item.qty} ${item.unit}`;
+  const control = item.binary
+    ? `<button type="button" class="chip" data-item-toggle="${item.id}" aria-pressed="${item.qty > 0}">${item.qty > 0 ? "In stock" : "Mark in stock"}</button>`
+    : stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` });
   return `
     <div class="tile tile-stock" data-item-id="${item.id}">
       <div class="tile-body" data-open-item="${item.id}">
@@ -73,7 +78,7 @@ function tileHtml(item) {
         <div class="tile-title">${item.name}</div>
         <div class="tile-meta">${meta}</div>
       </div>
-      <div class="tile-stepper">${stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` })}</div>
+      <div class="tile-stepper">${control}</div>
     </div>
   `;
 }
@@ -122,32 +127,50 @@ function lastRestockedLabel(item) {
 
 function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
   const state = getState();
+  const isBinary = !!item?.binary;
   openSheet({
     title: item ? "Edit item" : "Add item",
     bodyHtml: `
-      ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:16px;">${lastRestockedLabel(item)}${projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
+      ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-bottom:10px;">${lastRestockedLabel(item)}${projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
       <form id="item-form">
         ${field("Name", catalogField({ id: "f-item-name", type: "item", value: item?.name ?? "", placeholder: "Start typing — e.g. Toilet cleaner" }))}
         ${field("Space", chipGroup({ name: "itemSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: item?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
-        ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
-        ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1 }))}
-        ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1 }))}
-        ${field(
-          "Consumption rate (optional)",
-          `<div style="display:flex;gap:8px;align-items:center;">
-            <div style="flex:1;">${textInput({ id: "f-burnrate", type: "number", value: item?.burnRate || "", placeholder: "e.g. 0.5" })}</div>
-            <div style="flex:1;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }], value: "day" })}</div>
-          </div>`,
-        )}
+        ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
+        <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
+          ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
+          ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1 }))}
+          ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1 }))}
+          ${field(
+            "Consumption rate (optional)",
+            `<div style="display:flex;gap:8px;">
+              <div style="width:84px;flex-shrink:0;">${textInput({ id: "f-burnrate", type: "number", value: item?.burnRate || "", placeholder: "0.5" })}</div>
+              <div style="flex:1;min-width:0;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }], value: "day" })}</div>
+            </div>`,
+          )}
+        </div>
+        <div id="binary-field" style="display:${isBinary ? "block" : "none"};">
+          ${field("In stock?", chipGroup({ name: "binaryInStock", options: [{ value: "yes", label: "Yes, we have it" }, { value: "no", label: "No" }], value: item ? (item.qty > 0 ? "yes" : "no") : "yes" }))}
+        </div>
         ${field("Expiry date (optional)", textInput({ id: "f-expiry", type: "date", value: item?.expiryDate ?? "" }))}
       </form>
-      ${item?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:8px;">Catalog key: <span class="font-num">${item.catalogKey}</span></p>` : ""}
+      ${item?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:6px;">Catalog key: <span class="font-num">${item.catalogKey}</span></p>` : ""}
       ${sheetActions({ saveLabel: item ? "Save changes" : "Add item", showDelete: !!item })}
     `,
   });
   const root = document.getElementById("sheet-root");
-  ["itemSpaceId", "unit"].forEach((n) => wireChipGroup(root, n));
+  ["itemSpaceId", "unit", "trackMode", "binaryInStock"].forEach((n) => wireChipGroup(root, n));
   wireChipGroup(root, "burnPeriod");
+
+  // "Track as" toggles which field block shows — a stocked item is either
+  // a quantity you count, or a plain yes/no you have (2026-08-03, user
+  // request: "a binary option for the stock without numbers").
+  root.querySelectorAll('[data-field="trackMode"] [data-value]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const binary = btn.dataset.value === "binary";
+      root.querySelector("#qty-fields").style.display = binary ? "none" : "block";
+      root.querySelector("#binary-field").style.display = binary ? "block" : "none";
+    });
+  });
 
   // Re-express the entered number when the period chip changes, so
   // switching /day -> /week doesn't silently change what will be saved.
@@ -182,21 +205,46 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     const entry = resolveCatalogField(root, "f-item-name", "item");
     if (!entry) return;
-    const qty = Number(root.querySelector("#f-qty").value) || 0;
-    const parLevel = Number(root.querySelector("#f-par").value) || 1;
-    const burnRateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
-    const burnRate = burnRateRaw ? toPerDay(burnRateRaw, readChipGroup(root, "burnPeriod") || "day") : 0;
+    const spaceId = readChipGroup(root, "itemSpaceId");
+
+    // Same catalog item twice in the same room is almost always a mistake
+    // (the earlier "no warning" decision was about assets, which can
+    // legitimately repeat — e.g. two ACs — stock quantity should just be
+    // one tracked total per room instead). Assets are unaffected.
+    if (!item) {
+      const dup = state.items.find((i) => i.spaceId === spaceId && i.catalogKey === entry.key);
+      if (dup) {
+        showToast(`${entry.name} is already tracked in this room — adjust it there instead`);
+        return;
+      }
+    }
+
+    const binary = readChipGroup(root, "trackMode") === "binary";
+    let qty, parLevel, burnRate, status;
+    if (binary) {
+      qty = readChipGroup(root, "binaryInStock") === "yes" ? 1 : 0;
+      parLevel = 1;
+      burnRate = 0;
+      status = qty <= 0 ? "out" : "ok";
+    } else {
+      qty = Number(root.querySelector("#f-qty").value) || 0;
+      parLevel = Number(root.querySelector("#f-par").value) || 1;
+      const burnRateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
+      burnRate = burnRateRaw ? toPerDay(burnRateRaw, readChipGroup(root, "burnPeriod") || "day") : 0;
+      status = qty <= 0 ? "out" : qty <= parLevel ? "low" : "ok";
+    }
     const fields = {
       name: entry.name,
       catalogKey: entry.key,
       icon: entry.icon,
-      spaceId: readChipGroup(root, "itemSpaceId"),
-      unit: readChipGroup(root, "unit"),
+      spaceId,
+      unit: binary ? "piece" : readChipGroup(root, "unit"),
+      binary,
       qty,
       parLevel,
       burnRate,
       expiryDate: root.querySelector("#f-expiry").value || null,
-      status: qty <= 0 ? "out" : qty <= parLevel ? "low" : "ok",
+      status,
     };
     if (item) updateItem(item.id, fields);
     else addItem(fields);
@@ -244,6 +292,18 @@ function wireEvents(state) {
         adjustItemQty(id, Number(btn.dataset.step));
         haptic(4);
       });
+    });
+  });
+
+  mountEl.querySelectorAll("[data-item-toggle]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.itemToggle;
+      const it = byId(state.items, id);
+      if (!it) return;
+      const nowIn = it.qty <= 0;
+      updateItem(id, { qty: nowIn ? 1 : 0, status: nowIn ? "ok" : "out" });
+      haptic(4);
     });
   });
 }

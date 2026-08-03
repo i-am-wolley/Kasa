@@ -88,9 +88,18 @@ h1, h2, h3, p { margin: 0; }
 .app-mark {
   flex-shrink: 0;
   display: flex;
+  align-items: center;
   justify-content: flex-start;
+  gap: 7px;
   padding: 8px 14px 0;
   color: var(--gold);
+}
+
+.app-wordmark {
+  font-size: 14px;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.02em;
+  color: var(--ink);
 }
 
 @media (min-width: 600px) {
@@ -548,12 +557,12 @@ h1, h2, h3, p { margin: 0; }
 
 /* ---- Sheet form fields --------------------------------------------------- */
 
-.field { display: block; margin-bottom: 16px; }
+.field { display: block; margin-bottom: 10px; }
 
 .field-label {
   display: block;
-  margin-bottom: 6px;
-  font-size: var(--fs-meta);
+  margin-bottom: 4px;
+  font-size: var(--fs-micro);
   font-weight: var(--fw-semibold);
   color: var(--ink-muted);
 }
@@ -561,7 +570,10 @@ h1, h2, h3, p { margin: 0; }
 .text-input {
   width: 100%;
   min-height: var(--tap-min);
-  padding: 10px 14px;
+  padding: 9px 12px;
+  /* Deliberately NOT shrunk below 16px (var(--fs-body)) — iOS Safari
+     auto-zooms the viewport on focus for any input under 16px, which
+     would fight every other "make it sleeker" change here. */
   font-size: var(--fs-body);
   font-family: var(--font-sans);
   border: 1px solid var(--line);
@@ -575,7 +587,7 @@ h1, h2, h3, p { margin: 0; }
 .chip-group {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 /* ---- Catalog typeahead dropdown ------------------------------------------ */
@@ -595,14 +607,14 @@ h1, h2, h3, p { margin: 0; }
 .catalog-suggestion {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: none;
   border: none;
   border-bottom: 1px solid var(--line);
   color: var(--ink);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-meta);
   text-align: left;
   cursor: pointer;
 }
@@ -612,8 +624,8 @@ h1, h2, h3, p { margin: 0; }
 
 .sheet-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 6px;
 }
 
 /* ---- Buttons ----------------------------------------------------------- */
@@ -645,6 +657,7 @@ h1, h2, h3, p { margin: 0; }
 .btn-accent { background: var(--gold); color: var(--surface); }
 .btn-tinted { background: var(--gold-soft); color: var(--gold); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); }
 
 /* ---- Toast --------------------------------------------------------------- */
 
@@ -694,7 +707,7 @@ h1, h2, h3, p { margin: 0; }
   max-width: 560px;
   background: var(--surface);
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  padding: 20px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+  padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
   box-shadow: var(--shadow-pop);
   animation: sheet-up var(--dur-base) var(--ease-spring) forwards;
   max-height: 85vh;
@@ -716,9 +729,9 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .sheet-title {
-  font-size: var(--fs-heading);
+  font-size: var(--fs-body);
   font-weight: var(--fw-emphasis);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 /* ---- Skeleton loading shimmer ------------------------------------------- */

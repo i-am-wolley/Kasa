@@ -48,6 +48,13 @@
   --done:            #6E7A56;   /* muted olive, completion state */
   --done-soft:       rgba(110,122,86,0.12);
 
+  /* ---- danger — delete/destructive actions (2026-08-03, user request:
+     "add nice red color to delete tabs"). Deliberately its own hue, not a
+     reuse of --terracotta (that's the damaging consequence tier — reusing
+     it for "delete" would blur two different meanings). */
+  --danger:          #C0392B;
+  --danger-soft:     rgba(192,57,43,0.12);
+
   /* ---- type — real Miso Geist + Geist Mono, NOT Playfair/Karla -----------
      (the memo's §9.1 fallback assumed Playfair Display SC + Karla; real
      Miso ships Geist/Geist Mono + Fraunces italic for its one special-
@@ -135,4 +142,7 @@
   --tier-safety:   #A8503E;   /* lifted slightly for dark-surface contrast */
   --done:          #8A9670;
   --done-soft:     rgba(138,150,112,0.14);
+
+  --danger:        #D9564A;   /* lifted for dark-surface contrast */
+  --danger-soft:   rgba(217,86,74,0.16);
 }
