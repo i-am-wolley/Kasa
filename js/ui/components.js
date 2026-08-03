@@ -8,6 +8,15 @@
 import { Icon } from "./icons.js";
 import { findMatches, findExact, getOrCreate } from "../catalog.js";
 
+// Minimal, light haptic feedback (2026-08-03, user request) — a short
+// single pulse, not a pattern. navigator.vibrate is Android-Chrome-only
+// (iOS Safari has no Vibration API at all), so this is silently a no-op
+// there rather than an error; feature-detected once per call, no fallback
+// needed.
+function haptic(ms = 8) {
+  navigator.vibrate?.(ms);
+}
+
 function chip(label, { active = false, dataAttrs = "" } = {}) {
   return `<button class="chip" aria-pressed="${active}" ${dataAttrs}>${label}</button>`;
 }
@@ -240,6 +249,7 @@ function closeSheet() {
 }
 
 export {
+  haptic,
   chip,
   badge,
   emptyState,

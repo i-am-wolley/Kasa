@@ -1,7 +1,7 @@
 // House screen (memo §8.2) — spaces grid → space detail with its routines,
 // stock, and assets. "Where users browse and prune."
 
-import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, deleteItem, addAsset, deleteAsset, addRoutine, toggleRoutineActive, deleteRoutine, byId } from "../state.js";
+import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, byId } from "../state.js";
 import { templateFor } from "../roomTemplates.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -78,17 +78,19 @@ function detailHtml(state) {
     )
     .join("");
 
+  // Tiles, not rows, matching House's own space grid and Stock's item grid
+  // (2026-08-03, user request — "similar to the one we did before"). No
+  // inline trash button on the tile face — there's no room at this size —
+  // deleting still works from inside the edit sheet each tile opens, same
+  // as Stock's own top-level tiles never had inline delete either.
   const itemRows = state.items
     .filter((i) => i.spaceId === space.id)
     .map(
       (i) => `
-      <div class="list-row">
-        <div class="occ-row-icon">${Icon(i.icon || "stock", { size: 16 })}</div>
-        <div class="occ-row-body" data-open-item="${i.id}">
-          <div class="occ-row-title">${i.name}</div>
-          <div class="occ-row-meta">${i.qty} ${i.unit} · ${i.status}</div>
-        </div>
-        <button class="stepper-btn" data-delete-item="${i.id}">${Icon("trash", { size: 14 })}</button>
+      <div class="tile" data-open-item="${i.id}">
+        <div class="tile-icon">${Icon(i.icon || "stock", { size: 16 })}</div>
+        <div class="tile-title">${i.name}</div>
+        <div class="tile-meta">${i.qty} ${i.unit}</div>
       </div>`,
     )
     .join("");
@@ -97,13 +99,10 @@ function detailHtml(state) {
     .filter((a) => a.spaceId === space.id)
     .map(
       (a) => `
-      <div class="list-row">
-        <div class="occ-row-icon">${Icon(a.icon || "warranty", { size: 16 })}</div>
-        <div class="occ-row-body" data-open-asset="${a.id}">
-          <div class="occ-row-title named">${a.name}</div>
-          <div class="occ-row-meta">Next service ${a.nextServiceDue || "—"}</div>
-        </div>
-        <button class="stepper-btn" data-delete-asset="${a.id}">${Icon("trash", { size: 14 })}</button>
+      <div class="tile" data-open-asset="${a.id}">
+        <div class="tile-icon">${Icon(a.icon || "warranty", { size: 16 })}</div>
+        <div class="tile-title named">${a.name}</div>
+        <div class="tile-meta">${a.nextServiceDue ? `Due ${a.nextServiceDue}` : "—"}</div>
       </div>`,
     )
     .join("");
@@ -121,11 +120,11 @@ function detailHtml(state) {
     </div>
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Stock</span><button class="chip" id="add-item-btn">${Icon("plus", { size: 12 })} Add</button></div>
-      ${itemRows || emptyState({ message: "No stock tracked here.", actionLabel: null })}
+      ${itemRows ? `<div class="tile-grid">${itemRows}</div>` : emptyState({ message: "No stock tracked here.", actionLabel: null })}
     </div>
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Assets</span><button class="chip" id="add-asset-btn">${Icon("plus", { size: 12 })} Add</button></div>
-      ${assetRows || emptyState({ message: "No assets here.", actionLabel: null })}
+      ${assetRows ? `<div class="tile-grid">${assetRows}</div>` : emptyState({ message: "No assets here.", actionLabel: null })}
     </div>
   `;
 }
@@ -358,13 +357,6 @@ function wireEvents() {
     });
   });
 
-  mountEl.querySelectorAll("[data-delete-item]").forEach((el) => {
-    el.addEventListener("click", () => { if (confirm("Remove this item from Stock?")) deleteItem(el.dataset.deleteItem); });
-  });
-
-  mountEl.querySelectorAll("[data-delete-asset]").forEach((el) => {
-    el.addEventListener("click", () => { if (confirm("Remove this asset?")) deleteAsset(el.dataset.deleteAsset); });
-  });
 }
 
 function mount(el) {

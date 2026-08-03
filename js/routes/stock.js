@@ -5,7 +5,7 @@
 
 import { getState, subscribe, addItem, updateItem, deleteItem, adjustItemQty, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
-import { emptyState, stepper, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
+import { emptyState, stepper, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast, haptic } from "../ui/components.js";
 
 const UNITS = ["piece", "ml", "g", "kg", "pack", "roll", "litre"];
 const EXPIRING_WITHIN_DAYS = 14;
@@ -242,6 +242,7 @@ function wireEvents(state) {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         adjustItemQty(id, Number(btn.dataset.step));
+        haptic(4);
       });
     });
   });

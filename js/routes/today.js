@@ -5,7 +5,7 @@
 import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
-import { chip, emptyState, showToast, openSheet, closeSheet } from "../ui/components.js";
+import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
 
 const TIER_RANK = { safety: 4, damaging: 3, degrading: 2, cosmetic: 1 };
 
@@ -210,27 +210,64 @@ function wireEvents() {
 }
 
 const SWIPE_THRESHOLD = 90;
+const SWIPE_DIRECTION_THRESHOLD = 8; // px of movement before committing to horizontal vs vertical
 
+// Direction disambiguation + rAF-batched transform writes (2026-08-03, user
+// report: "scrolling is not very smooth"). The old version captured the
+// pointer and wrote row.style.transform on every single pointermove from
+// the moment a finger touched a row — including pure vertical scrolls,
+// which made every scroll starting on a row fight the swipe handler's JS
+// for the same touch instead of just letting the browser's native scroll
+// compositor run. Now direction is decided first (bail out to native
+// scroll if the gesture is more vertical than horizontal), and only a
+// committed horizontal drag ever calls setPointerCapture or touches style.
 function attachSwipe(row) {
   const occId = row.dataset.occId;
   let startX = 0;
+  let startY = 0;
   let dx = 0;
   let dragging = false;
+  let pointerId = null;
+  let rafPending = false;
+
+  function applyTransform() {
+    rafPending = false;
+    row.style.transform = `translateX(${dx}px)`;
+  }
 
   row.addEventListener("pointerdown", (e) => {
-    dragging = true;
     startX = e.clientX;
-    row.setPointerCapture(e.pointerId);
+    startY = e.clientY;
+    dx = 0;
+    dragging = false;
+    pointerId = e.pointerId;
     row.style.transition = "none";
   });
 
   row.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    dx = e.clientX - startX;
-    row.style.transform = `translateX(${dx}px)`;
+    if (pointerId === null) return;
+    const moveX = e.clientX - startX;
+    const moveY = e.clientY - startY;
+
+    if (!dragging) {
+      if (Math.abs(moveX) < SWIPE_DIRECTION_THRESHOLD && Math.abs(moveY) < SWIPE_DIRECTION_THRESHOLD) return;
+      if (Math.abs(moveY) > Math.abs(moveX)) {
+        pointerId = null; // vertical intent — hand off to native scroll entirely
+        return;
+      }
+      dragging = true;
+      row.setPointerCapture(pointerId);
+    }
+
+    dx = moveX;
+    if (!rafPending) {
+      rafPending = true;
+      requestAnimationFrame(applyTransform);
+    }
   });
 
   function finish() {
+    pointerId = null;
     if (!dragging) return;
     dragging = false;
     row.style.transition = "transform var(--dur-fast) var(--ease-std)";
@@ -254,6 +291,7 @@ function markDone(occId) {
   const state = getState();
   const routine = byId(state.routines, byId(state.occurrences, occId)?.routineId);
   completeOccurrence(occId);
+  haptic(10);
   showToast(`Marked done${routine ? ` — ${routine.title}` : ""}`, { onUndo: undoLast });
 }
 
@@ -261,6 +299,7 @@ function markSnoozed(occId) {
   const state = getState();
   const routine = byId(state.routines, byId(state.occurrences, occId)?.routineId);
   snoozeOccurrence(occId, 1);
+  haptic(6);
   showToast(`Snoozed${routine ? ` — ${routine.title}` : ""}`, { onUndo: undoLast });
 }
 

@@ -112,7 +112,7 @@
      <600px single column, 600-1024px two-pane, >1024px three-pane (deferred) */
   --tap-min: 44px;
   --nav-height: 84px;
-  --content-max-w: 1024px;
+  --content-max-w: 1600px;
 }
 
 [data-theme="dark"] {
