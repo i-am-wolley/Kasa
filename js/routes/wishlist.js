@@ -49,14 +49,13 @@ function formatCost(cost) {
 // Footer is two centered halves on one line — cost bottom-left, checklist
 // progress bottom-right (2026-08-04, user request: drop the redundant
 // Soon/Someday label from the tile since the section header above it
-// already says that; show cost + task count instead). Either half is left
-// blank (not collapsed) so cost and count always land in the same spot
-// across a grid of tiles, rather than the line reflowing per-card.
+// already says that; show cost + task count instead). The count side
+// shows "—" rather than going blank when there's no checklist (2026-08-05,
+// user request) — a visible "not applicable" beats an unexplained gap.
 function tileFootHtml(entry) {
   const subs = entry.subItems || [];
-  if (!entry.estimatedCost && !subs.length) return "";
   const cost = entry.estimatedCost ? formatCost(entry.estimatedCost) : "";
-  const count = subs.length ? `${subs.filter((s) => s.done).length}/${subs.length}` : "";
+  const count = subs.length ? `${subs.filter((s) => s.done).length}/${subs.length}` : "—";
   return `<div class="tile-foot"><span>${cost}</span><span>${count}</span></div>`;
 }
 
