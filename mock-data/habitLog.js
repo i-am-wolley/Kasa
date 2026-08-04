@@ -15,14 +15,20 @@ function last72Dates() {
   return dates;
 }
 
-function seedLog(habitId, keepDay) {
+// keepDaysAgo(n) — n=0 is today, n=71 is 71 days ago. Keeping the "days
+// ago" semantics explicit here (rather than a raw array index) avoids the
+// off-by-71 mistake it's easy to make otherwise: last72Dates() returns
+// oldest-first, so array index 71 — not 0 — is today.
+function seedLog(habitId, keepDaysAgo) {
   return last72Dates()
-    .filter((_, i) => keepDay(i))
-    .map((date, idx) => ({ id: `${habitId}_log_${idx}`, habitId, date }));
+    .map((date, idx) => ({ date, daysAgo: 71 - idx }))
+    .filter(({ daysAgo }) => keepDaysAgo(daysAgo))
+    .map(({ date }, i) => ({ id: `${habitId}_log_${i}`, habitId, date }));
 }
 
 export const habitLog = [
-  ...seedLog("hb_meditate", (i) => i % 3 !== 0), // ~67% of days
-  ...seedLog("hb_read", (i) => i % 2 === 0), // ~50% of days
-  ...seedLog("hb_walk", (i) => i % 4 !== 3), // ~75% of days
+  ...seedLog("hb_meditate", (n) => n % 3 !== 0), // ~67% of days, not done today — shows up due on Today
+  ...seedLog("hb_read", (n) => n % 2 === 0), // ~50% of days, done today
+  ...seedLog("hb_walk", (n) => n % 4 !== 3), // ~75% of days, done today
+  ...seedLog("hb_gym", (n) => n % 3 === 1), // ~3x/week rhythm, not done today — shows up due on Today
 ];

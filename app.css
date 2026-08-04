@@ -106,7 +106,7 @@ h1, h2, h3, p { margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
+  margin-left: auto; /* logo/wordmark stay top-left, More sits top-right of the same row (2026-08-04, user request) */
   padding: 4px 9px;
   min-height: 30px;
   border: 1px solid var(--line);
@@ -324,49 +324,6 @@ h1, h2, h3, p { margin: 0; }
   font-size: var(--fs-heading);
   font-weight: var(--fw-emphasis);
   color: var(--ink);
-}
-
-.insight-score-explain {
-  margin-top: 4px;
-  font-size: var(--fs-meta);
-  color: var(--ink-muted);
-}
-
-.week-trend {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 6px;
-  height: 90px;
-  padding: 0 4px;
-}
-
-.week-trend-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.week-trend-count {
-  font-size: var(--fs-micro);
-  color: var(--ink-muted);
-  height: 14px;
-}
-
-.week-trend-bar {
-  width: 100%;
-  max-width: 22px;
-  border-radius: 4px 4px 0 0;
-  background: var(--gold-soft);
-}
-
-.week-trend-bar.today { background: var(--gold); }
-
-.week-trend-label {
-  font-size: var(--fs-micro);
-  color: var(--ink-faint);
 }
 
 /* ---- Occurrence row — the core swipeable list item ----------------------- */

@@ -2,7 +2,7 @@
 // (only damaging/safety visually loud), then due today, then the effort-1
 // filter. Completion is one gesture: swipe right = done, left = snooze.
 
-import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, byId } from "../state.js";
+import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
@@ -76,6 +76,43 @@ function sectionHtml(title, rows) {
     <div class="today-section" id="${sectionId}">
       <div class="section-head"><span class="eyebrow">${title}</span></div>
       ${sorted.map(rowHtml).join("")}
+    </div>
+  `;
+}
+
+// Habits, personal and separate from routines (2026-08-04, user request):
+// "let it pop up in today tab as well, so i can swipe to complete... the
+// tracking will be in the insights space." Due-today habits (per their own
+// frequency, not just daily) get the exact same swipeable row/gesture as
+// routines — swiping either direction marks it done, there's no "snooze"
+// equivalent for a habit. The row disappears once done (isHabitDueToday
+// excludes anything already logged today); the 72-day grid/streak view
+// lives in Insights, not here.
+function habitRowHtml(habit) {
+  return `
+    <div class="occ-row-wrap" data-habit-id="${habit.id}">
+      <div class="occ-row-actions">
+        <div class="occ-row-action done">${Icon("check", { size: 18 })} Done</div>
+        <div class="occ-row-action done" style="justify-content:flex-end;">Done ${Icon("check", { size: 18 })}</div>
+      </div>
+      <div class="occ-row" data-habit-id="${habit.id}">
+        <div class="occ-row-icon">${Icon("flame", { size: 18 })}</div>
+        <div class="occ-row-body">
+          <div class="occ-row-title named">${habit.title}</div>
+          <div class="occ-row-meta">Habit</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function habitsSectionHtml(state) {
+  const due = state.habits.filter((h) => isHabitDueToday(h));
+  if (!due.length) return "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Habits</span></div>
+      ${due.map(habitRowHtml).join("")}
     </div>
   `;
 }
@@ -163,6 +200,7 @@ function render() {
   const rows = visibleRows(state);
   const overdue = rows.filter((r) => r.state === "overdue");
   const due = rows.filter((r) => r.state === "due");
+  const dueHabits = state.habits.filter((h) => isHabitDueToday(h));
 
   mountEl.innerHTML = `
     ${topbarHtml(state)}
@@ -172,8 +210,9 @@ function render() {
     </div>
     ${sectionHtml("Overdue", overdue)}
     ${sectionHtml("Due today", due)}
+    ${habitsSectionHtml(state)}
     ${
-      !overdue.length && !due.length
+      !overdue.length && !due.length && !dueHabits.length
         ? emptyState({ message: "Nothing due right now. The house is quiet.", actionLabel: null })
         : ""
     }
@@ -200,7 +239,17 @@ function wireEvents() {
     });
   });
 
-  mountEl.querySelectorAll(".occ-row").forEach((row) => attachSwipe(row));
+  mountEl.querySelectorAll(".occ-row[data-occ-id]").forEach((row) => {
+    const occId = row.dataset.occId;
+    attachSwipe(row, { onSwipeRight: () => markDone(occId), onSwipeLeft: () => markSnoozed(occId) });
+  });
+
+  // Habits swipe too, but there's no "snooze" equivalent — either
+  // direction just marks it done (2026-08-04, user request).
+  mountEl.querySelectorAll(".occ-row[data-habit-id]").forEach((row) => {
+    const habitId = row.dataset.habitId;
+    attachSwipe(row, { onSwipeRight: () => markHabitDone(habitId), onSwipeLeft: () => markHabitDone(habitId) });
+  });
 
   mountEl.querySelectorAll("[data-jump]").forEach((tile) => {
     tile.addEventListener("click", () => {
@@ -221,8 +270,7 @@ const SWIPE_DIRECTION_THRESHOLD = 8; // px of movement before committing to hori
 // compositor run. Now direction is decided first (bail out to native
 // scroll if the gesture is more vertical than horizontal), and only a
 // committed horizontal drag ever calls setPointerCapture or touches style.
-function attachSwipe(row) {
-  const occId = row.dataset.occId;
+function attachSwipe(row, { onSwipeRight, onSwipeLeft } = {}) {
   let startX = 0;
   let startY = 0;
   let dx = 0;
@@ -273,10 +321,10 @@ function attachSwipe(row) {
     row.style.transition = "transform var(--dur-fast) var(--ease-std)";
     if (dx > SWIPE_THRESHOLD) {
       row.style.transform = "translateX(120%)";
-      setTimeout(() => markDone(occId), 140);
+      setTimeout(() => onSwipeRight?.(), 140);
     } else if (dx < -SWIPE_THRESHOLD) {
       row.style.transform = "translateX(-120%)";
-      setTimeout(() => markSnoozed(occId), 140);
+      setTimeout(() => onSwipeLeft?.(), 140);
     } else {
       row.style.transform = "translateX(0)";
     }
@@ -301,6 +349,15 @@ function markSnoozed(occId) {
   snoozeOccurrence(occId, 1);
   haptic(6);
   showToast(`Snoozed${routine ? ` — ${routine.title}` : ""}`, { onUndo: undoLast });
+}
+
+// toggleHabitToday is a pure toggle, so calling it again in onUndo exactly
+// reverses this — no snapshot bookkeeping needed the way occurrences use.
+function markHabitDone(habitId) {
+  const habit = byId(getState().habits, habitId);
+  toggleHabitToday(habitId);
+  haptic(10);
+  showToast(`Marked done${habit ? ` — ${habit.title}` : ""}`, { onUndo: () => toggleHabitToday(habitId) });
 }
 
 function mount(el) {

@@ -142,7 +142,10 @@ function lastRestockedLabel(item) {
   return `Last refilled ${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
+// onSaved lets a caller elsewhere (Wishlist's "buy this" flow — 2026-08-04,
+// user request) react to the item just created/updated, after this sheet's
+// own save logic has fully run.
+function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null, onSaved = null } = {}) {
   const state = getState();
   const isBinary = !!item?.binary;
   // "/usage" means the number is "units consumed per completion of a
@@ -155,7 +158,7 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
     bodyHtml: `
       ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-bottom:10px;">${lastRestockedLabel(item)}${projectedUsesLeft(item) !== null ? ` · ~${projectedUsesLeft(item)} uses left` : projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
       <form id="item-form">
-        ${field("Name", catalogField({ id: "f-item-name", type: "item", value: item?.name ?? "", placeholder: "Start typing — e.g. Toilet cleaner" }))}
+        ${field("Name", catalogField({ id: "f-item-name", type: "item", value: item?.name ?? defaultName ?? "", placeholder: "Start typing — e.g. Toilet cleaner" }))}
         ${field("Space", chipGroup({ name: "itemSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: item?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
         ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
         <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
@@ -309,10 +312,12 @@ function openItemSheet({ item = null, defaultSpaceId = null } = {}) {
       expiryDate: root.querySelector("#f-expiry").value || null,
       status,
     };
-    if (item) updateItem(item.id, fields);
-    else addItem(fields);
+    let savedItem;
+    if (item) { updateItem(item.id, fields); savedItem = byId(getState().items, item.id); }
+    else savedItem = addItem(fields);
     closeSheet();
     showToast(item ? "Item updated" : "Item added");
+    onSaved?.(savedItem);
   });
 
   if (item) {

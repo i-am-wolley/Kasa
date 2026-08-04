@@ -69,9 +69,9 @@ function render() {
   wireEvents(state);
 }
 
-function assetFormFields(asset, state, defaultSpaceId) {
+function assetFormFields(asset, state, defaultSpaceId, defaultName) {
   return `
-    ${field("Name", catalogField({ id: "f-asset-name", type: "asset", value: asset?.name ?? "", placeholder: "Start typing — e.g. Geyser" }))}
+    ${field("Name", catalogField({ id: "f-asset-name", type: "asset", value: asset?.name ?? defaultName ?? "", placeholder: "Start typing — e.g. Geyser" }))}
     ${field("Space", chipGroup({ name: "assetSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: asset?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
     ${field("Brand / model", textInput({ id: "f-asset-brand", value: asset?.brand ?? "" }))}
     ${field("Purchase date", textInput({ id: "f-asset-purchased", type: "date", value: asset?.purchaseDate ?? "" }))}
@@ -109,7 +109,12 @@ function renderSuggestedRoutines(root, routines) {
   });
 }
 
-function openAssetSheet({ asset = null, defaultSpaceId = null } = {}) {
+// onSaved lets a caller elsewhere in the app (Wishlist's "buy this" flow —
+// 2026-08-04, user request: acquiring a wishlist asset should collect the
+// same real details this sheet always has, not a bare-bones create) react
+// to the asset that was just created/updated, after this sheet's own save
+// logic (incl. suggestedRoutines) has fully run.
+function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = null, onSaved = null } = {}) {
   const state = getState();
   const catalogEntry = asset?.catalogKey ? findByKey(asset.catalogKey, "asset") : null;
   const canOfferMore = asset && catalogEntry?.suggestedRoutines?.length;
@@ -129,7 +134,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null } = {}) {
     title: asset ? "Edit asset" : "Add asset",
     bodyHtml: `
       ${extraActions}
-      <form id="asset-form">${assetFormFields(asset, state, defaultSpaceId)}</form>
+      <form id="asset-form">${assetFormFields(asset, state, defaultSpaceId, defaultName)}</form>
       <div class="field" id="suggested-routines-field"></div>
       ${asset?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:8px;">Catalog key: <span class="font-num">${asset.catalogKey}</span></p>` : ""}
       ${sheetActions({ saveLabel: asset ? "Save changes" : "Add asset", showDelete: !!asset })}
@@ -205,6 +210,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null } = {}) {
     closeSheet();
     const routineNote = addedRoutines ? ` + ${addedRoutines} routine${addedRoutines === 1 ? "" : "s"}` : "";
     showToast((asset ? "Asset updated" : "Asset added") + routineNote);
+    onSaved?.(byId(getState().assets, assetId));
   });
 
   if (asset) {

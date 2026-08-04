@@ -1,8 +1,15 @@
 // The custom routine builder — a plain-language sheet, not a form dump
 // (memo §4.2). Shared by every screen that creates or edits a routine
 // (House space detail today; reused wherever else needs it later).
+//
+// Also builds Habits (2026-08-04, user request: "let's have a toggle
+// between habit and routine in the same add routine/edit modal") — a
+// household Routine and a personal Habit are different enough underneath
+// (space + 6-trigger engine vs. person + a simple frequency) that they stay
+// separate data models (state.js's addRoutine/addHabit), but share this one
+// entry sheet with a Kind toggle up top switching which field block shows.
 
-import { getState, addRoutine, updateRoutine, deleteRoutine } from "../state.js";
+import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit } from "../state.js";
 import { openSheet, closeSheet, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, showToast } from "../ui/components.js";
 
 const TRIGGER_TYPES = [
@@ -27,6 +34,20 @@ const OWNER_OPTIONS = ["member", "help", "vendor", "either"];
 const WEEKDAYS = [
   { value: "SU", label: "Sun" }, { value: "MO", label: "Mon" }, { value: "TU", label: "Tue" },
   { value: "WE", label: "Wed" }, { value: "TH", label: "Thu" }, { value: "FR", label: "Fri" }, { value: "SA", label: "Sat" },
+];
+
+const HABIT_FREQ_TYPES = [
+  { value: "daily", label: "Daily" },
+  { value: "weekdays", label: "Weekdays" },
+  { value: "weekends", label: "Weekends" },
+  { value: "custom", label: "Custom days" },
+  { value: "weekly_count", label: "N times/week" },
+];
+// JS Date.getDay() numbering (0=Sun..6=Sat), kept as strings since chip
+// data-value always round-trips through the DOM as a string.
+const HABIT_WEEKDAYS = [
+  { value: "1", label: "Mon" }, { value: "2", label: "Tue" }, { value: "3", label: "Wed" },
+  { value: "4", label: "Thu" }, { value: "5", label: "Fri" }, { value: "6", label: "Sat" }, { value: "0", label: "Sun" },
 ];
 
 function triggerParamsHtml(routine) {
@@ -69,23 +90,46 @@ function requiresItemsFieldHtml(spaceId, selectedIds) {
   return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options: items.map((i) => ({ value: i.id, label: i.name })), value: selectedIds, multi: true }));
 }
 
-function bodyHtml(routine, spaceId) {
-  const state = getState();
+function routineFieldsHtml(routine, spaceId, state) {
   const initialSpaceId = routine?.spaceId ?? spaceId;
   return `
+    ${field("Space", chipGroup({ name: "spaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: initialSpaceId }))}
+    ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
+    ${triggerParamsHtml(routine)}
+    <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
+    ${field("Effort", chipGroup({ name: "effort", options: EFFORT_OPTIONS, value: String(routine?.effort ?? 1) }))}
+    ${field("If skipped, it", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
+    ${field("Usually done by", chipGroup({ name: "ownerClass", options: OWNER_OPTIONS, value: routine?.ownerClass ?? "either" }))}
+    ${field("Default assignee", chipGroup({ name: "defaultAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: routine?.defaultAssigneeId ?? null }))}
+    ${field("Pause during", chipGroup({ name: "pauseIn", options: state.modes.filter((m) => m.key !== "normal").map((m) => ({ value: m.key, label: m.label })), value: routine?.modeFilters?.pauseIn ?? [], multi: true }))}
+  `;
+}
+
+function habitFieldsHtml(habit, defaultPersonId, state) {
+  const freq = habit?.frequency || { type: "daily" };
+  return `
+    ${field("Person", chipGroup({ name: "habitPersonId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: habit?.personId ?? defaultPersonId ?? state.people[0]?.id }))}
+    ${field("How often", chipGroup({ name: "habitFreqType", options: HABIT_FREQ_TYPES, value: freq.type }))}
+    <div id="habit-custom-days" style="display:${freq.type === "custom" ? "block" : "none"};">
+      ${field("Which days", chipGroup({ name: "habitCustomDays", options: HABIT_WEEKDAYS, value: (freq.days ?? []).map(String), multi: true }))}
+    </div>
+    <div id="habit-weekly-count" style="display:${freq.type === "weekly_count" ? "block" : "none"};">
+      ${field("Times per week", textInput({ id: "f-habit-timesperweek", type: "number", value: freq.timesPerWeek ?? 3, min: 1 }))}
+    </div>
+  `;
+}
+
+function bodyHtml(routine, habit, spaceId, defaultPersonId, defaultKind) {
+  const state = getState();
+  const kind = habit ? "habit" : routine ? "routine" : (defaultKind || "routine");
+  return `
     <form id="routine-form">
-      ${field("Title", textInput({ id: "f-title", value: routine?.title ?? "", placeholder: "e.g. Clean ceiling fans" }))}
-      ${field("Space", chipGroup({ name: "spaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: initialSpaceId }))}
-      ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
-      ${triggerParamsHtml(routine)}
-      <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
-      ${field("Effort", chipGroup({ name: "effort", options: EFFORT_OPTIONS, value: String(routine?.effort ?? 1) }))}
-      ${field("If skipped, it", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
-      ${field("Usually done by", chipGroup({ name: "ownerClass", options: OWNER_OPTIONS, value: routine?.ownerClass ?? "either" }))}
-      ${field("Default assignee", chipGroup({ name: "defaultAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: routine?.defaultAssigneeId ?? null }))}
-      ${field("Pause during", chipGroup({ name: "pauseIn", options: state.modes.filter((m) => m.key !== "normal").map((m) => ({ value: m.key, label: m.label })), value: routine?.modeFilters?.pauseIn ?? [], multi: true }))}
+      ${field("Kind", chipGroup({ name: "kind", options: [{ value: "routine", label: "Household routine" }, { value: "habit", label: "Personal habit" }], value: kind }))}
+      ${field("Title", textInput({ id: "f-title", value: (routine || habit)?.title ?? "", placeholder: kind === "habit" ? "e.g. Meditate" : "e.g. Clean ceiling fans" }))}
+      <div id="routine-fields" style="display:${kind === "habit" ? "none" : "block"};">${routineFieldsHtml(routine, spaceId, state)}</div>
+      <div id="habit-fields" style="display:${kind === "habit" ? "block" : "none"};">${habitFieldsHtml(habit, defaultPersonId, state)}</div>
     </form>
-    ${sheetActions({ saveLabel: routine ? "Save changes" : "Add routine", showDelete: !!routine })}
+    ${sheetActions({ saveLabel: (routine || habit) ? "Save changes" : (kind === "habit" ? "Add habit" : "Add routine"), showDelete: !!(routine || habit) })}
   `;
 }
 
@@ -126,12 +170,45 @@ function buildTrigger(root) {
   }
 }
 
-function openRoutineEditor({ routine = null, defaultSpaceId = null } = {}) {
-  openSheet({ title: routine ? "Edit routine" : "Add routine", bodyHtml: bodyHtml(routine, defaultSpaceId) });
+function buildHabitFrequency(root) {
+  const type = readChipGroup(root, "habitFreqType") || "daily";
+  const frequency = { type };
+  if (type === "custom") frequency.days = (readChipGroup(root, "habitCustomDays") || []).map(Number);
+  if (type === "weekly_count") frequency.timesPerWeek = Number(root.querySelector("#f-habit-timesperweek").value) || 1;
+  return frequency;
+}
+
+function openRoutineEditor({ routine = null, habit = null, defaultSpaceId = null, defaultPersonId = null, defaultKind = null, onSaved = null } = {}) {
+  const isEditingHabit = !!habit;
+  openSheet({
+    title: (routine || habit) ? (isEditingHabit ? "Edit habit" : "Edit routine") : "Add routine or habit",
+    bodyHtml: bodyHtml(routine, habit, defaultSpaceId, defaultPersonId, defaultKind),
+  });
   const root = document.getElementById("sheet-root");
 
-  ["spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn"]
+  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays"]
     .forEach((name) => wireChipGroup(root, name));
+
+  // Kind toggle swaps which field block shows — same sheet builds both
+  // (2026-08-04, user request: "a toggle between habit and routine in the
+  // same add routine/edit modal").
+  root.querySelector('[data-field="kind"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn) return;
+    const isHabit = btn.dataset.value === "habit";
+    root.querySelector("#routine-fields").style.display = isHabit ? "none" : "block";
+    root.querySelector("#habit-fields").style.display = isHabit ? "block" : "none";
+    if (!routine && !habit) {
+      root.querySelector('[data-action="save"]').textContent = isHabit ? "Add habit" : "Add routine";
+    }
+  });
+
+  root.querySelector('[data-field="habitFreqType"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn) return;
+    root.querySelector("#habit-custom-days").style.display = btn.dataset.value === "custom" ? "block" : "none";
+    root.querySelector("#habit-weekly-count").style.display = btn.dataset.value === "weekly_count" ? "block" : "none";
+  });
 
   showTriggerBlock(root, routine?.trigger?.type ?? "floating_since_last");
   root.querySelector('[data-field="triggerType"]').addEventListener("click", (e) => {
@@ -159,6 +236,23 @@ function openRoutineEditor({ routine = null, defaultSpaceId = null } = {}) {
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     const title = root.querySelector("#f-title").value.trim();
     if (!title) return;
+    const kind = readChipGroup(root, "kind") || "routine";
+
+    if (kind === "habit") {
+      const personId = readChipGroup(root, "habitPersonId");
+      if (!personId) {
+        showToast("Pick a person for this habit");
+        return;
+      }
+      const fields = { title, personId, frequency: buildHabitFrequency(root) };
+      if (habit) updateHabit(habit.id, fields);
+      else addHabit(fields);
+      closeSheet();
+      showToast(habit ? "Habit updated" : "Habit added");
+      onSaved?.();
+      return;
+    }
+
     const fields = {
       title,
       spaceId: readChipGroup(root, "spaceId"),
@@ -177,14 +271,23 @@ function openRoutineEditor({ routine = null, defaultSpaceId = null } = {}) {
     else addRoutine(fields);
     closeSheet();
     showToast(routine ? "Routine updated" : "Routine added");
+    onSaved?.();
   });
 
-  if (routine) {
+  if (routine || habit) {
     root.querySelector('[data-action="delete"]').addEventListener("click", () => {
-      if (!confirm(`Delete "${routine.title}"? This can't be undone.`)) return;
-      deleteRoutine(routine.id);
-      closeSheet();
-      showToast("Routine deleted");
+      if (isEditingHabit) {
+        if (!confirm(`Delete "${habit.title}"? This can't be undone.`)) return;
+        deleteHabit(habit.id);
+        closeSheet();
+        showToast("Habit deleted");
+        onSaved?.();
+      } else {
+        if (!confirm(`Delete "${routine.title}"? This can't be undone.`)) return;
+        deleteRoutine(routine.id);
+        closeSheet();
+        showToast("Routine deleted");
+      }
     });
   }
 }

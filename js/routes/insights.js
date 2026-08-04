@@ -1,25 +1,23 @@
 // Insights (build-plan Phase 6) — deliberately NOT the memo's literal spec.
 // The memo's §6 also bundles AI features (photo sweep, bill scan) that need
 // a Cloud Function proxy that doesn't exist yet (Phase 4/6 both blocked on
-// Firebase) — those are skipped here, not silently dropped: see the "not
-// built yet" note at the bottom of this file's render(). What IS built is
-// everything that's honestly answerable from data already in state, without
-// an LLM (memo §5.10's own hard boundary, applied to this screen too):
+// Firebase) — those are skipped here, not silently dropped: see the note at
+// the bottom of render(). What IS built is everything honestly answerable
+// from data already in state, without an LLM (memo §5.10's own hard
+// boundary, applied to this screen too).
 //
-// - House health score: one number, composite of overdue severity, stock
-//   health, and asset service compliance — a synthesis Today/House/Stock
-//   don't give you (they show lists, not a "how are we doing" signal).
-// - This week: a 7-day completion trend from the ledger — shows the SHAPE
-//   of the week (which days things get done), not just Today's single
-//   "completed this week" count.
-// - Attention needed: the top ~5 things across routines/stock/assets
-//   ranked together, so you don't have to check three screens to find
-//   what actually matters most right now.
-// - Help on leave impact (memo §6.3's own "hero feature"): cross-references
-//   a helper's leave dates against routines they normally own, due in that
-//   window — a genuine insight (connecting two otherwise-separate records),
-//   not just a re-list.
-// - Habits: each person's 72-day grid (js/ui/habitGrid.js).
+// Redesigned 2026-08-04 on direct user feedback ("the score is not
+// intuitive, why 78, what needs to be fixed... 7 day trend adds no value"):
+// - The health score now ships with an itemized, actionable breakdown
+//   instead of one vague sentence — every point lost is a named, counted
+//   reason.
+// - The 7-day completion trend is gone; it wasn't earning its space.
+// - Habit check-in moved to Today (swipe to complete, like a routine) —
+//   this screen is now purely the tracking/streak view for habits, not a
+//   duplicate action surface, which is most of what's left here now that
+//   the trend is gone. Kept as a section rather than spinning up a
+//   dedicated Habits screen/tab: a 6th tab would break the memo's own
+//   5-tab limit, and there's no other content competing for room here now.
 
 import { getState, subscribe, habitStreak, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
@@ -39,14 +37,17 @@ const TIER_PENALTY = { safety: 8, damaging: 5, degrading: 2, cosmetic: 1 };
 
 function computeHealth(state) {
   const activeModeKey = state.household.activeMode;
-  let overduePenalty = 0;
+  const overdueByTier = { safety: 0, damaging: 0, degrading: 0, cosmetic: 0 };
   for (const occ of state.occurrences) {
     if (occ.state === "done" || occ.state === "snoozed") continue;
     const routine = byId(state.routines, occ.routineId);
     if (!routine || isPausedNow(routine, activeModeKey)) continue;
     if (stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()) !== "overdue") continue;
-    overduePenalty += TIER_PENALTY[routine.consequence] || 1;
+    overdueByTier[routine.consequence] = (overdueByTier[routine.consequence] || 0) + 1;
   }
+  const overdueCount = Object.values(overdueByTier).reduce((a, b) => a + b, 0);
+  let overduePenalty = 0;
+  for (const [tier, count] of Object.entries(overdueByTier)) overduePenalty += (TIER_PENALTY[tier] || 1) * count;
   overduePenalty = Math.min(40, overduePenalty);
 
   const outCount = state.items.filter((i) => i.status === "out").length;
@@ -59,7 +60,7 @@ function computeHealth(state) {
   const assetPenalty = Math.min(30, overdueAssets * 5);
 
   const score = Math.max(0, Math.round(100 - overduePenalty - stockPenalty - assetPenalty));
-  return { score, overduePenalty, stockPenalty, assetPenalty, outCount, lowCount, overdueAssets };
+  return { score, overduePenalty, stockPenalty, assetPenalty, overdueCount, overdueByTier, outCount, lowCount, overdueAssets };
 }
 
 function scoreLabel(score) {
@@ -69,12 +70,38 @@ function scoreLabel(score) {
   return "Falling behind";
 }
 
-function scoreExplain(h) {
-  const top = Math.max(h.overduePenalty, h.stockPenalty, h.assetPenalty);
-  if (top === 0) return "Nothing dragging this down right now.";
-  if (top === h.overduePenalty) return "Overdue routines are the biggest drag — clear the loud ones on Today first.";
-  if (top === h.stockPenalty) return `${h.outCount} item${h.outCount === 1 ? "" : "s"} out, ${h.lowCount} running low.`;
-  return `${h.overdueAssets} asset${h.overdueAssets === 1 ? "" : "s"} overdue for service.`;
+// Every point lost gets a named, counted reason — the direct fix for "why
+// 78, what needs to be fixed" (2026-08-04 user feedback on the old
+// one-sentence explanation).
+function scoreBreakdownHtml(h) {
+  const rows = [];
+  if (h.overduePenalty > 0) {
+    const byTier = Object.entries(h.overdueByTier).filter(([, c]) => c > 0).map(([tier, c]) => `${c} ${tier}`).join(", ");
+    rows.push({ icon: "today", label: "Overdue routines", points: h.overduePenalty, detail: `${h.overdueCount} item${h.overdueCount === 1 ? "" : "s"} — ${byTier}` });
+  }
+  if (h.stockPenalty > 0) {
+    rows.push({ icon: "stock", label: "Stock running low", points: h.stockPenalty, detail: `${h.outCount} out, ${h.lowCount} low` });
+  }
+  if (h.assetPenalty > 0) {
+    rows.push({ icon: "warranty", label: "Asset service overdue", points: h.assetPenalty, detail: `${h.overdueAssets} asset${h.overdueAssets === 1 ? "" : "s"}` });
+  }
+  if (!rows.length) {
+    return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">Nothing dragging this down — everything's on track.</p>`;
+  }
+  return rows
+    .map(
+      (r) => `
+    <div class="list-row" style="cursor:default;">
+      <div class="occ-row-icon">${Icon(r.icon, { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${r.label}</div>
+        <div class="occ-row-meta">${r.detail}</div>
+      </div>
+      <div class="list-row-right font-num" style="color:var(--tier-damaging);">-${r.points}</div>
+    </div>
+  `,
+    )
+    .join("");
 }
 
 function healthCardHtml(state) {
@@ -84,42 +111,11 @@ function healthCardHtml(state) {
       <div class="insight-score-card">
         <div class="insight-score-value">${h.score}</div>
         <div class="insight-score-label">${scoreLabel(h.score)}</div>
-        <div class="insight-score-explain">${scoreExplain(h)}</div>
       </div>
     </div>
-  `;
-}
-
-// ---- This week trend --------------------------------------------------
-
-function weekTrendHtml(state) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().slice(0, 10);
-    const count = state.ledger.filter((l) => l.doneAt.slice(0, 10) === dateStr).length;
-    days.push({ count, label: d.toLocaleDateString("en-IN", { weekday: "narrow" }), isToday: i === 0 });
-  }
-  const max = Math.max(1, ...days.map((d) => d.count));
-  return `
     <div class="today-section">
-      <div class="section-head"><span class="eyebrow">This week</span></div>
-      <div class="week-trend">
-        ${days
-          .map(
-            (d) => `
-          <div class="week-trend-col">
-            <div class="week-trend-count font-num">${d.count || ""}</div>
-            <div class="week-trend-bar${d.isToday ? " today" : ""}" style="height:${d.count ? Math.max(6, Math.round((d.count / max) * 48)) : 3}px;"></div>
-            <div class="week-trend-label">${d.label}</div>
-          </div>
-        `,
-          )
-          .join("")}
-      </div>
+      <div class="section-head"><span class="eyebrow">What's affecting your score</span></div>
+      ${scoreBreakdownHtml(h)}
     </div>
   `;
 }
@@ -246,12 +242,16 @@ function helpLeaveSectionHtml(state) {
 }
 
 // ---- Habits — 72-day grid per person's habit -------------------------
+// Pure tracking now — check-in itself happens on Today (2026-08-04, user
+// request), so this section is the streak/history view, not a second
+// place to mark things done.
 
 function habitsSectionHtml(state) {
   if (!state.habits.length) return "";
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Habits</span></div>
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:12px;">Check these off on Today — this is just the tracking view.</p>
       ${state.habits
         .map((h) => {
           const person = byId(state.people, h.personId);
@@ -274,7 +274,6 @@ function render() {
   mountEl.innerHTML = `
     <div class="topbar"><h1>Insights</h1></div>
     ${healthCardHtml(state)}
-    ${weekTrendHtml(state)}
     ${attentionSectionHtml(state)}
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}

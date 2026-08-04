@@ -3,9 +3,10 @@
 // "Mark leave" here is the entry point to the Help-on-leave hero feature,
 // which isn't built yet (build-plan Phase 7).
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, addHabit, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
+import { openRoutineEditor } from "./routine.js";
 
 let mountEl = null;
 let unsubscribe = null;
@@ -59,11 +60,23 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Habits are personal, not household (2026-08-04, user request) — managed
-// from inside a person's own edit sheet rather than a separate screen,
-// since there's no per-person detail view elsewhere in the app to hang
-// this off of. "Mark done" just toggles today; the 72-day grid view lives
-// in Insights, not repeated here.
+// Habits are personal, not household (2026-08-04, user request) — created
+// and edited through the same shared sheet routine.js uses for routines
+// (its Kind toggle), reached here via "+ Add habit" / tapping a habit's
+// title. "Mark done" is a quick inline toggle for today only; the 72-day
+// grid view lives in Insights, not repeated here.
+function freqLabel(freq) {
+  if (!freq || freq.type === "daily") return "Daily";
+  if (freq.type === "weekdays") return "Weekdays";
+  if (freq.type === "weekends") return "Weekends";
+  if (freq.type === "weekly_count") return `${freq.timesPerWeek || 1}x/week`;
+  if (freq.type === "custom") {
+    const names = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+    return (freq.days || []).map((d) => names[d]).join("/") || "Custom days";
+  }
+  return "Daily";
+}
+
 function habitsListHtml(person, state) {
   const list = state.habits.filter((h) => h.personId === person.id);
   if (!list.length) return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No habits yet.</p>`;
@@ -74,9 +87,9 @@ function habitsListHtml(person, state) {
       return `
       <div class="list-row" style="margin-bottom:6px;">
         <div class="occ-row-icon">${Icon("flame", { size: 16 })}</div>
-        <div class="occ-row-body">
+        <div class="occ-row-body" data-edit-habit="${h.id}">
           <div class="occ-row-title">${h.title}</div>
-          <div class="occ-row-meta">${streak > 0 ? `${streak} day streak` : "No streak yet"}</div>
+          <div class="occ-row-meta">${freqLabel(h.frequency)} · ${streak > 0 ? `${streak} day streak` : "No streak yet"}</div>
         </div>
         <button type="button" class="chip" data-toggle-habit="${h.id}" aria-pressed="${doneToday}">${doneToday ? "Done today" : "Mark done"}</button>
         <button type="button" class="stepper-btn" data-delete-habit="${h.id}">${Icon("trash", { size: 14 })}</button>
@@ -113,10 +126,7 @@ function openPersonSheet(person) {
           <div class="field">
             <span class="field-label">Habits (personal)</span>
             <div id="habits-list">${habitsListHtml(person, getState())}</div>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <div style="flex:1;">${textInput({ id: "f-new-habit", placeholder: "e.g. Meditate" })}</div>
-              <button type="button" class="btn btn-ghost" id="add-habit-btn">Add</button>
-            </div>
+            <button type="button" class="btn btn-ghost" id="add-habit-btn" style="margin-top:8px;">${Icon("plus", { size: 14 })} Add habit</button>
           </div>
         ` : ""}
       </form>
@@ -131,25 +141,34 @@ function openPersonSheet(person) {
   function rewireHabits() {
     root.querySelector("#habits-list").innerHTML = habitsListHtml(person, getState());
     root.querySelectorAll("[data-toggle-habit]").forEach((btn) => {
-      btn.addEventListener("click", () => { toggleHabitToday(btn.dataset.toggleHabit); rewireHabits(); });
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleHabitToday(btn.dataset.toggleHabit);
+        rewireHabits();
+      });
     });
     root.querySelectorAll("[data-delete-habit]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
         if (!confirm("Delete this habit?")) return;
         deleteHabit(btn.dataset.deleteHabit);
         rewireHabits();
+      });
+    });
+    // Tapping a habit's title reopens it in the same routine/habit builder
+    // routine.js uses — editing frequency etc. needs more room than fits
+    // inline here.
+    root.querySelectorAll("[data-edit-habit]").forEach((el) => {
+      el.addEventListener("click", () => {
+        const h = byId(getState().habits, el.dataset.editHabit);
+        openRoutineEditor({ habit: h, defaultPersonId: person.id, onSaved: () => openPersonSheet(byId(getState().people, person.id)) });
       });
     });
   }
   if (person) {
     rewireHabits();
     root.querySelector("#add-habit-btn").addEventListener("click", () => {
-      const input = root.querySelector("#f-new-habit");
-      const title = input.value.trim();
-      if (!title) return;
-      addHabit({ personId: person.id, title });
-      input.value = "";
-      rewireHabits();
+      openRoutineEditor({ defaultPersonId: person.id, defaultKind: "habit", onSaved: () => openPersonSheet(byId(getState().people, person.id)) });
     });
   }
 

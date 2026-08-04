@@ -246,6 +246,7 @@ function addItem(fields) {
   if (item.qty > 0 && !item.lastRestockedAt) item.lastRestockedAt = new Date().toISOString();
   state.items.push(item);
   notify();
+  return item;
 }
 
 function updateItem(id, patch) {
@@ -418,28 +419,6 @@ function deleteWishlistItem(id) {
   notify();
 }
 
-// Marks an idea real. Asset/item types create the actual tracked record
-// (through the same addAsset/addItem paths every other screen uses, so it
-// shows up on House/Stock exactly like anything added there) and return
-// its id; project types have nothing to create, just a completion mark.
-function markWishlistAcquired(id, { spaceId } = {}) {
-  const entry = byId(state.wishlist, id);
-  if (!entry) return null;
-  const targetSpaceId = spaceId || entry.spaceId;
-  let createdId = null;
-  if (entry.type === "asset" && targetSpaceId) {
-    const catalogEntry = entry.catalogKey ? { key: entry.catalogKey, icon: entry.icon } : getOrCreate(entry.title, "asset");
-    createdId = addAsset({ name: entry.title, catalogKey: catalogEntry.key, icon: entry.icon || catalogEntry.icon, spaceId: targetSpaceId }).id;
-  } else if (entry.type === "item" && targetSpaceId) {
-    const catalogEntry = entry.catalogKey ? { key: entry.catalogKey, icon: entry.icon } : getOrCreate(entry.title, "item");
-    addItem({ name: entry.title, catalogKey: catalogEntry.key, icon: entry.icon || catalogEntry.icon, spaceId: targetSpaceId, qty: 1, parLevel: 1 });
-  }
-  entry.status = "acquired";
-  entry.acquiredAt = new Date().toISOString();
-  notify();
-  return createdId;
-}
-
 // ---- habit CRUD (2026-08-04, user request) -------------------------------
 // Personal, not household — belongs to exactly one person, no space, no
 // engine trigger. Just "did I do this today," logged sparsely (a row per
@@ -501,6 +480,37 @@ function habitStreak(habitId) {
   return count;
 }
 
+// Monday-start week, matching how most weekly schedules read locally.
+function startOfWeek(date) {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 Sun .. 6 Sat
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function countDoneThisWeek(habitId) {
+  const start = startOfWeek(new Date());
+  return state.habitLog.filter((l) => l.habitId === habitId && new Date(l.date) >= start).length;
+}
+
+// Habits "needn't be only daily" (2026-08-04, user request) — a habit is
+// due today per its own frequency, and only if not already logged today.
+// Surfaced on Today so it can be swiped complete there; the streak/grid
+// view stays in Insights.
+function isHabitDueToday(habit) {
+  if (isHabitDoneOn(habit.id, todayStr())) return false;
+  const freq = habit.frequency || { type: "daily" };
+  const dow = new Date().getDay();
+  switch (freq.type) {
+    case "weekdays": return dow >= 1 && dow <= 5;
+    case "weekends": return dow === 0 || dow === 6;
+    case "custom": return (freq.days || []).includes(dow);
+    case "weekly_count": return countDoneThisWeek(habit.id) < (freq.timesPerWeek || 1);
+    default: return true; // daily
+  }
+}
+
 export {
   getState,
   subscribe,
@@ -532,12 +542,12 @@ export {
   addWishlistItem,
   updateWishlistItem,
   deleteWishlistItem,
-  markWishlistAcquired,
   addHabit,
   updateHabit,
   deleteHabit,
   isHabitDoneOn,
   toggleHabitToday,
   habitStreak,
+  isHabitDueToday,
   byId,
 };
