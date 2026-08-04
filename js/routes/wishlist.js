@@ -103,6 +103,21 @@ function catalogNameFieldHtml(type, value) {
   }));
 }
 
+// The checklist's own "add item" name field gets the same catalog
+// typeahead as everywhere else when its kind is asset/item (2026-08-04,
+// user request: "i want the assets and items... to come when i type
+// similar to other places") — a plain task doesn't have a catalog to
+// search, so it stays a bare text input.
+function subitemNameFieldHtml(kind, value) {
+  if (kind === "task") {
+    return textInput({ id: "f-new-subitem", value, placeholder: "e.g. Get quotes from painters" });
+  }
+  return catalogField({
+    id: "f-new-subitem", type: kind, value,
+    placeholder: kind === "item" ? "Start typing — e.g. Detergent" : "Start typing — e.g. Floor lamp",
+  });
+}
+
 function subItemsChecklistHtml(entry) {
   const subs = entry.subItems || [];
   if (!subs.length) return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No checklist items yet — add one below.</p>`;
@@ -113,7 +128,7 @@ function subItemsChecklistHtml(entry) {
       .map(
         (s) => `
       <div class="list-row" style="margin-bottom:6px;opacity:${s.done ? 0.55 : 1};">
-        <div class="occ-row-icon">${Icon(s.kind === "task" ? "check" : s.kind === "asset" ? "warranty" : "stock", { size: 14 })}</div>
+        <div class="occ-row-icon">${Icon(s.icon || (s.kind === "task" ? "check" : s.kind === "asset" ? "warranty" : "stock"), { size: 14 })}</div>
         <div class="occ-row-body">
           <div class="occ-row-title">${s.title}</div>
           <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "asset" ? "Asset to buy" : "Item to buy"}</div>
@@ -154,7 +169,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
           <div style="margin-top:8px;">
             ${chipGroup({ name: "newSubKind", options: SUBITEM_KINDS, value: "task" })}
             <div style="display:flex;gap:8px;margin-top:8px;">
-              <div style="flex:1;">${textInput({ id: "f-new-subitem", placeholder: "e.g. Get quotes from painters" })}</div>
+              <div id="subitem-name-wrap" style="flex:1;position:relative;">${subitemNameFieldHtml("task", "")}</div>
               <button type="button" class="btn btn-ghost" id="add-subitem-btn">Add</button>
             </div>
           </div>
@@ -166,7 +181,24 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
   });
   const root = document.getElementById("sheet-root");
   ["wishType", "wishSpaceId", "wishPriority"].forEach((n) => wireChipGroup(root, n));
-  if (entry && isProject) wireChipGroup(root, "newSubKind");
+
+  let currentSubKind = "task";
+  function wireSubitemNameField() {
+    if (currentSubKind === "task") return;
+    wireCatalogField(root, "f-new-subitem", currentSubKind);
+  }
+  if (entry && isProject) {
+    wireChipGroup(root, "newSubKind");
+    root.querySelectorAll('[data-field="newSubKind"] [data-value]').forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const kind = btn.dataset.value;
+        if (kind === currentSubKind) return;
+        currentSubKind = kind;
+        root.querySelector("#subitem-name-wrap").innerHTML = subitemNameFieldHtml(kind, "");
+        wireSubitemNameField();
+      });
+    });
+  }
 
   let currentCatalogType = initialType === "item" ? "item" : "asset";
   function wireNameCatalog() {
@@ -255,13 +287,24 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
     }
 
     root.querySelector("#add-subitem-btn").addEventListener("click", () => {
-      const input = root.querySelector("#f-new-subitem");
-      const title = input.value.trim();
-      if (!title) return;
       const kind = readChipGroup(root, "newSubKind") || "task";
-      entry.subItems = [...(entry.subItems || []), { id: genId("wlsub"), title, kind, done: false, createdId: null }];
+      let title, catalogKey, icon;
+      if (kind === "task") {
+        title = root.querySelector("#f-new-subitem").value.trim();
+        if (!title) return;
+        catalogKey = null;
+        icon = null;
+      } else {
+        const resolved = resolveCatalogField(root, "f-new-subitem", kind);
+        if (!resolved) return;
+        title = resolved.name;
+        catalogKey = resolved.key;
+        icon = resolved.icon;
+      }
+      entry.subItems = [...(entry.subItems || []), { id: genId("wlsub"), title, kind, catalogKey, icon, done: false, createdId: null }];
       persistSubItems();
-      input.value = "";
+      root.querySelector("#subitem-name-wrap").innerHTML = subitemNameFieldHtml(currentSubKind, "");
+      wireSubitemNameField();
       rewireSubItems();
     });
   }

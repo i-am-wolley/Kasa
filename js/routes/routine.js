@@ -2,15 +2,23 @@
 // (memo §4.2). Shared by every screen that creates or edits a routine
 // (House space detail today; reused wherever else needs it later).
 //
-// Also builds Habits (2026-08-04, user request: "let's have a toggle
-// between habit and routine in the same add routine/edit modal") — a
-// household Routine and a personal Habit are different enough underneath
-// (space + 6-trigger engine vs. person + a simple frequency) that they stay
-// separate data models (state.js's addRoutine/addHabit), but share this one
+// Also builds Habits and Tasks (2026-08-04, user requests: "let's have a
+// toggle between habit and routine in the same add routine/edit modal",
+// then "create a new category called task... needs to be done by a
+// specific day"). All three stay separate data models underneath (a
+// household Routine uses a space + the 6-trigger engine; a personal Habit
+// uses a person + a simple frequency; a Task is a one-off with just a due
+// date, no recurrence, no required space/person) — but share this one
 // entry sheet with a Kind toggle up top switching which field block shows.
 
-import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit } from "../state.js";
+import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit, addTask, updateTask, deleteTask } from "../state.js";
 import { openSheet, closeSheet, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, showToast } from "../ui/components.js";
+
+const KIND_OPTIONS = [
+  { value: "routine", label: "Household routine" },
+  { value: "habit", label: "Personal habit" },
+  { value: "task", label: "Task" },
+];
 
 const TRIGGER_TYPES = [
   { value: "floating_since_last", label: "Every N days since last done" },
@@ -119,17 +127,30 @@ function habitFieldsHtml(habit, defaultPersonId, state) {
   `;
 }
 
-function bodyHtml(routine, habit, spaceId, defaultPersonId, defaultKind) {
+// A task is deliberately the lightest of the three: a title (shared field
+// above) and a due date, optionally scoped to a space and/or assigned to
+// someone — no recurrence, no trigger, no effort/consequence rating.
+function taskFieldsHtml(task, defaultSpaceId, state) {
+  return `
+    ${field("Due date", textInput({ id: "f-task-due", type: "date", value: task?.dueDate ?? new Date().toISOString().slice(0, 10) }))}
+    ${field("Space (optional)", chipGroup({ name: "taskSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: task?.spaceId ?? defaultSpaceId ?? null }))}
+    ${field("Assign to (optional)", chipGroup({ name: "taskAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: task?.assigneeId ?? null }))}
+  `;
+}
+
+function bodyHtml(routine, habit, task, spaceId, defaultPersonId, defaultKind) {
   const state = getState();
-  const kind = habit ? "habit" : routine ? "routine" : (defaultKind || "routine");
+  const kind = habit ? "habit" : task ? "task" : routine ? "routine" : (defaultKind || "routine");
+  const saveLabels = { routine: "Add routine", habit: "Add habit", task: "Add task" };
   return `
     <form id="routine-form">
-      ${field("Kind", chipGroup({ name: "kind", options: [{ value: "routine", label: "Household routine" }, { value: "habit", label: "Personal habit" }], value: kind }))}
-      ${field("Title", textInput({ id: "f-title", value: (routine || habit)?.title ?? "", placeholder: kind === "habit" ? "e.g. Meditate" : "e.g. Clean ceiling fans" }))}
-      <div id="routine-fields" style="display:${kind === "habit" ? "none" : "block"};">${routineFieldsHtml(routine, spaceId, state)}</div>
+      ${field("Kind", chipGroup({ name: "kind", options: KIND_OPTIONS, value: kind }))}
+      ${field("Title", textInput({ id: "f-title", value: (routine || habit || task)?.title ?? "", placeholder: kind === "habit" ? "e.g. Meditate" : kind === "task" ? "e.g. Renew passport" : "e.g. Clean ceiling fans" }))}
+      <div id="routine-fields" style="display:${kind === "routine" ? "block" : "none"};">${routineFieldsHtml(routine, spaceId, state)}</div>
       <div id="habit-fields" style="display:${kind === "habit" ? "block" : "none"};">${habitFieldsHtml(habit, defaultPersonId, state)}</div>
+      <div id="task-fields" style="display:${kind === "task" ? "block" : "none"};">${taskFieldsHtml(task, spaceId, state)}</div>
     </form>
-    ${sheetActions({ saveLabel: (routine || habit) ? "Save changes" : (kind === "habit" ? "Add habit" : "Add routine"), showDelete: !!(routine || habit) })}
+    ${sheetActions({ saveLabel: (routine || habit || task) ? "Save changes" : saveLabels[kind], showDelete: !!(routine || habit || task) })}
   `;
 }
 
@@ -178,28 +199,31 @@ function buildHabitFrequency(root) {
   return frequency;
 }
 
-function openRoutineEditor({ routine = null, habit = null, defaultSpaceId = null, defaultPersonId = null, defaultKind = null, onSaved = null } = {}) {
-  const isEditingHabit = !!habit;
+function openRoutineEditor({ routine = null, habit = null, task = null, defaultSpaceId = null, defaultPersonId = null, defaultKind = null, onSaved = null } = {}) {
+  const editingKind = habit ? "habit" : task ? "task" : routine ? "routine" : null;
+  const editLabels = { habit: "Edit habit", task: "Edit task", routine: "Edit routine" };
   openSheet({
-    title: (routine || habit) ? (isEditingHabit ? "Edit habit" : "Edit routine") : "Add routine or habit",
-    bodyHtml: bodyHtml(routine, habit, defaultSpaceId, defaultPersonId, defaultKind),
+    title: editingKind ? editLabels[editingKind] : "Add routine, habit, or task",
+    bodyHtml: bodyHtml(routine, habit, task, defaultSpaceId, defaultPersonId, defaultKind),
   });
   const root = document.getElementById("sheet-root");
 
-  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays"]
+  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays", "taskSpaceId", "taskAssigneeId"]
     .forEach((name) => wireChipGroup(root, name));
 
-  // Kind toggle swaps which field block shows — same sheet builds both
-  // (2026-08-04, user request: "a toggle between habit and routine in the
-  // same add routine/edit modal").
+  // Kind toggle swaps which of the three field blocks shows — same sheet
+  // builds all of them (2026-08-04, user requests: "a toggle between habit
+  // and routine", then "a new category called task").
+  const saveLabels = { routine: "Add routine", habit: "Add habit", task: "Add task" };
   root.querySelector('[data-field="kind"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
     if (!btn) return;
-    const isHabit = btn.dataset.value === "habit";
-    root.querySelector("#routine-fields").style.display = isHabit ? "none" : "block";
-    root.querySelector("#habit-fields").style.display = isHabit ? "block" : "none";
-    if (!routine && !habit) {
-      root.querySelector('[data-action="save"]').textContent = isHabit ? "Add habit" : "Add routine";
+    const kind = btn.dataset.value;
+    root.querySelector("#routine-fields").style.display = kind === "routine" ? "block" : "none";
+    root.querySelector("#habit-fields").style.display = kind === "habit" ? "block" : "none";
+    root.querySelector("#task-fields").style.display = kind === "task" ? "block" : "none";
+    if (!editingKind) {
+      root.querySelector('[data-action="save"]').textContent = saveLabels[kind];
     }
   });
 
@@ -253,6 +277,25 @@ function openRoutineEditor({ routine = null, habit = null, defaultSpaceId = null
       return;
     }
 
+    if (kind === "task") {
+      const dueDate = root.querySelector("#f-task-due").value;
+      if (!dueDate) {
+        showToast("Pick a due date for this task");
+        return;
+      }
+      const fields = {
+        title, dueDate,
+        spaceId: readChipGroup(root, "taskSpaceId"),
+        assigneeId: readChipGroup(root, "taskAssigneeId"),
+      };
+      if (task) updateTask(task.id, fields);
+      else addTask(fields);
+      closeSheet();
+      showToast(task ? "Task updated" : "Task added");
+      onSaved?.();
+      return;
+    }
+
     const fields = {
       title,
       spaceId: readChipGroup(root, "spaceId"),
@@ -274,20 +317,16 @@ function openRoutineEditor({ routine = null, habit = null, defaultSpaceId = null
     onSaved?.();
   });
 
-  if (routine || habit) {
+  if (routine || habit || task) {
     root.querySelector('[data-action="delete"]').addEventListener("click", () => {
-      if (isEditingHabit) {
-        if (!confirm(`Delete "${habit.title}"? This can't be undone.`)) return;
-        deleteHabit(habit.id);
-        closeSheet();
-        showToast("Habit deleted");
-        onSaved?.();
-      } else {
-        if (!confirm(`Delete "${routine.title}"? This can't be undone.`)) return;
-        deleteRoutine(routine.id);
-        closeSheet();
-        showToast("Routine deleted");
-      }
+      const entity = habit || task || routine;
+      if (!confirm(`Delete "${entity.title}"? This can't be undone.`)) return;
+      if (habit) deleteHabit(habit.id);
+      else if (task) deleteTask(task.id);
+      else deleteRoutine(routine.id);
+      closeSheet();
+      showToast(`${habit ? "Habit" : task ? "Task" : "Routine"} deleted`);
+      onSaved?.();
     });
   }
 }

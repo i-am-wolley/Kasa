@@ -3,7 +3,7 @@
 // in-memory, same read shape Firestore reads will produce in Phase 4 so
 // route/engine code doesn't change when the data source swaps.
 
-import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog } from "../mock-data/index.js";
+import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog, tasks } from "../mock-data/index.js";
 import { generateOccurrences } from "./engine.js";
 import { getOrCreate } from "./catalog.js";
 
@@ -35,6 +35,7 @@ const state = {
   wishlist: wishlist.map((w) => ({ ...w })),
   habits: habits.map((h) => ({ ...h })),
   habitLog: habitLog.map((l) => ({ ...l })),
+  tasks: tasks.map((t) => ({ ...t })),
 };
 
 // Re-run the engine over current state, only creating occurrences for
@@ -511,6 +512,69 @@ function isHabitDueToday(habit) {
   }
 }
 
+// ---- task CRUD (2026-08-04, user request) --------------------------------
+// The third category alongside household Routines and personal Habits: "a
+// task is not a routine, but needs to be done by a specific day." No
+// recurrence, no trigger engine, no required space/person — just a title
+// and a due date, optionally scoped to a space and/or assigned to someone.
+// Structured as its own flat list (not occurrences, not routines) since a
+// task has exactly one occurrence ever, by definition.
+
+function addTask(fields) {
+  const task = { id: genId("tsk"), spaceId: null, assigneeId: null, done: false, doneAt: null, createdAt: new Date().toISOString(), ...fields };
+  state.tasks.push(task);
+  notify();
+  return task;
+}
+
+function updateTask(id, patch) {
+  const task = byId(state.tasks, id);
+  if (task) Object.assign(task, patch);
+  notify();
+}
+
+function deleteTask(id) {
+  state.tasks = state.tasks.filter((t) => t.id !== id);
+  notify();
+}
+
+function completeTask(id) {
+  const task = byId(state.tasks, id);
+  if (!task) return;
+  task.done = true;
+  task.doneAt = new Date().toISOString();
+  notify();
+}
+
+// Toggling done is symmetric, same as habits — lets Today's undo toast just
+// call this again instead of needing its own snapshot bookkeeping.
+function uncompleteTask(id) {
+  const task = byId(state.tasks, id);
+  if (!task) return;
+  task.done = false;
+  task.doneAt = null;
+  notify();
+}
+
+function taskState(task) {
+  if (task.done) return "done";
+  const due = new Date(task.dueDate);
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (due < today) return "overdue";
+  if (due.getTime() === today.getTime()) return "due";
+  return "upcoming";
+}
+
+function taskOverdueDays(task) {
+  const due = new Date(task.dueDate);
+  due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((today - due) / 86400000);
+}
+
 export {
   getState,
   subscribe,
@@ -549,5 +613,12 @@ export {
   toggleHabitToday,
   habitStreak,
   isHabitDueToday,
+  addTask,
+  updateTask,
+  deleteTask,
+  completeTask,
+  uncompleteTask,
+  taskState,
+  taskOverdueDays,
   byId,
 };

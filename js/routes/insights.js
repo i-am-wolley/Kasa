@@ -18,9 +18,13 @@
 //   the trend is gone. Kept as a section rather than spinning up a
 //   dedicated Habits screen/tab: a 6th tab would break the memo's own
 //   5-tab limit, and there's no other content competing for room here now.
+// - The "Attention needed" digest was also removed on a second round of
+//   feedback — with the score breakdown now pointing at specifics and
+//   Today already listing overdue/due items directly, it was redundant
+//   with both rather than adding a third view of the same handful of facts.
 
 import { getState, subscribe, habitStreak, byId } from "../state.js";
-import { stateOf, overdueDays } from "../engine.js";
+import { stateOf } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { habitGridHtml } from "../ui/habitGrid.js";
 
@@ -120,73 +124,6 @@ function healthCardHtml(state) {
   `;
 }
 
-// ---- Attention needed — top-5 digest across routines/stock/assets --------
-
-function attentionItems(state) {
-  const activeModeKey = state.household.activeMode;
-  const out = [];
-
-  for (const occ of state.occurrences) {
-    if (occ.state === "done" || occ.state === "snoozed") continue;
-    const routine = byId(state.routines, occ.routineId);
-    if (!routine || isPausedNow(routine, activeModeKey)) continue;
-    if (stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()) !== "overdue") continue;
-    if (routine.consequence !== "safety" && routine.consequence !== "damaging") continue;
-    const days = overdueDays({ dueAt: occ.dueAt }, new Date());
-    const space = byId(state.spaces, routine.spaceId);
-    out.push({
-      icon: space?.icon || "house", title: routine.title, meta: `Overdue by ${days}d · ${space?.name || ""}`,
-      rank: (routine.consequence === "safety" ? 100 : 80) + days,
-    });
-  }
-
-  for (const item of state.items) {
-    if (item.status !== "out") continue;
-    const space = byId(state.spaces, item.spaceId);
-    out.push({ icon: item.icon || "stock", title: item.name, meta: `Out of stock · ${space?.name || ""}`, rank: 70 });
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (const asset of state.assets) {
-    if (!asset.nextServiceDue || new Date(asset.nextServiceDue) >= today) continue;
-    const space = byId(state.spaces, asset.spaceId);
-    out.push({ icon: asset.icon || "warranty", title: `${asset.name} service`, meta: `Overdue · ${space?.name || ""}`, rank: 75 });
-  }
-
-  return out.sort((a, b) => b.rank - a.rank).slice(0, 5);
-}
-
-function attentionSectionHtml(state) {
-  const items = attentionItems(state);
-  if (!items.length) {
-    return `
-      <div class="today-section">
-        <div class="section-head"><span class="eyebrow">Attention needed</span></div>
-        <p style="color:var(--ink-muted);font-size:var(--fs-meta);">Nothing urgent across routines, stock, or assets right now.</p>
-      </div>
-    `;
-  }
-  return `
-    <div class="today-section">
-      <div class="section-head"><span class="eyebrow">Attention needed</span></div>
-      ${items
-        .map(
-          (i) => `
-        <div class="list-row" style="cursor:default;">
-          <div class="occ-row-icon">${Icon(i.icon, { size: 16 })}</div>
-          <div class="occ-row-body">
-            <div class="occ-row-title">${i.title}</div>
-            <div class="occ-row-meta">${i.meta}</div>
-          </div>
-        </div>
-      `,
-        )
-        .join("")}
-    </div>
-  `;
-}
-
 // ---- Help on leave impact (memo §6.3 hero feature) ------------------------
 
 function helpLeaveImpacts(state) {
@@ -274,7 +211,6 @@ function render() {
   mountEl.innerHTML = `
     <div class="topbar"><h1>Insights</h1></div>
     ${healthCardHtml(state)}
-    ${attentionSectionHtml(state)}
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}
     <div class="today-section">

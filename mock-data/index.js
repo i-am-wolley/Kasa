@@ -13,3 +13,4 @@ export { modes } from "./modes.js";
 export { wishlist } from "./wishlist.js";
 export { habits } from "./habits.js";
 export { habitLog } from "./habitLog.js";
+export { tasks } from "./tasks.js";

@@ -34,7 +34,12 @@ h1, h2, h3, p { margin: 0; }
 
 .font-num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
 
-.named { font-family: var(--font-serif); font-style: italic; font-weight: 500; }
+/* Was Fraunces italic serif ("named things" treatment) — dropped 2026-08-04
+   on direct user feedback ("i dont like the italics across"). Kept as a
+   class (every route still applies it to routine/space/asset/habit
+   titles) but now a no-op beyond the weight already set on those
+   elements, so removing it everywhere wasn't needed to make it disappear. */
+.named { font-weight: var(--fw-semibold); }
 
 .eyebrow {
   font-size: var(--fs-label);
@@ -326,6 +331,38 @@ h1, h2, h3, p { margin: 0; }
   color: var(--ink);
 }
 
+/* ---- Member filter row (Today) — subtle on purpose (2026-08-04, user
+   request: "shouldnt look cluttered") — no border unless active, small
+   muted text, horizontally scrollable if the household has a lot of
+   people rather than wrapping to a second row. -------------------------- */
+
+.member-filter-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 4px;
+  margin-top: 8px;
+}
+
+.member-chip {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  min-height: 28px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+}
+
+.member-chip[aria-pressed="true"] {
+  background: var(--surface-sunk);
+  color: var(--ink);
+  font-weight: var(--fw-semibold);
+}
+
 /* ---- Occurrence row — the core swipeable list item ----------------------- */
 
 .occ-row-wrap {
@@ -377,9 +414,16 @@ h1, h2, h3, p { margin: 0; }
   cursor: grab;
 }
 
-.occ-row[data-tier="degrading"] { border-left: 3px solid var(--tier-degrading); }
-.occ-row[data-tier="damaging"]  { border-left: 3px solid var(--tier-damaging); }
-.occ-row[data-tier="safety"]    { border-left: 3px solid var(--tier-safety); }
+/* Consequence tier reads as a soft full-card wash now, not a border stripe
+   (2026-08-04, user feedback: "that side color i dont even know what it
+   means" — no label either; the tint alone is meant to read as "this one's
+   a bit more than cosmetic" without needing an explanation). Cosmetic (the
+   majority of routines) stays untinted on purpose — same "don't colour
+   everything or nothing reads as urgent" principle the tier system always
+   had, just expressed as a wash instead of a stripe. */
+.occ-row[data-tier="degrading"] { background: color-mix(in srgb, var(--tier-degrading) 7%, var(--surface)); }
+.occ-row[data-tier="damaging"]  { background: color-mix(in srgb, var(--tier-damaging) 7%, var(--surface)); }
+.occ-row[data-tier="safety"]    { background: color-mix(in srgb, var(--tier-safety) 9%, var(--surface)); }
 
 .occ-row-icon {
   flex-shrink: 0;
@@ -410,8 +454,9 @@ h1, h2, h3, p { margin: 0; }
 @media (min-width: 600px) {
   .occ-row { gap: 12px; padding: 14px 16px; }
   .occ-row-icon { width: 36px; height: 36px; }
-  .occ-row-title { font-size: var(--fs-body); }
-  .occ-row-meta { font-size: var(--fs-meta); }
+  /* Title/meta font sizes deliberately do NOT bump up here (2026-08-04,
+     user feedback: "font size across cards seems very big") — same compact
+     size at every breakpoint now instead of growing on tablet. */
 }
 
 .occ-row-meta.overdue { color: var(--tier-damaging); font-weight: var(--fw-semibold); }
@@ -787,13 +832,18 @@ h1, h2, h3, p { margin: 0; }
   margin-bottom: 12px;
 }
 
-/* ---- Habit grid — 72 small squares, reading order --------------------- */
+/* ---- Habit grid — 72 small squares, reading order -----------------------
+   3 rows x 24 columns (2026-08-04, user request — was 12x6 capped at
+   260px, they wanted it to actually fill the card's width instead of
+   sitting in a small fixed block). Capped at 640px so cells don't balloon
+   on a wide screen — there's no real desktop layout yet to size against. */
 
 .habit-grid {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(24, 1fr);
   gap: 3px;
-  max-width: 260px;
+  width: 100%;
+  max-width: 640px;
 }
 
 .habit-cell {
