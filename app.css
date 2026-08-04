@@ -232,7 +232,8 @@ h1, h2, h3, p { margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  height: 34px;
+  padding: 0 12px;
   border-radius: var(--radius-full);
   background: var(--gold-soft);
   color: var(--gold);
@@ -241,6 +242,24 @@ h1, h2, h3, p { margin: 0; }
   border: none;
   cursor: pointer;
 }
+
+/* Icon-only pill, sized to exactly match .mode-chip's height so Today's
+   quick-add "+" reads as the same size box next to it (2026-08-04, user
+   request) instead of the taller generic .btn tap-target. */
+.icon-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--gold-soft);
+  color: var(--gold);
+  border: none;
+  cursor: pointer;
+}
+.icon-chip-btn:active { transform: scale(0.96); }
 
 /* ---- Stat row --------------------------------------------------------
    Overdue / Due today / This week / Completed this week — replaced the
@@ -251,13 +270,13 @@ h1, h2, h3, p { margin: 0; }
 
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   padding: 4px 16px 12px;
 }
 
 @media (min-width: 600px) {
-  .stat-row { grid-template-columns: repeat(4, 1fr); padding: 4px 24px 16px; gap: 12px; }
+  .stat-row { grid-template-columns: repeat(5, 1fr); padding: 4px 24px 16px; gap: 12px; }
 }
 
 .stat-tile {
@@ -591,6 +610,24 @@ h1, h2, h3, p { margin: 0; }
 
 .tile-meta {
   font-size: 10px;
+  color: var(--ink-muted);
+}
+
+/* Wishlist tile footer — cost bottom-left, checklist progress bottom-right,
+   both centered within their own half of the line (2026-08-04, user
+   request). margin-top:auto pushes it to the card's bottom edge even
+   though .tile centers its other children as a group. */
+.tile-foot {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+}
+.tile-foot span {
+  flex: 1;
+  text-align: center;
+  font-size: 10px;
+  font-family: var(--font-mono);
   color: var(--ink-muted);
 }
 

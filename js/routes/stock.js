@@ -383,4 +383,4 @@ function mount(el) {
   render();
 }
 
-export { mount, openItemSheet };
+export { mount, openItemSheet, bucketOf };

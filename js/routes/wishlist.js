@@ -37,7 +37,6 @@ const SUBITEM_KINDS = [
   { value: "asset", label: "Asset to buy" },
   { value: "item", label: "Item to buy" },
 ];
-const PRIORITY_LABEL = Object.fromEntries(PRIORITIES.map((p) => [p.value, p.label]));
 
 let mountEl = null;
 let unsubscribe = null;
@@ -47,18 +46,27 @@ function formatCost(cost) {
   return `₹${Number(cost).toLocaleString("en-IN")}`;
 }
 
-function tileHtml(entry) {
+// Footer is two centered halves on one line — cost bottom-left, checklist
+// progress bottom-right (2026-08-04, user request: drop the redundant
+// Soon/Someday label from the tile since the section header above it
+// already says that; show cost + task count instead). Either half is left
+// blank (not collapsed) so cost and count always land in the same spot
+// across a grid of tiles, rather than the line reflowing per-card.
+function tileFootHtml(entry) {
   const subs = entry.subItems || [];
-  const meta = entry.status === "acquired"
-    ? (entry.type === "project" ? "Done" : "Acquired")
-    : subs.length
-      ? `${subs.filter((s) => s.done).length}/${subs.length} done`
-      : [PRIORITY_LABEL[entry.priority], formatCost(entry.estimatedCost)].filter(Boolean).join(" · ");
+  if (!entry.estimatedCost && !subs.length) return "";
+  const cost = entry.estimatedCost ? formatCost(entry.estimatedCost) : "";
+  const count = subs.length ? `${subs.filter((s) => s.done).length}/${subs.length}` : "";
+  return `<div class="tile-foot"><span>${cost}</span><span>${count}</span></div>`;
+}
+
+function tileHtml(entry) {
+  const isAcquired = entry.status === "acquired";
   return `
-    <div class="tile" data-open-wish="${entry.id}" style="opacity:${entry.status === "acquired" ? 0.55 : 1};">
+    <div class="tile" data-open-wish="${entry.id}" style="opacity:${isAcquired ? 0.55 : 1};">
       <div class="tile-icon">${Icon(entry.icon || "wishlist", { size: 16 })}</div>
       <div class="tile-title">${entry.title}</div>
-      <div class="tile-meta">${meta}</div>
+      ${isAcquired ? `<div class="tile-meta">${entry.type === "project" ? "Done" : "Acquired"}</div>` : tileFootHtml(entry)}
     </div>
   `;
 }
@@ -133,7 +141,7 @@ function subItemsChecklistHtml(entry) {
           <div class="occ-row-title">${s.title}</div>
           <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "asset" ? "Asset to buy" : "Item to buy"}</div>
         </div>
-        <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}" ${s.done ? "disabled" : ""}>${s.done ? "Done" : s.kind === "task" ? "Mark done" : "Buy"}</button>
+        <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}">${s.done ? "Undo" : s.kind === "task" ? "Mark done" : "Buy"}</button>
         <button type="button" class="stepper-btn" data-delete-subitem="${s.id}">${Icon("trash", { size: 12 })}</button>
       </div>`,
       )
@@ -238,6 +246,11 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
       if (allDone && entry.status !== "acquired") {
         patch.status = "acquired";
         patch.acquiredAt = new Date().toISOString();
+      } else if (!allDone && entry.status === "acquired") {
+        // Undoing a sub-item after the project auto-completed reopens it
+        // (2026-08-04, user request: accidental taps need a way back).
+        patch.status = "idea";
+        patch.acquiredAt = null;
       }
       updateWishlistItem(entry.id, patch);
       Object.assign(entry, patch);
@@ -254,7 +267,17 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
       root.querySelectorAll("[data-toggle-subitem]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const sub = entry.subItems.find((s) => s.id === btn.dataset.toggleSubitem);
-          if (!sub || sub.done) return;
+          if (!sub) return;
+          if (sub.done) {
+            // Undo — protects against an accidental tap (2026-08-04, user
+            // request). Only reverts the checklist's own done flag; an
+            // asset/item sub-item's already-created real Stock/Assets
+            // record (if any) is left alone, not deleted.
+            sub.done = false;
+            persistSubItems();
+            rewireSubItems();
+            return;
+          }
           if (sub.kind === "task") {
             sub.done = true;
             persistSubItems();
@@ -285,6 +308,14 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
         });
       });
     }
+    // Wires the checklist rows already baked into this sheet's initial
+    // bodyHtml. Previously only called from inside "Add" below, so any
+    // pre-existing sub-item's Mark done/Buy/delete buttons were dead on
+    // arrival until a new one was added first in the same sheet session —
+    // the actual cause of "can't mark done or bought" (2026-08-04 bug
+    // report), not a mobile-specific issue, just harder to notice on
+    // desktop while actively adding items during testing.
+    rewireSubItems();
 
     root.querySelector("#add-subitem-btn").addEventListener("click", () => {
       const kind = readChipGroup(root, "newSubKind") || "task";

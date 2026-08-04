@@ -14,6 +14,7 @@ import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
+import { bucketOf } from "./stock.js";
 
 const TIER_RANK = { safety: 4, damaging: 3, degrading: 2, cosmetic: 1 };
 // Human labels instead of the old "E1"/"E4" shorthand (2026-08-04, user
@@ -22,11 +23,26 @@ const EFFORT_LABEL = { 1: "2 min", 2: "15 min", 3: "1 hr", 4: "Half day", 5: "Ve
 
 let effortOnly = false;
 let memberFilter = null; // personId, or null for everyone
+let view = "today"; // "today" | "week" (2026-08-05, user request)
 let mountEl = null;
 let unsubscribe = null;
 
 function isPausedNow(routine, activeModeKey) {
   return routine.modeFilters?.pauseIn?.includes(activeModeKey);
+}
+
+// Signed day offset from today (0 = today, negative = past). Used by the
+// "This week" view to bucket by raw due date instead of the engine's
+// window-gated due/pending state — a routine can enter "due" state days
+// before its literal due date (memo §5.1's window), which is the right
+// call for the Today view but not for "what's happening by which day this
+// week" (2026-08-04, user request).
+function dayOffset(dueRaw) {
+  const d = new Date(dueRaw);
+  d.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((d - today) / 86400000);
 }
 
 function enrichRoutine(occ, state) {
@@ -38,6 +54,7 @@ function enrichRoutine(occ, state) {
     assigneeId: routine?.defaultAssigneeId ?? null,
     state: stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()),
     days: overdueDays({ dueAt: occ.dueAt }, new Date()),
+    offset: dayOffset(occ.dueAt),
   };
 }
 
@@ -49,29 +66,44 @@ function enrichTask(task, state) {
     assigneeId: task.assigneeId ?? null,
     state: taskState(task),
     days: taskOverdueDays(task),
+    offset: dayOffset(task.dueDate),
   };
 }
 
+// Every open, unpaused, filter-matching row — NOT yet split into
+// overdue/due-today/due-this-week buckets, since which bucket a "pending"
+// row belongs to depends on the Today/This week toggle (see render()).
 function visibleRows(state) {
   const activeModeKey = state.household.activeMode;
   const routineRows = state.occurrences
     .filter((o) => o.state !== "done" && o.state !== "snoozed")
     .map((o) => enrichRoutine(o, state))
     .filter((r) => r.routine && !isPausedNow(r.routine, activeModeKey))
-    .filter((r) => r.state === "due" || r.state === "overdue")
     .filter((r) => !effortOnly || r.effort === 1);
   const taskRows = state.tasks
     .filter((t) => !t.done)
-    .map((t) => enrichTask(t, state))
-    .filter((r) => r.state === "due" || r.state === "overdue");
+    .map((t) => enrichTask(t, state));
   const rows = [...routineRows, ...taskRows];
   return memberFilter ? rows.filter((r) => r.assigneeId === memberFilter) : rows;
 }
 
+// Weekday label for a few days out ("Due Thu") reads better than "Due in
+// 4 days" once the This week view can surface rows beyond tomorrow
+// (2026-08-05) — falls back to the old "Due today"/"Overdue by N days"
+// wording for the common cases.
+function dueLabel(row) {
+  if (row.state === "overdue") return `Overdue by ${row.days} day${row.days === 1 ? "" : "s"}`;
+  if (row.offset <= 0) return "Due today";
+  if (row.offset === 1) return "Due tomorrow";
+  const d = new Date();
+  d.setDate(d.getDate() + row.offset);
+  return `Due ${d.toLocaleDateString("en-IN", { weekday: "short" })}`;
+}
+
 function rowHtml(row) {
-  const { type, state, days, tier, title, space, effort } = row;
+  const { type, state, tier, title, space, effort } = row;
   const loud = state === "overdue" && (tier === "damaging" || tier === "safety");
-  const meta = state === "overdue" ? `Overdue by ${days} day${days === 1 ? "" : "s"}` : "Due today";
+  const meta = dueLabel(row);
   let metaClass = "occ-row-meta";
   if (loud) metaClass += tier === "safety" ? " safety-overdue" : " overdue";
   const entryId = type === "routine" ? row.occ.id : row.task.id;
@@ -104,12 +136,15 @@ function rowHtml(row) {
   `;
 }
 
-function sectionHtml(title, rows) {
+function sectionHtml(title, rows, { sortByOffset = false } = {}) {
   if (!rows.length) return "";
   const sorted = [...rows].sort((a, b) => {
     const rankDiff = TIER_RANK[b.tier] - TIER_RANK[a.tier];
     if (rankDiff !== 0) return rankDiff;
-    return b.days - a.days;
+    // Due-today rows are all offset 0 so this is a no-op there; This week
+    // rows span offset 0-6, so break tier ties chronologically instead of
+    // falling back to `days` (always 0 for anything not yet overdue).
+    return sortByOffset ? a.offset - b.offset : b.days - a.days;
   });
   const sectionId = title === "Overdue" ? "section-overdue" : "section-due";
   return `
@@ -181,14 +216,7 @@ function statRowHtml(state) {
 
   const overdueCount = openRows.filter((r) => r.state === "overdue").length;
   const dueTodayCount = openRows.filter((r) => r.state === "due").length;
-
-  const weekCount = openRows.filter((r) => {
-    const dueRaw = r.type === "routine" ? r.occ.dueAt : r.task.dueDate;
-    const d = new Date(dueRaw);
-    d.setHours(0, 0, 0, 0);
-    const offset = Math.round((d - today) / 86400000);
-    return offset >= 0 && offset <= 6;
-  }).length;
+  const weekCount = openRows.filter((r) => r.offset >= 0 && r.offset <= 6).length;
 
   const withinLast7 = (dateStr) => {
     const d = new Date(dateStr);
@@ -199,11 +227,19 @@ function statRowHtml(state) {
   const completedCount = state.ledger.filter((entry) => withinLast7(entry.doneAt)).length
     + state.tasks.filter((t) => t.done && t.doneAt && withinLast7(t.doneAt)).length;
 
+  // Out/low/expiring stock, same bucketing Stock itself uses (js/routes/
+  // stock.js's bucketOf) so this always matches what tapping through
+  // actually shows. One extra number here beats a second list on Today
+  // (2026-08-05, user request: see what needs restocking "without making
+  // it cluttered").
+  const stockAlertCount = state.items.filter((i) => bucketOf(i) !== "ok").length;
+
   const tiles = [
-    { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, jump: "section-overdue" },
-    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, jump: "section-due" },
-    { id: "this-week", value: weekCount, label: "This week", tone: null, jump: null },
-    { id: "completed-week", value: completedCount, label: "Completed this week", tone: "var(--done)", jump: null },
+    { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, action: "jump:section-overdue" },
+    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "jump:section-due" },
+    { id: "this-week", value: weekCount, label: "This week", tone: null, action: "week:section-due" },
+    { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
+    { id: "completed-week", value: completedCount, label: "Completed this week", tone: "var(--done)", action: null },
   ];
 
   return `
@@ -211,7 +247,7 @@ function statRowHtml(state) {
       ${tiles
         .map(
           (t) => `
-        <div class="stat-tile" ${t.jump ? `data-jump="${t.jump}" role="button" tabindex="0"` : ""}>
+        <div class="stat-tile" ${t.action ? `data-tile-action="${t.action}" role="button" tabindex="0"` : ""}>
           <div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div>
           <div class="stat-tile-label">${t.label}</div>
         </div>
@@ -228,7 +264,7 @@ function topbarHtml(state) {
     <div class="topbar">
       <h1>Today</h1>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-tinted" id="quick-add-btn" style="padding:8px;" aria-label="Add routine, habit, or task">${Icon("plus", { size: 16 })}</button>
+        <button class="icon-chip-btn" id="quick-add-btn" aria-label="Add routine, habit, or task">${Icon("plus", { size: 16 })}</button>
         <button class="mode-chip" id="mode-chip-btn">${Icon("sparkle", { size: 14 })} ${activeMode?.label || "Normal"}</button>
       </div>
     </div>
@@ -251,18 +287,27 @@ function render() {
   const state = getState();
   const rows = visibleRows(state);
   const overdue = rows.filter((r) => r.state === "overdue");
-  const due = rows.filter((r) => r.state === "due");
+  // "Today" view keeps the engine's window-gated due state (matches every
+  // prior round's behavior). "This week" view instead buckets by raw due
+  // date offset (0-6 days out), which also surfaces "pending" rows whose
+  // window hasn't opened yet but whose due date already falls this week
+  // (2026-08-05, user request: a toggle to see the whole week at a glance).
+  const due = view === "week" ? rows.filter((r) => r.offset >= 0 && r.offset <= 6) : rows.filter((r) => r.state === "due");
   const dueHabits = state.habits.filter((h) => isHabitDueToday(h) && (!memberFilter || h.personId === memberFilter));
 
   mountEl.innerHTML = `
     ${topbarHtml(state)}
     ${statRowHtml(state)}
     <div class="today-section" style="padding-top:4px;">
-      ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
+        ${chip("Today", { active: view === "today", dataAttrs: 'data-view="today"' })}
+        ${chip("This week", { active: view === "week", dataAttrs: 'data-view="week"' })}
+      </div>
       ${memberFilterHtml(state)}
     </div>
     ${sectionHtml("Overdue", overdue)}
-    ${sectionHtml("Due today", due)}
+    ${sectionHtml(view === "week" ? "Due this week" : "Due today", due, { sortByOffset: view === "week" })}
     ${habitsSectionHtml(state)}
     ${
       !overdue.length && !due.length && !dueHabits.length
@@ -280,6 +325,13 @@ function wireEvents() {
   document.getElementById("effort-filter")?.addEventListener("click", () => {
     effortOnly = !effortOnly;
     render();
+  });
+
+  mountEl.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      view = btn.dataset.view;
+      render();
+    });
   });
 
   document.getElementById("quick-add-btn")?.addEventListener("click", () => {
@@ -320,9 +372,22 @@ function wireEvents() {
     attachSwipe(row, { onSwipeRight: () => markHabitDone(habitId), onSwipeLeft: () => markHabitDone(habitId) });
   });
 
-  mountEl.querySelectorAll("[data-jump]").forEach((tile) => {
+  // Stat tiles: "jump" scrolls to a section already on screen, "week"
+  // switches to the This week view first (then scrolls once it's
+  // rendered), "tab" hands off to the Stock tab's own tabbar button
+  // (2026-08-05) rather than duplicating boot.js's routing here.
+  mountEl.querySelectorAll("[data-tile-action]").forEach((tile) => {
     tile.addEventListener("click", () => {
-      document.getElementById(tile.dataset.jump)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const [kind, target] = tile.dataset.tileAction.split(":");
+      if (kind === "jump") {
+        document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (kind === "week") {
+        view = "week";
+        render();
+        requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      } else if (kind === "tab") {
+        document.querySelector(`[data-tab="${target}"]`)?.click();
+      }
     });
   });
 }
