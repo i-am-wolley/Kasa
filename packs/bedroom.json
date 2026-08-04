@@ -1,0 +1,50 @@
+{
+  "packId": "bedroom",
+  "version": 1,
+  "label": "Bedroom",
+  "appliesWhen": { "spaces": ["bedroom"] },
+  "spaces": [
+    { "type": "bedroom", "name": "Bedroom" }
+  ],
+  "items": [],
+  "assets": [
+    { "name": "Ceiling fan", "spaceType": "bedroom", "category": "climate", "serviceIntervalDays": 365, "expectedLifeYears": 10 },
+    { "name": "Wardrobe", "spaceType": "bedroom", "category": "furniture", "expectedLifeYears": 15 },
+    { "name": "Mattress", "spaceType": "bedroom", "category": "furniture", "expectedLifeYears": 8 }
+  ],
+  "routines": [
+    {
+      "title": "Change pillowcases",
+      "spaceType": "bedroom",
+      "trigger": { "type": "fixed_calendar", "rrule": "FREQ=WEEKLY;BYDAY=WE" },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Vacuum under bed and mattress",
+      "spaceType": "bedroom",
+      "trigger": { "type": "floating_since_last", "intervalDays": 21 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Clean ceiling fan blades",
+      "spaceType": "bedroom",
+      "assetRef": "Ceiling fan",
+      "trigger": { "type": "floating_since_last", "intervalDays": 60 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Flip / rotate mattress",
+      "spaceType": "bedroom",
+      "assetRef": "Mattress",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Air out wardrobe, check for moisture",
+      "spaceType": "bedroom",
+      "assetRef": "Wardrobe",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    }
+  ]
+}

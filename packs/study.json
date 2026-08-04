@@ -1,0 +1,61 @@
+{
+  "packId": "study",
+  "version": 1,
+  "label": "Study / home office",
+  "appliesWhen": { "spaces": ["study"] },
+  "spaces": [
+    { "type": "study", "name": "Study" }
+  ],
+  "items": [
+    { "name": "Printer paper", "spaceType": "study", "unit": "pack", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.005 },
+    { "name": "Ink cartridge", "spaceType": "study", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.003 },
+    { "name": "Charging cable", "spaceType": "study", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.005 }
+  ],
+  "assets": [
+    { "name": "Desktop computer", "spaceType": "study", "category": "electronics", "expectedLifeYears": 6 },
+    { "name": "Office chair", "spaceType": "study", "category": "furniture", "expectedLifeYears": 7 },
+    { "name": "Printer", "spaceType": "study", "category": "electronics", "serviceIntervalDays": 365, "expectedLifeYears": 6 },
+    { "name": "Monitor", "spaceType": "study", "category": "electronics", "expectedLifeYears": 7 },
+    { "name": "Wi-Fi router", "spaceType": "study", "category": "electronics", "expectedLifeYears": 5 }
+  ],
+  "routines": [
+    {
+      "title": "Dust desk and electronics",
+      "spaceType": "study",
+      "trigger": { "type": "floating_since_last", "intervalDays": 14 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Clean printer heads",
+      "spaceType": "study",
+      "assetRef": "Printer",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Restart router",
+      "spaceType": "study",
+      "assetRef": "Wi-Fi router",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Organize cables and power strip",
+      "spaceType": "study",
+      "trigger": { "type": "floating_since_last", "intervalDays": 60 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Back up important files",
+      "spaceType": "study",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 2, "consequence": "degrading", "ownerClass": "member"
+    },
+    {
+      "title": "File and shred loose paperwork",
+      "spaceType": "study",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "member"
+    }
+  ]
+}

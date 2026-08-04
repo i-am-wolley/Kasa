@@ -10,12 +10,12 @@
   "items": [],
   "assets": [
     {
-      "name": "RO unit", "spaceType": "utility", "category": "water_purifier",
+      "name": "RO / water purifier", "spaceType": "utility", "category": "water_purifier",
       "serviceIntervalDays": 180, "serviceIntervalMeter": 3000,
       "meterType": "litres", "meterUnit": "L", "expectedLifeYears": 7
     },
     {
-      "name": "AC unit", "spaceType": "bedroom", "category": "ac",
+      "name": "Split AC", "spaceType": "bedroom", "category": "ac",
       "serviceIntervalDays": 180, "expectedLifeYears": 10
     }
   ],
@@ -23,14 +23,14 @@
     {
       "title": "Service RO unit",
       "spaceType": "utility",
-      "assetRef": "RO unit",
+      "assetRef": "RO / water purifier",
       "trigger": { "type": "usage_meter", "meterDelta": 3000 },
       "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
     },
     {
       "title": "Pre-summer AC servicing",
       "spaceType": "bedroom",
-      "assetRef": "AC unit",
+      "assetRef": "Split AC",
       "trigger": { "type": "seasonal", "months": [2, 3] },
       "effort": 4, "consequence": "degrading", "ownerClass": "vendor"
     },

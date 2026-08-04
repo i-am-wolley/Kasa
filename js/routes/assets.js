@@ -77,6 +77,7 @@ function assetFormFields(asset, state, defaultSpaceId, defaultName) {
     ${field("Purchase date", textInput({ id: "f-asset-purchased", type: "date", value: asset?.purchaseDate ?? "" }))}
     ${field("Warranty until", textInput({ id: "f-asset-warranty", type: "date", value: asset?.warrantyUntil ?? "" }))}
     ${field("Service every N days", textInput({ id: "f-asset-interval", type: "number", value: asset?.serviceIntervalDays ?? "" }))}
+    ${field("Expected life (years)", textInput({ id: "f-asset-life", type: "number", value: asset?.expectedLifeYears ?? "", placeholder: "e.g. 10", min: 1 }))}
     ${field("Vendor name", textInput({ id: "f-asset-vendor", value: asset?.vendorName ?? "" }))}
     ${field("Vendor phone", textInput({ id: "f-asset-phone", type: "tel", value: (asset?.vendorPhone || "").replace("tel:", "") }))}
   `;
@@ -151,6 +152,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
     onSelect: (entry) => {
       if (asset) return; // never clobber an existing asset's fields on edit
       if (entry.serviceIntervalDays != null) root.querySelector("#f-asset-interval").value = entry.serviceIntervalDays;
+      if (entry.expectedLifeYears != null) root.querySelector("#f-asset-life").value = entry.expectedLifeYears;
       renderSuggestedRoutines(root, entry.suggestedRoutines);
     },
   });
@@ -181,6 +183,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       purchaseDate: root.querySelector("#f-asset-purchased").value || null,
       warrantyUntil: root.querySelector("#f-asset-warranty").value || null,
       serviceIntervalDays: interval ? Number(interval) : null,
+      expectedLifeYears: root.querySelector("#f-asset-life").value ? Number(root.querySelector("#f-asset-life").value) : null,
       vendorName: root.querySelector("#f-asset-vendor").value.trim() || null,
       vendorPhone: phone ? `tel:${phone}` : null,
     };

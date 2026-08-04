@@ -1,0 +1,43 @@
+{
+  "packId": "admin",
+  "version": 1,
+  "label": "Admin & paperwork",
+  "appliesWhen": { "always": true },
+  "spaces": [
+    { "type": "whole_home", "name": "Whole home" }
+  ],
+  "items": [],
+  "assets": [],
+  "routines": [
+    {
+      "title": "Renew home/property insurance",
+      "spaceType": "whole_home",
+      "trigger": { "type": "floating_since_last", "intervalDays": 365 },
+      "effort": 3, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Review and file warranty documents",
+      "spaceType": "whole_home",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 2, "consequence": "degrading", "ownerClass": "member"
+    },
+    {
+      "title": "Review recurring subscriptions",
+      "spaceType": "whole_home",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Pay property tax",
+      "spaceType": "whole_home",
+      "trigger": { "type": "floating_since_last", "intervalDays": 365 },
+      "effort": 3, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "File income tax returns",
+      "spaceType": "whole_home",
+      "trigger": { "type": "seasonal", "months": [6, 7] },
+      "effort": 4, "consequence": "damaging", "ownerClass": "member"
+    }
+  ]
+}

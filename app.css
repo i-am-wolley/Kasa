@@ -890,7 +890,12 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .habit-cell.done { background: var(--done); }
+/* A day the habit's own frequency never scheduled (2026-08-05, user
+   request) — visually distinct from a plain missed day, not just a
+   lighter shade of the same "empty" fill, so it doesn't read as neglect. */
+.habit-cell.not-scheduled { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .habit-cell.today { box-shadow: 0 0 0 1.5px var(--gold); }
+.habit-cell.today.not-scheduled { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1.5px var(--gold); }
 
 /* ---- Skeleton loading shimmer ------------------------------------------- */
 

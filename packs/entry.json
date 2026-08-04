@@ -1,0 +1,33 @@
+{
+  "packId": "entry",
+  "version": 1,
+  "label": "Entry",
+  "appliesWhen": { "spaces": ["entry"] },
+  "spaces": [
+    { "type": "entry", "name": "Entry" }
+  ],
+  "items": [
+    { "name": "Light bulbs", "spaceType": "entry", "unit": "piece", "qty": 2, "parLevel": 2, "packSize": 2, "defaultBurnRate": 0.02 }
+  ],
+  "assets": [],
+  "routines": [
+    {
+      "title": "Organize shoe rack",
+      "spaceType": "entry",
+      "trigger": { "type": "floating_since_last", "intervalDays": 21 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Check and replace entry light bulbs",
+      "spaceType": "entry",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Test door lock and security chain",
+      "spaceType": "entry",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 1, "consequence": "safety", "ownerClass": "member"
+    }
+  ]
+}

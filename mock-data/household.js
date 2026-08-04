@@ -17,5 +17,8 @@ export const household = {
     quietHours: { start: "21:30", end: "07:30" },
     oneNotifPerDay: true,
   },
-  packVersions: { core: 1, bath: 1, laundry: 1, help: 1, appliances: 1 },
+  packVersions: {
+    core: 1, bath: 1, laundry: 1, help: 1, appliances: 1,
+    utility: 1, bedroom: 1, living: 1, plants: 1, admin: 1, entry: 1, vehicle: 1, study: 1,
+  },
 };

@@ -6,7 +6,11 @@
 
 import { getOrCreate } from "./catalog.js";
 
-const PACK_IDS = ["core", "bath", "laundry", "help", "appliances"];
+const PACK_IDS = [
+  "core", "bath", "laundry", "help", "appliances",
+  // Phase 7, 2026-08-05 — remaining packs per memo §10's priority order.
+  "utility", "bedroom", "living", "plants", "admin", "entry", "vehicle", "study",
+];
 
 let cachedPacks = null;
 

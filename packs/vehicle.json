@@ -1,0 +1,59 @@
+{
+  "packId": "vehicle",
+  "version": 1,
+  "label": "Vehicle",
+  "appliesWhen": { "has": ["Vehicle"] },
+  "spaces": [
+    { "type": "outside", "name": "Outside" }
+  ],
+  "items": [
+    { "name": "Engine oil", "spaceType": "outside", "unit": "litre", "qty": 1, "parLevel": 1, "packSize": 4, "defaultBurnRate": 0.01 },
+    { "name": "Wiper fluid", "spaceType": "outside", "unit": "litre", "qty": 1, "parLevel": 1, "packSize": 2, "defaultBurnRate": 0.02 }
+  ],
+  "assets": [
+    { "name": "Car", "spaceType": "outside", "category": "vehicle", "serviceIntervalDays": 180, "expectedLifeYears": 12 },
+    { "name": "Motorcycle / scooter", "spaceType": "outside", "category": "vehicle", "serviceIntervalDays": 90, "expectedLifeYears": 10 }
+  ],
+  "routines": [
+    {
+      "title": "Service car",
+      "spaceType": "outside",
+      "assetRef": "Car",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+    },
+    {
+      "title": "Check tire pressure",
+      "spaceType": "outside",
+      "assetRef": "Car",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Service motorcycle / scooter",
+      "spaceType": "outside",
+      "assetRef": "Motorcycle / scooter",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 2, "consequence": "degrading", "ownerClass": "vendor"
+    },
+    {
+      "title": "Renew vehicle insurance",
+      "spaceType": "outside",
+      "trigger": { "type": "floating_since_last", "intervalDays": 365 },
+      "effort": 2, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Wash car",
+      "spaceType": "outside",
+      "assetRef": "Car",
+      "trigger": { "type": "floating_since_last", "intervalDays": 14 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Top up engine oil and wiper fluid",
+      "spaceType": "outside",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 1, "consequence": "degrading", "ownerClass": "member"
+    }
+  ]
+}

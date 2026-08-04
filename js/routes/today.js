@@ -15,6 +15,7 @@ import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
 import { bucketOf } from "./stock.js";
+import { batches as intelBatches } from "../intel.js";
 
 const TIER_RANK = { safety: 4, damaging: 3, degrading: 2, cosmetic: 1 };
 // Human labels instead of the old "E1"/"E4" shorthand (2026-08-04, user
@@ -202,6 +203,49 @@ function memberFilterHtml(state) {
   `;
 }
 
+// §5.6 batching (2026-08-05) — "you're already in the room, do these
+// together" clustering for whatever's actually overdue/due right now.
+// Same-effort-tier batching already exists as the "10 free minutes?" chip
+// and same-trip shopping batching already exists as Stock's "Build
+// shopping list" — this section is the two genuinely new clusters: same
+// space, same vendor. Tapping a card just jumps to the list below (reuses
+// the stat tiles' own data-tile-action wiring) rather than adding a third
+// filter dimension on top of the member filter and view toggle.
+function batchesSectionHtml(state, actionableRows) {
+  const { spaces, vendors } = intelBatches(state, actionableRows);
+  if (!spaces.length && !vendors.length) return "";
+  const spaceCards = spaces
+    .map(
+      (b) => `
+    <div class="list-row" data-tile-action="jump:section-overdue" style="cursor:pointer;">
+      <div class="occ-row-icon">${Icon("house", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">You're already in ${b.spaceName}</div>
+        <div class="occ-row-meta">${b.count} things${b.minutes ? ` · ~${b.minutes} min total` : ""} — ${b.titles.join(", ")}</div>
+      </div>
+    </div>`,
+    )
+    .join("");
+  const vendorCards = vendors
+    .map(
+      (b) => `
+    <div class="list-row" data-tile-action="jump:section-overdue" style="cursor:pointer;">
+      <div class="occ-row-icon">${Icon("call", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">Calling ${b.vendorName}?</div>
+        <div class="occ-row-meta">${b.count} other things need them — ${b.titles.join(", ")}</div>
+      </div>
+    </div>`,
+    )
+    .join("");
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Batch these together</span></div>
+      ${spaceCards}${vendorCards}
+    </div>
+  `;
+}
+
 function statRowHtml(state) {
   const activeModeKey = state.household.activeMode;
   const today = new Date();
@@ -306,6 +350,7 @@ function render() {
       </div>
       ${memberFilterHtml(state)}
     </div>
+    ${batchesSectionHtml(state, [...overdue, ...due])}
     ${sectionHtml("Overdue", overdue)}
     ${sectionHtml(view === "week" ? "Due this week" : "Due today", due, { sortByOffset: view === "week" })}
     ${habitsSectionHtml(state)}
@@ -475,7 +520,13 @@ function attachSwipe(row, { onSwipeRight, onSwipeLeft } = {}) {
 function markDone(occId) {
   const state = getState();
   const routine = byId(state.routines, byId(state.occurrences, occId)?.routineId);
-  completeOccurrence(occId);
+  // Attributed to the routine's default assignee (2026-08-05) — completeOccurrence
+  // was never passed a doneBy at all before this, so the ledger's attribution
+  // field went permanently unused and Phase 5's load balancing (§5.5) had
+  // nothing to compute from. There's no "who actually did this" prompt in the
+  // UI (not asked for), so this is a reasonable stand-in: who it's normally
+  // assigned to, same person already shown on the row.
+  completeOccurrence(occId, routine?.defaultAssigneeId ?? null);
   haptic(10);
   showToast(`Marked done${routine ? ` — ${routine.title}` : ""}`, { onUndo: undoLast });
 }

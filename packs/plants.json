@@ -1,0 +1,41 @@
+{
+  "packId": "plants",
+  "version": 1,
+  "label": "Plants",
+  "appliesWhen": { "has": ["Plants"] },
+  "spaces": [
+    { "type": "balcony", "name": "Balcony / Garden" }
+  ],
+  "items": [
+    { "name": "Plant fertilizer", "spaceType": "balcony", "unit": "pack", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.01 },
+    { "name": "Pesticide spray", "spaceType": "balcony", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.01 },
+    { "name": "Potting soil", "spaceType": "balcony", "unit": "kg", "qty": 2, "parLevel": 2, "packSize": 5, "defaultBurnRate": 0.05 }
+  ],
+  "assets": [],
+  "routines": [
+    {
+      "title": "Water plants",
+      "spaceType": "balcony",
+      "trigger": { "type": "floating_since_last", "intervalDays": 3 },
+      "effort": 1, "consequence": "damaging", "ownerClass": "either"
+    },
+    {
+      "title": "Fertilize plants",
+      "spaceType": "balcony",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 1, "consequence": "degrading", "ownerClass": "either"
+    },
+    {
+      "title": "Check plants for pests",
+      "spaceType": "balcony",
+      "trigger": { "type": "floating_since_last", "intervalDays": 14 },
+      "effort": 1, "consequence": "degrading", "ownerClass": "either"
+    },
+    {
+      "title": "Repot plants that have outgrown their pots",
+      "spaceType": "balcony",
+      "trigger": { "type": "floating_since_last", "intervalDays": 365 },
+      "effort": 3, "consequence": "degrading", "ownerClass": "member"
+    }
+  ]
+}

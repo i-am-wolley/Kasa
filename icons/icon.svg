@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Kasa">
+  <!--
+    Kasa's PWA icon — the same mark used in index.html's .app-mark header
+    (rounded square + a small solid dot near one corner, "one tracked
+    thing, watched"), scaled up and given its own solid background so it
+    reads as a standalone app icon rather than an inline header glyph.
+    Colors are the real tokens.css values, not re-guessed:
+      background = --bg  (#F5F0EA, warm cream paper)
+      mark       = --gold (#B8935A)
+    Single SVG referenced at multiple manifest.json icon sizes (valid per
+    the spec) rather than exported to several PNGs — no build step, no
+    image-generation tooling in this repo, and the mark is simple enough
+    to stay crisp at any size as a vector.
+  -->
+  <rect width="512" height="512" rx="96" fill="#F5F0EA" />
+  <rect x="128" y="128" width="256" height="256" rx="88" fill="none" stroke="#B8935A" stroke-width="29" stroke-linecap="round" stroke-linejoin="round" />
+  <circle cx="312" cy="200" r="24" fill="#B8935A" />
+</svg>

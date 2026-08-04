@@ -1,0 +1,44 @@
+{
+  "packId": "living",
+  "version": 1,
+  "label": "Living room",
+  "appliesWhen": { "spaces": ["living"] },
+  "spaces": [
+    { "type": "living", "name": "Living room" }
+  ],
+  "items": [],
+  "assets": [
+    { "name": "Sofa", "spaceType": "living", "category": "furniture", "expectedLifeYears": 10 },
+    { "name": "Curtains / blinds", "spaceType": "living", "category": "furniture", "expectedLifeYears": 6 },
+    { "name": "Television", "spaceType": "living", "category": "electronics", "expectedLifeYears": 8 }
+  ],
+  "routines": [
+    {
+      "title": "Vacuum and rotate sofa cushions",
+      "spaceType": "living",
+      "assetRef": "Sofa",
+      "trigger": { "type": "floating_since_last", "intervalDays": 30 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Wash curtains",
+      "spaceType": "living",
+      "assetRef": "Curtains / blinds",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Dust TV and electronics",
+      "spaceType": "living",
+      "assetRef": "Television",
+      "trigger": { "type": "floating_since_last", "intervalDays": 21 },
+      "effort": 1, "consequence": "cosmetic", "ownerClass": "either"
+    },
+    {
+      "title": "Deep-mop living room floor",
+      "spaceType": "living",
+      "trigger": { "type": "floating_since_last", "intervalDays": 14 },
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "member"
+    }
+  ]
+}

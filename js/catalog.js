@@ -34,12 +34,12 @@
 // belong.
 const ASSETS = [
   // Water heating
-  { key: "AST-GEYSER", name: "Geyser", icon: "waterHeaterTank", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 8,
+  { key: "AST-GEYSER", name: "Geyser", icon: "waterHeaterTank", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 9,
     suggestedRoutines: [
       { title: "Service geyser", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
       { title: "Check pressure relief valve", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" },
     ] },
-  { key: "AST-WATER-HEATER-TANKLESS", name: "Tankless / instant water heater", icon: "waterHeaterTankless", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 12,
+  { key: "AST-WATER-HEATER-TANKLESS", name: "Tankless / instant water heater", icon: "waterHeaterTankless", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 20,
     suggestedRoutines: [{ title: "Descale tankless heater", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "vendor" }] },
   { key: "AST-WATER-HEATER-TANK", name: "Tank water heater", icon: "waterHeaterTank", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Flush water heater tank", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "member" }] },
@@ -61,7 +61,7 @@ const ASSETS = [
     suggestedRoutines: [{ title: "Pump septic tank", trigger: { type: "floating_since_last", intervalDays: 1095 }, effort: 4, consequence: "safety", ownerClass: "vendor" }] },
 
   // Climate control
-  { key: "AST-AC-SPLIT", name: "Split AC", icon: "acSplit", category: "climate", serviceIntervalDays: 180, expectedLifeYears: 10,
+  { key: "AST-AC-SPLIT", name: "Split AC", icon: "acSplit", category: "climate", serviceIntervalDays: 180, expectedLifeYears: 12,
     suggestedRoutines: [
       { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
       { title: "Clean AC filter", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either", requiresItemKeys: ["ITM-AC-FILTER"] },
@@ -231,6 +231,33 @@ const ASSETS = [
     suggestedRoutines: [{ title: "Service motorcycle", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "degrading", ownerClass: "vendor" }] },
   { key: "AST-BICYCLE", name: "Bicycle", icon: "bicycle", category: "vehicle", expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Oil bicycle chain", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
+
+  // Baby & kids (added 2026-08-05, catalog breadth pass)
+  { key: "AST-CRIB", name: "Crib / cot", icon: "crib", category: "baby", expectedLifeYears: 3 },
+  { key: "AST-STROLLER", name: "Stroller", icon: "stroller", category: "baby", expectedLifeYears: 4,
+    suggestedRoutines: [{ title: "Wipe down and check stroller wheels", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
+  { key: "AST-HIGH-CHAIR", name: "High chair", icon: "highChair", category: "baby", expectedLifeYears: 4,
+    suggestedRoutines: [{ title: "Deep clean high chair", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
+  { key: "AST-CAR-SEAT", name: "Child car seat", icon: "carSeat", category: "baby", expectedLifeYears: 6,
+    suggestedRoutines: [{ title: "Check car seat expiry and straps", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" }] },
+
+  // Office & admin furniture
+  { key: "AST-DESK", name: "Desk", icon: "desk", category: "furniture", expectedLifeYears: 15 },
+  { key: "AST-FILING-CABINET", name: "Filing cabinet", icon: "filingCabinet", category: "furniture", expectedLifeYears: 15 },
+
+  // Lighting & fixtures
+  { key: "AST-CEILING-LIGHT", name: "Ceiling light fixture", icon: "ceilingLight", category: "electrical", expectedLifeYears: 10 },
+  { key: "AST-DOORBELL", name: "Video doorbell", icon: "doorbell", category: "safety", expectedLifeYears: 6,
+    suggestedRoutines: [{ title: "Check doorbell battery and footage", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "member" }] },
+
+  // Fitness equipment
+  { key: "AST-TREADMILL", name: "Treadmill", icon: "treadmill", category: "fitness", serviceIntervalDays: 365, expectedLifeYears: 8,
+    suggestedRoutines: [
+      { title: "Lubricate treadmill belt", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Service treadmill", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+    ] },
+  { key: "AST-EXERCISE-BIKE", name: "Exercise bike", icon: "exerciseBike", category: "fitness", expectedLifeYears: 8,
+    suggestedRoutines: [{ title: "Wipe and check exercise bike resistance", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
 ];
 
 const ITEMS = [

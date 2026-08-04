@@ -23,10 +23,12 @@
 //   Today already listing overdue/due items directly, it was redundant
 //   with both rather than adding a third view of the same handful of facts.
 
-import { getState, subscribe, habitStreak, byId } from "../state.js";
+import { getState, subscribe, habitStreak, byId, updateRoutine, toggleRoutineActive } from "../state.js";
 import { stateOf } from "../engine.js";
 import { Icon } from "../ui/icons.js";
+import { showToast } from "../ui/components.js";
 import { habitGridHtml } from "../ui/habitGrid.js";
+import { snoozeSuggestions, loadBalance, seasonalBoosts, failurePredictions, consumableCoupling, neglectClusters } from "../intel.js";
 
 let mountEl = null;
 let unsubscribe = null;
@@ -197,7 +199,7 @@ function habitsSectionHtml(state) {
           <div style="margin-bottom:18px;">
             <div class="occ-row-title named">${h.title}</div>
             <div class="occ-row-meta" style="margin-bottom:8px;">${person?.name || "—"} · ${streak > 0 ? `${streak} day streak` : "no streak yet"}</div>
-            ${habitGridHtml(h.id)}
+            ${habitGridHtml(h)}
           </div>
         `;
         })
@@ -206,17 +208,211 @@ function habitsSectionHtml(state) {
   `;
 }
 
+// ---- Phase 5 — intelligent logic (memo §5.4-§5.9, 2026-08-05) -------------
+// §5.2 burn-rate learning and §5.3 adaptive intervals are explicitly NOT
+// built (user direction) — everything below is §5.4-§5.9's UI surface.
+
+function smoothingNoticeHtml(state) {
+  const moves = state.lastSmoothingMoves || [];
+  if (!moves.length) return "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">This week was smoothed</span></div>
+      <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:8px;">${moves.length} flexible routine${moves.length === 1 ? "" : "s"} moved to keep the week under the household's effort ceiling — never anything damaging/safety, never a fixed-calendar item.</p>
+      ${moves
+        .map(
+          (m) => `
+        <div class="list-row" style="cursor:default;">
+          <div class="occ-row-icon">${Icon("today", { size: 16 })}</div>
+          <div class="occ-row-body">
+            <div class="occ-row-title">${m.title}</div>
+            <div class="occ-row-meta">${new Date(m.from).toLocaleDateString("en-IN", { month: "short", day: "numeric" })} → ${new Date(m.to).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}</div>
+          </div>
+        </div>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+// §5.4 snooze learning — the richest signal in the app. "ease" suggestions
+// get real actions (lengthen/lower/disable); "day-preference" is shown as
+// information only (rescheduling a routine's actual trigger day is a
+// bigger structural change than this signal alone should force through).
+function snoozeSuggestionsHtml(state) {
+  const suggestions = snoozeSuggestions(state);
+  if (!suggestions.length) return "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Worth a second look</span></div>
+      ${suggestions
+        .map((s) => {
+          if (s.type === "disable") {
+            return `
+            <div class="list-row" style="cursor:default;">
+              <div class="occ-row-icon">${Icon("snooze", { size: 16 })}</div>
+              <div class="occ-row-body">
+                <div class="occ-row-title">${s.title}</div>
+                <div class="occ-row-meta">${s.detail}</div>
+              </div>
+              <button type="button" class="chip" data-disable-routine="${s.routineId}">Turn off</button>
+            </div>`;
+          }
+          if (s.type === "ease") {
+            return `
+            <div class="list-row" style="cursor:default;">
+              <div class="occ-row-icon">${Icon("snooze", { size: 16 })}</div>
+              <div class="occ-row-body">
+                <div class="occ-row-title">${s.title}</div>
+                <div class="occ-row-meta">${s.detail}</div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                ${s.canLengthen ? `<button type="button" class="chip" data-lengthen-routine="${s.routineId}" data-current-interval="${s.currentIntervalDays}">Lengthen</button>` : ""}
+                <button type="button" class="chip" data-lower-routine="${s.routineId}">Lower priority</button>
+              </div>
+            </div>`;
+          }
+          // day-preference — informational
+          return `
+            <div class="list-row" style="cursor:default;">
+              <div class="occ-row-icon">${Icon("sparkle", { size: 16 })}</div>
+              <div class="occ-row-body">
+                <div class="occ-row-title">${s.title}</div>
+                <div class="occ-row-meta">${s.detail}</div>
+              </div>
+            </div>`;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+// §5.5 load balancing — pull-only, phrased about the house, never about a
+// person underperforming (memo's own framing). Members only, not paid help.
+function loadBalanceHtml(state) {
+  const lb = loadBalance(state);
+  if (!lb) return "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">This month's load</span></div>
+      <div class="list-row" style="cursor:default;">
+        <div class="occ-row-icon">${Icon("person", { size: 16 })}</div>
+        <div class="occ-row-body">
+          <div class="occ-row-title">The house has been leaning on ${lb.leaning.name}</div>
+          <div class="occ-row-meta">${lb.sharePct}% of the last ${lb.windowDays} days' effort points, across ${lb.totals.length} people</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// §5.8 seasonal intelligence — city-mapped windows (Bengaluru only, per the
+// memo's own data), keyword-matched against routines already due/overdue.
+function seasonalHtml(state) {
+  const boosts = seasonalBoosts(state);
+  if (!boosts.length) return "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Seasonal</span></div>
+      ${boosts
+        .map(
+          (b) => `
+        <div class="list-row" style="cursor:default;">
+          <div class="occ-row-icon">${Icon("sparkle", { size: 16 })}</div>
+          <div class="occ-row-body">
+            <div class="occ-row-title">${b.season} window</div>
+            <div class="occ-row-meta">${b.titles.length} thing${b.titles.length === 1 ? "" : "s"} to check: ${b.titles.join(", ")}</div>
+          </div>
+        </div>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+// §5.9 correlation and forecasting — failure prediction, consumable
+// coupling, neglect clustering. Grouped as one "Forecast" section since
+// each fires rarely and none needs its own eyebrow to stay legible.
+function forecastHtml(state) {
+  const failures = failurePredictions(state);
+  const coupled = consumableCoupling(state);
+  const neglect = neglectClusters(state);
+  if (!failures.length && !coupled.length && !neglect.length) return "";
+  const rows = [
+    ...failures.map((f) => ({ icon: "warranty", title: f.name, detail: f.detail })),
+    ...coupled.map((c) => ({ icon: "stock", title: c.assetName, detail: `Recently serviced — ${c.items.join(", ")} may need replacing sooner than the calendar suggests.` })),
+    ...neglect.map((n) => ({ icon: "house", title: n.spaceName, detail: `${n.overdueCount} of ${n.totalCount} routines here are overdue — still apply, or worth pausing/removing some?` })),
+  ];
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Forecast</span></div>
+      ${rows
+        .map(
+          (r) => `
+        <div class="list-row" style="cursor:default;">
+          <div class="occ-row-icon">${Icon(r.icon, { size: 16 })}</div>
+          <div class="occ-row-body">
+            <div class="occ-row-title">${r.title}</div>
+            <div class="occ-row-meta">${r.detail}</div>
+          </div>
+        </div>`,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function wireEvents(state) {
+  mountEl.querySelectorAll("[data-disable-routine]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      toggleRoutineActive(btn.dataset.disableRoutine);
+      showToast("Routine turned off");
+    });
+  });
+  mountEl.querySelectorAll("[data-lengthen-routine]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = byId(state.routines, btn.dataset.lengthenRoutine);
+      if (!routine) return;
+      const current = Number(btn.dataset.currentInterval) || routine.trigger.intervalDays;
+      const longer = Math.round(current * 1.5);
+      updateRoutine(routine.id, { trigger: { ...routine.trigger, intervalDays: longer } });
+      showToast(`Interval lengthened to every ${longer} days`);
+    });
+  });
+  mountEl.querySelectorAll("[data-lower-routine]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const routine = byId(state.routines, btn.dataset.lowerRoutine);
+      if (!routine) return;
+      const order = ["safety", "damaging", "degrading", "cosmetic"];
+      const idx = order.indexOf(routine.consequence);
+      const alreadyLowest = idx === -1 || idx >= order.length - 1;
+      if (alreadyLowest) {
+        showToast("Already at the lowest tier");
+        return;
+      }
+      updateRoutine(routine.id, { consequence: order[idx + 1] });
+      showToast("Priority lowered");
+    });
+  });
+}
+
 function render() {
   const state = getState();
   mountEl.innerHTML = `
     <div class="topbar"><h1>Insights</h1></div>
     ${healthCardHtml(state)}
+    ${smoothingNoticeHtml(state)}
+    ${snoozeSuggestionsHtml(state)}
+    ${loadBalanceHtml(state)}
+    ${forecastHtml(state)}
+    ${seasonalHtml(state)}
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}
     <div class="today-section">
       <p style="color:var(--ink-faint);font-size:var(--fs-micro);">Photo sweep, bill scan, and the weekly AI digest need a Cloud Function proxy (memo §5.10's own no-client-side-LLM rule) — those land with Phase 4/6's Firebase pass, not before.</p>
     </div>
   `;
+  wireEvents(state);
 }
 
 function mount(el) {

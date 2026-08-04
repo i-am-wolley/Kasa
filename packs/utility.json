@@ -1,0 +1,53 @@
+{
+  "packId": "utility",
+  "version": 1,
+  "label": "Utility & bills",
+  "appliesWhen": { "spaces": ["utility"] },
+  "spaces": [
+    { "type": "utility", "name": "Utility" }
+  ],
+  "items": [
+    { "name": "LPG cylinder", "spaceType": "utility", "unit": "piece", "qty": 1, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.033 },
+    { "name": "Drinking water can", "spaceType": "utility", "unit": "piece", "qty": 2, "parLevel": 1, "packSize": 1, "defaultBurnRate": 0.15 }
+  ],
+  "assets": [
+    {
+      "name": "Inverter / UPS", "spaceType": "utility", "category": "power",
+      "serviceIntervalDays": 365, "expectedLifeYears": 5
+    }
+  ],
+  "routines": [
+    {
+      "title": "Book water tanker",
+      "spaceType": "utility",
+      "trigger": { "type": "floating_since_last", "intervalDays": 20 },
+      "effort": 2, "consequence": "damaging", "ownerClass": "member",
+      "regionalOverrides": { "water_scarce_city": { "intervalDays": 10 } }
+    },
+    {
+      "title": "Reorder LPG cylinder",
+      "spaceType": "utility",
+      "trigger": { "type": "floating_since_last", "intervalDays": 25 },
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Pay electricity bill",
+      "spaceType": "utility",
+      "trigger": { "type": "fixed_calendar", "rrule": "FREQ=MONTHLY;BYMONTHDAY=10" },
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Top up inverter battery water",
+      "spaceType": "utility",
+      "assetRef": "Inverter / UPS",
+      "trigger": { "type": "floating_since_last", "intervalDays": 90 },
+      "effort": 2, "consequence": "damaging", "ownerClass": "member"
+    },
+    {
+      "title": "Check gas pipeline and regulator for leaks",
+      "spaceType": "utility",
+      "trigger": { "type": "floating_since_last", "intervalDays": 180 },
+      "effort": 2, "consequence": "safety", "ownerClass": "vendor"
+    }
+  ]
+}

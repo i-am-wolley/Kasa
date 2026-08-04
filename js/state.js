@@ -3,9 +3,10 @@
 // in-memory, same read shape Firestore reads will produce in Phase 4 so
 // route/engine code doesn't change when the data source swaps.
 
-import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog, tasks } from "../mock-data/index.js";
-import { generateOccurrences } from "./engine.js";
-import { getOrCreate } from "./catalog.js";
+import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog, tasks, snoozeLog } from "../mock-data/index.js";
+import { generateOccurrences, stateOf } from "./engine.js";
+import { getOrCreate, findByKey } from "./catalog.js";
+import { applyLoadSmoothing } from "./intel.js";
 
 const listeners = new Set();
 
@@ -22,11 +23,22 @@ function withCatalogLink(record, type) {
   return { ...record, catalogKey: entry.key, icon: record.icon || entry.icon };
 }
 
+// Backfills expectedLifeYears from the catalog's researched default for any
+// asset that doesn't already have one set (2026-08-05, user request: keep
+// existing assets auto-updated from catalog research rather than only new
+// ones) — never overwrites a value someone already set, and always resolves
+// through the catalog entry the asset is actually linked to, not a guess.
+function withExpectedLife(asset) {
+  if (asset.expectedLifeYears != null) return asset;
+  const entry = findByKey(asset.catalogKey, "asset");
+  return entry?.expectedLifeYears != null ? { ...asset, expectedLifeYears: entry.expectedLifeYears } : asset;
+}
+
 const state = {
   household,
   spaces: spaces.map((s) => ({ ...s })),
   items: items.map((i) => withCatalogLink({ ...i }, "item")),
-  assets: assets.map((a) => withCatalogLink({ ...a }, "asset")),
+  assets: assets.map((a) => withExpectedLife(withCatalogLink({ ...a }, "asset"))),
   people: people.map((p) => ({ ...p })),
   modes: modes.map((m) => ({ ...m })),
   routines: routines.map((r) => ({ ...r })),
@@ -36,12 +48,35 @@ const state = {
   habits: habits.map((h) => ({ ...h })),
   habitLog: habitLog.map((l) => ({ ...l })),
   tasks: tasks.map((t) => ({ ...t })),
+  snoozeLog: snoozeLog.map((s) => ({ ...s })),
+  lastSmoothingMoves: [],
 };
+
+// A snoozed occurrence never woke back up on its own — nothing anywhere
+// transitioned `state: "snoozed"` back to due/overdue once `snoozedUntil`
+// passed. Found while building Phase 5's snooze learning (2026-08-05): it
+// meant a snoozed item vanished from Today for good, and regenerate()'s
+// "no open occurrence exists" check would eventually spawn a SECOND fresh
+// occurrence for the same routine alongside the permanently-snoozed one
+// (since "snoozed" was never counted as open) the next time anything
+// triggered a regenerate(). Also meant `snoozeCount` could never reach 3 —
+// the memo's own "snoozed 3x in a row" signal was unreachable. Fixed by
+// waking any occurrence whose snooze window has elapsed back to its real
+// engine-computed state before anything else reads or regenerates.
+function wakeSnoozedOccurrences() {
+  const now = new Date();
+  for (const occ of state.occurrences) {
+    if (occ.state === "snoozed" && occ.snoozedUntil && new Date(occ.snoozedUntil) <= now) {
+      occ.state = stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, now);
+    }
+  }
+}
 
 // Re-run the engine over current state, only creating occurrences for
 // routines that don't already have one open — same "no open occurrence
 // exists" rule the real engine.js tick uses (memo §5.1).
 function regenerate() {
+  wakeSnoozedOccurrences();
   const openRoutineIds = new Set(
     state.occurrences
       .filter((o) => o.state !== "done" && o.state !== "snoozed")
@@ -57,6 +92,13 @@ function regenerate() {
     now: new Date(),
   });
   state.occurrences.push(...fresh);
+  // Phase 5 load smoothing (§5.7) — shifts flexible occurrences ±7 days if
+  // a week's total effort exceeds the household ceiling. Runs as part of
+  // the same engine pass regenerate() already does, not a separate manual
+  // action; each occurrence is only ever smoothed once (applyLoadSmoothing
+  // marks `occ.smoothed`), so repeat regenerate() calls don't re-shuffle
+  // things that already moved.
+  state.lastSmoothingMoves = applyLoadSmoothing(state);
 }
 
 regenerate();
@@ -104,6 +146,7 @@ function applyAutoDepletion() {
 
 function getState() {
   applyAutoDepletion();
+  wakeSnoozedOccurrences();
   return state;
 }
 
@@ -173,6 +216,12 @@ function snoozeOccurrence(occId, days = 1) {
   occ.state = "snoozed";
   occ.snoozeCount = (occ.snoozeCount || 0) + 1;
   occ.snoozedUntil = new Date(Date.now() + days * 86400000).toISOString();
+  // Logged for Phase 5's snooze-learning day-of-week detection (§5.4) — see
+  // intel.js's snoozeSuggestions(). Not restored by the 5s undo toast (only
+  // the occurrence/ledger snapshot is) — an undone snooze still happened
+  // from a "did the user hesitate on this" signal standpoint.
+  const now = new Date();
+  state.snoozeLog.push({ id: genId("snz"), routineId: occ.routineId, date: now.toISOString().slice(0, 10), dow: now.getDay() });
   notify();
 }
 
@@ -286,6 +335,17 @@ function computeNextServiceDue(asset) {
   return new Date(base.getTime() + asset.serviceIntervalDays * 86400000).toISOString().slice(0, 10);
 }
 
+// Same "single source of truth, recomputed whenever its inputs change"
+// pattern as computeNextServiceDue — feeds Phase 5's failure prediction
+// (intel.js's failurePredictions(), §5.9). Purely informational (nothing
+// currently acts on replacementDueAt directly); null until both a purchase
+// date and an expected life are known.
+function computeReplacementDueAt(asset) {
+  if (!asset.purchaseDate || !asset.expectedLifeYears) return asset.replacementDueAt ?? null;
+  const purchased = new Date(asset.purchaseDate);
+  return new Date(purchased.getTime() + asset.expectedLifeYears * 365.25 * 86400000).toISOString().slice(0, 10);
+}
+
 function addAsset(fields) {
   const asset = {
     id: genId("ast"), brand: null, model: null, serial: null,
@@ -293,9 +353,10 @@ function addAsset(fields) {
     meter: null, serviceIntervalDays: null, serviceIntervalMeter: null,
     lastServicedAt: null, nextServiceDue: null, consumableItemIds: [],
     vendorName: null, vendorPhone: null, docs: [], expectedLifeYears: null,
-    replacementDueAt: null, ...fields,
+    replacementDueAt: null, serviceHistory: [], ...fields,
   };
   asset.nextServiceDue = computeNextServiceDue(asset);
+  asset.replacementDueAt = computeReplacementDueAt(asset);
   state.assets.push(asset);
   notify();
   return asset;
@@ -306,6 +367,7 @@ function updateAsset(id, patch) {
   if (!asset) return;
   Object.assign(asset, patch);
   if (patch.serviceIntervalDays != null) asset.nextServiceDue = computeNextServiceDue(asset);
+  if (patch.purchaseDate != null || patch.expectedLifeYears != null) asset.replacementDueAt = computeReplacementDueAt(asset);
   notify();
 }
 
@@ -314,13 +376,18 @@ function deleteAsset(id) {
   notify();
 }
 
-// Marks an asset serviced today and re-baselines its meter, so the next
-// usage_meter/floating computeNext() starts counting fresh from now.
+// Marks an asset serviced today, re-baselines its meter so the next
+// usage_meter/floating computeNext() starts counting fresh from now, and
+// appends to serviceHistory — the record intel.js's failurePredictions()
+// (§5.9) needs to detect a "rising service frequency" trend, which has
+// nothing to measure without at least a few real timestamps.
 function markAssetServiced(id) {
   const asset = byId(state.assets, id);
   if (!asset) return;
-  asset.lastServicedAt = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  asset.lastServicedAt = today;
   asset.nextServiceDue = computeNextServiceDue(asset);
+  asset.serviceHistory = [...(asset.serviceHistory || []), today];
   if (asset.meter) asset.lastServiceMeterValue = asset.meter.value;
   notify();
 }
@@ -426,8 +493,20 @@ function deleteWishlistItem(id) {
 // day it WAS done, same pattern as the ledger — silence means not done,
 // not an explicit "false" row for every day that ever existed).
 
-function addHabit({ personId, title }) {
-  const habit = { id: genId("hb"), personId, title, createdAt: new Date().toISOString() };
+// Was `function addHabit({ personId, title })` — silently dropped every
+// other field the caller passed, including `frequency`. Found 2026-08-05
+// while testing the new "Every N days" option: routine.js's save handler
+// has always correctly built `{ title, personId, frequency }` and called
+// addHabit(fields), but the destructured signature here threw `frequency`
+// away before it ever reached state.habits, so every habit ever created
+// via "Add habit" silently defaulted to daily regardless of what was
+// actually picked — invisible until something actually checked the saved
+// object, since `isHabitScheduledOn`'s `habit.frequency || {type:"daily"}`
+// fallback made a missing frequency look identical to an explicit "Daily"
+// choice. Habits created directly in mock-data (which set `frequency`
+// literally, not through this function) were never affected.
+function addHabit(fields) {
+  const habit = { id: genId("hb"), frequency: { type: "daily" }, createdAt: new Date().toISOString(), ...fields };
   state.habits.push(habit);
   notify();
   return habit;
@@ -495,21 +574,43 @@ function countDoneThisWeek(habitId) {
   return state.habitLog.filter((l) => l.habitId === habitId && new Date(l.date) >= start).length;
 }
 
+// Whether a habit was ever "supposed to" happen on a given date, per its
+// own frequency — independent of whether it was actually done. Pure and
+// date-parameterized (not just "today") so the 72-day grid (2026-08-05,
+// user request: "cant have blank days cos it was never planned") can ask
+// this retroactively for each of its cells, distinguishing "not scheduled"
+// from "scheduled but missed" instead of treating every non-done day the
+// same way. `weekly_count` habits are the one deliberate exception — they
+// have no specific scheduled days by nature ("3x this week," not "Mon/Wed/
+// Fri"), so every day counts as schedulable for them, same as daily.
+function isHabitScheduledOn(habit, date) {
+  const freq = habit.frequency || { type: "daily" };
+  const dow = date.getDay();
+  switch (freq.type) {
+    case "weekdays": return dow >= 1 && dow <= 5;
+    case "weekends": return dow === 0 || dow === 6;
+    case "custom": return (freq.days || []).includes(dow);
+    case "every_n_days": {
+      const n = freq.intervalDays || 2;
+      const anchor = new Date(habit.createdAt);
+      anchor.setHours(0, 0, 0, 0);
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      const daysSince = Math.round((d - anchor) / 86400000);
+      return daysSince >= 0 && daysSince % n === 0;
+    }
+    default: return true; // daily, weekly_count
+  }
+}
+
 // Habits "needn't be only daily" (2026-08-04, user request) — a habit is
 // due today per its own frequency, and only if not already logged today.
 // Surfaced on Today so it can be swiped complete there; the streak/grid
 // view stays in Insights.
 function isHabitDueToday(habit) {
   if (isHabitDoneOn(habit.id, todayStr())) return false;
-  const freq = habit.frequency || { type: "daily" };
-  const dow = new Date().getDay();
-  switch (freq.type) {
-    case "weekdays": return dow >= 1 && dow <= 5;
-    case "weekends": return dow === 0 || dow === 6;
-    case "custom": return (freq.days || []).includes(dow);
-    case "weekly_count": return countDoneThisWeek(habit.id) < (freq.timesPerWeek || 1);
-    default: return true; // daily
-  }
+  if (habit.frequency?.type === "weekly_count") return countDoneThisWeek(habit.id) < (habit.frequency.timesPerWeek || 1);
+  return isHabitScheduledOn(habit, new Date());
 }
 
 // ---- task CRUD (2026-08-04, user request) --------------------------------
@@ -613,6 +714,7 @@ export {
   toggleHabitToday,
   habitStreak,
   isHabitDueToday,
+  isHabitScheduledOn,
   addTask,
   updateTask,
   deleteTask,

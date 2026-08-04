@@ -3,8 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#F5F0EA" />
+  <meta name="theme-color" content="#B8935A" />
   <title>Kasa</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icons/icon.svg" />
   <link rel="stylesheet" href="./tokens.css" />
   <link rel="stylesheet" href="./app.css" />
   <!--
@@ -52,5 +55,19 @@
     </div>
   </div>
   <script type="module" src="./js/boot.js"></script>
+  <script>
+    // PWA offline shell (build-plan Phase 7). Registered after load, not
+    // blocking boot — matches memo §8.5 ("app must be fully usable in
+    // airplane mode after first load") for the parts already buildable
+    // pre-Firebase: static shell + packs. Plain inline script (not an ES
+    // module) since it has nothing to import and runs once.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch((err) => {
+          console.warn("[kasa] service worker registration failed:", err);
+        });
+      });
+    }
+  </script>
 </body>
 </html>

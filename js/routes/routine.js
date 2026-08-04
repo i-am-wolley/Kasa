@@ -50,6 +50,7 @@ const HABIT_FREQ_TYPES = [
   { value: "weekends", label: "Weekends" },
   { value: "custom", label: "Custom days" },
   { value: "weekly_count", label: "N times/week" },
+  { value: "every_n_days", label: "Every N days" },
 ];
 // JS Date.getDay() numbering (0=Sun..6=Sat), kept as strings since chip
 // data-value always round-trips through the DOM as a string.
@@ -124,6 +125,9 @@ function habitFieldsHtml(habit, defaultPersonId, state) {
     <div id="habit-weekly-count" style="display:${freq.type === "weekly_count" ? "block" : "none"};">
       ${field("Times per week", textInput({ id: "f-habit-timesperweek", type: "number", value: freq.timesPerWeek ?? 3, min: 1 }))}
     </div>
+    <div id="habit-every-n-days" style="display:${freq.type === "every_n_days" ? "block" : "none"};">
+      ${field("Every how many days", textInput({ id: "f-habit-intervaldays", type: "number", value: freq.intervalDays ?? 2, min: 2 }))}
+    </div>
   `;
 }
 
@@ -196,6 +200,7 @@ function buildHabitFrequency(root) {
   const frequency = { type };
   if (type === "custom") frequency.days = (readChipGroup(root, "habitCustomDays") || []).map(Number);
   if (type === "weekly_count") frequency.timesPerWeek = Number(root.querySelector("#f-habit-timesperweek").value) || 1;
+  if (type === "every_n_days") frequency.intervalDays = Math.max(2, Number(root.querySelector("#f-habit-intervaldays").value) || 2);
   return frequency;
 }
 
@@ -232,6 +237,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
     if (!btn) return;
     root.querySelector("#habit-custom-days").style.display = btn.dataset.value === "custom" ? "block" : "none";
     root.querySelector("#habit-weekly-count").style.display = btn.dataset.value === "weekly_count" ? "block" : "none";
+    root.querySelector("#habit-every-n-days").style.display = btn.dataset.value === "every_n_days" ? "block" : "none";
   });
 
   showTriggerBlock(root, routine?.trigger?.type ?? "floating_since_last");
