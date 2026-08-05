@@ -1,7 +1,14 @@
-// People screen (memo §8.2) — members and help, roster + leave. Reached
-// via More (not a primary tab — memo §8.1 lists 5 tabs, People isn't one).
+// People & Household screen (memo §8.2) — members and help, roster + leave,
+// plus the household itself (2026-08-05, user request: "make it people
+// and household where I can onboard to a household anytime"). Reached via
+// More (not a primary tab — memo §8.1 lists 5 tabs, People isn't one).
 // "Mark leave" here is the entry point to the Help-on-leave hero feature,
 // which isn't built yet (build-plan Phase 7).
+//
+// Members vs help is a real distinction, not just a label (2026-08-05,
+// user request): a member represents an eventual real account and needs
+// an email on file for that; help (maid/cook/driver) is added by a member
+// and never needs one of its own.
 
 import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
@@ -17,7 +24,7 @@ function subtitleFor(person) {
     const days = person.schedule?.days?.length ? `${person.schedule.days.length}x/week` : "";
     return [person.role, days, person.schedule?.time].filter(Boolean).join(" · ");
   }
-  return "Household member";
+  return person.email || "Household member";
 }
 
 function rowHtml(person) {
@@ -32,19 +39,71 @@ function rowHtml(person) {
   `;
 }
 
+// Household code + "join a different household" (2026-08-05, user
+// request) — the same honest join stub welcome.js's first-run flow uses,
+// reachable here anytime afterward too, not just on first launch.
+function householdSectionHtml(state) {
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Household</span></div>
+      <div class="list-row" style="cursor:default;">
+        <div class="occ-row-icon">${Icon("wholeHome", { size: 16 })}</div>
+        <div class="occ-row-body">
+          <div class="occ-row-title">${state.household.name || "Your household"}</div>
+          <div class="occ-row-meta">Code: <span class="font-num">${state.household.code || "—"}</span></div>
+        </div>
+        <button type="button" class="chip" id="join-household-btn">Join different</button>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   const state = getState();
+  const members = state.people.filter((p) => p.kind === "member");
+  const help = state.people.filter((p) => p.kind === "help");
   mountEl.innerHTML = `
     <div class="topbar">
       <button class="btn btn-ghost" id="back-to-more" style="padding:8px;">${Icon("chevronLeft", { size: 18 })}</button>
-      <h1 style="flex:1;">People</h1>
+      <h1 style="flex:1;">People & Household</h1>
       <button class="btn btn-tinted" id="add-person-btn">${Icon("plus", { size: 16 })} Person</button>
     </div>
+    ${householdSectionHtml(state)}
     <div class="today-section">
-      ${state.people.map(rowHtml).join("") || emptyState({ message: "No one added yet.", actionLabel: null })}
+      <div class="section-head"><span class="eyebrow">Members</span></div>
+      ${members.map(rowHtml).join("") || emptyState({ message: "No members added yet.", actionLabel: null })}
+    </div>
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Help</span></div>
+      ${help.length ? help.map(rowHtml).join("") : `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No help added yet.</p>`}
     </div>
   `;
   wireEvents(state);
+}
+
+// Same honest stub as welcome.js's own join step — looking a code up
+// needs Firestore (Phase 4). Kept reachable here so joining a different
+// household isn't only offered once, on first launch.
+function openJoinHouseholdSheet() {
+  openSheet({
+    title: "Join a different household",
+    bodyHtml: `
+      ${field("Household code", textInput({ id: "f-join-code-people", placeholder: "ABC123" }))}
+      ${sheetActions({ saveLabel: "Join" })}
+    `,
+  });
+  const root = document.getElementById("sheet-root");
+  const codeInput = root.querySelector("#f-join-code-people");
+  codeInput.addEventListener("input", () => {
+    codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+  });
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    if (!codeInput.value.trim()) {
+      showToast("Enter a household code first");
+      return;
+    }
+    showToast("Joining a household needs Firebase (Phase 4) — not built yet.");
+  });
 }
 
 const WEEKDAY_CHIPS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -106,6 +165,10 @@ function openPersonSheet(person) {
       <form id="person-form">
         ${field("Name", textInput({ id: "f-person-name", value: person?.name ?? "" }))}
         ${field("Type", chipGroup({ name: "kind", options: ["member", "help"], value: person?.kind ?? "member" }))}
+        <div data-kind-block="member" style="display:${isHelp ? "none" : ""};">
+          ${field("Email", textInput({ id: "f-person-email", type: "email", value: person?.email ?? "", placeholder: "name@example.com" }))}
+          <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-6px;margin-bottom:10px;">Members need an email — they'll eventually sign in and get onboarded to the household with it. Add as Help below if that's not needed.</p>
+        </div>
         <div data-kind-block="help" style="display:${isHelp ? "" : "none"};">
           ${field("Role", textInput({ id: "f-person-role", value: person?.role ?? "", placeholder: "e.g. maid, cook, driver" }))}
           ${field("Works on", chipGroup({ name: "scheduleDays", options: WEEKDAY_CHIPS, value: person?.schedule?.days ?? [], multi: true }))}
@@ -175,7 +238,9 @@ function openPersonSheet(person) {
   root.querySelector('[data-field="kind"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
     if (!btn) return;
-    root.querySelector('[data-kind-block="help"]').style.display = btn.dataset.value === "help" ? "" : "none";
+    const nowHelp = btn.dataset.value === "help";
+    root.querySelector('[data-kind-block="help"]').style.display = nowHelp ? "" : "none";
+    root.querySelector('[data-kind-block="member"]').style.display = nowHelp ? "none" : "";
   });
 
   root.querySelector("#add-leave-btn")?.addEventListener("click", () => {
@@ -195,6 +260,17 @@ function openPersonSheet(person) {
     if (kind === "help") {
       fields.role = root.querySelector("#f-person-role").value.trim() || null;
       fields.schedule = { days: readChipGroup(root, "scheduleDays") || [], time: root.querySelector("#f-person-time").value || null };
+      fields.email = null;
+    } else {
+      // Members represent a real account-to-be, so an email is required
+      // (2026-08-05, user request) — help never needs one, added by a
+      // member rather than having its own account.
+      const email = root.querySelector("#f-person-email").value.trim();
+      if (!email) {
+        showToast("Members need an email on file. Add as Help instead if that's not needed.");
+        return;
+      }
+      fields.email = email;
     }
     if (person) updatePerson(person.id, fields);
     else addPerson(fields);
@@ -215,6 +291,10 @@ function openPersonSheet(person) {
 function wireEvents(state) {
   document.getElementById("back-to-more")?.addEventListener("click", () => onBack?.());
   document.getElementById("add-person-btn")?.addEventListener("click", () => openPersonSheet(null));
+  document.getElementById("join-household-btn")?.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openJoinHouseholdSheet();
+  });
   mountEl.querySelectorAll("[data-person-id]").forEach((row) => {
     row.addEventListener("click", () => openPersonSheet(byId(state.people, row.dataset.personId)));
   });

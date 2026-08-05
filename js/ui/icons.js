@@ -19,6 +19,15 @@ const PATHS = {
   wishlist: `<path d="M12 3.5l2.6 5.5 6 .9-4.3 4.3 1 6-5.3-2.9-5.3 2.9 1-6-4.3-4.3 6-.9z" stroke-linejoin="round"/>`,
   flame: `<path d="M12 2.5c1.2 3-2.5 4.2-2.5 8a2.5 2.5 0 1 0 5 0c1 1.2 1.5 2.8 1.5 4.2a4.5 4.5 0 1 1-9 0C7 10 12 8 12 2.5z" stroke-linejoin="round"/>`,
   task: `<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3V2.5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1V3"/><polyline points="8.5,12.5 10.5,14.5 15.5,9.5"/>`,
+  // Generic routine glyph (2026-08-05, user request) — a recurring-cycle
+  // arrow, a deliberate fit for "this repeats." Used as a routine row's
+  // icon whenever it isn't tied to an asset (which gets that asset's own
+  // icon instead) — was previously falling back to the routine's SPACE
+  // icon, which read as arbitrary/wrong for a routine that just happens to
+  // live in that room (e.g. a water-tank-cleaning routine showing Utility's
+  // washing-machine-like icon). Never a room icon, never random — always
+  // this one consistent glyph when there's no more specific asset to show.
+  routine: `<path d="M4 12a8 8 0 0 1 14-5"/><polyline points="18,3 18,7 14,7"/><path d="M20 12a8 8 0 0 1-14 5"/><polyline points="6,21 6,17 10,17"/>`,
   more: `<circle cx="5" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="19" cy="12" r="1.1" fill="currentColor"/>`,
 
   // ---- spaces ---------------------------------------------------------

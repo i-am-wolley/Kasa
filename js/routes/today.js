@@ -53,10 +53,12 @@ function dayOffset(dueRaw) {
 function enrichRoutine(occ, state) {
   const routine = byId(state.routines, occ.routineId);
   const space = routine ? byId(state.spaces, routine.spaceId) : null;
+  const asset = routine?.assetId ? byId(state.assets, routine.assetId) : null;
   return {
     type: "routine", occ, routine, space,
     title: routine?.title, tier: routine?.consequence || "cosmetic", effort: routine?.effort ?? null,
     assigneeId: routine?.defaultAssigneeId ?? null,
+    assetIcon: asset?.icon ?? null,
     state: stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()),
     days: overdueDays({ dueAt: occ.dueAt }, new Date()),
     offset: dayOffset(occ.dueAt),
@@ -112,7 +114,14 @@ function rowHtml(row) {
   let metaClass = "occ-row-meta";
   if (loud) metaClass += tier === "safety" ? " safety-overdue" : " overdue";
   const entryId = type === "routine" ? row.occ.id : row.task.id;
-  const icon = space?.icon || (type === "task" ? "task" : "house");
+  // A routine's icon was borrowing its SPACE's icon (2026-08-05, user
+  // report: "for water tank cleaning there is washing machine" — Utility's
+  // room icon, not anything about the routine itself). Prefer the linked
+  // asset's own icon when there is one (genuinely meaningful — "Service
+  // geyser" shows the geyser), otherwise fall back to one consistent
+  // generic "routine" glyph, never a room icon and never anything that
+  // could read as arbitrary.
+  const icon = type === "task" ? "task" : type === "routine" ? row.assetIcon || "routine" : space?.icon || "house";
   // Routines keep the done/snooze split peek; tasks have no snooze concept
   // — either swipe direction just completes it, so both peek panels read
   // "Done" (matches how habit rows already behave).
@@ -225,7 +234,7 @@ function batchesSectionHtml(state, actionableRows) {
     .map(
       (b) => `
     <div class="list-row" data-tile-action="jump:section-overdue" style="cursor:pointer;">
-      <div class="occ-row-icon">${Icon("house", { size: 16 })}</div>
+      <div class="occ-row-icon">${Icon(b.spaceIcon || "house", { size: 16 })}</div>
       <div class="occ-row-body">
         <div class="occ-row-title">You're already in ${b.spaceName}</div>
         <div class="occ-row-meta">${b.count} things${b.minutes ? ` · ~${b.minutes} min total` : ""} — ${b.titles.join(", ")}</div>
@@ -290,7 +299,7 @@ function statRowHtml(state) {
     { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "jump:section-due" },
     { id: "this-week", value: weekCount, label: "This week", tone: null, action: "week:section-due" },
     { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
-    { id: "completed-week", value: completedCount, label: "Completed this week", tone: "var(--done)", action: null },
+    { id: "completed-week", value: completedCount, label: "Completed", tone: "var(--done)", action: null },
   ];
 
   return `

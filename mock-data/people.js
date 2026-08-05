@@ -2,12 +2,12 @@
 
 export const people = [
   {
-    id: "u_vinod", name: "Vinod", kind: "member", role: null,
+    id: "u_vinod", name: "Vinod", kind: "member", role: null, email: "vinod@example.com",
     schedule: null, leave: [], payDay: null, payAmount: null, advances: [],
     handoverRoutineIds: [], avatarColor: "var(--gold)",
   },
   {
-    id: "u_keerthana", name: "Keerthana", kind: "member", role: null,
+    id: "u_keerthana", name: "Keerthana", kind: "member", role: null, email: "keerthana@example.com",
     schedule: null, leave: [], payDay: null, payAmount: null, advances: [],
     handoverRoutineIds: [], avatarColor: "var(--terracotta)",
   },

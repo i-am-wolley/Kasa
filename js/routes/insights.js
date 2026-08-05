@@ -83,13 +83,13 @@ function scoreBreakdownHtml(h) {
   const rows = [];
   if (h.overduePenalty > 0) {
     const byTier = Object.entries(h.overdueByTier).filter(([, c]) => c > 0).map(([tier, c]) => `${c} ${tier}`).join(", ");
-    rows.push({ icon: "today", label: "Overdue routines", points: h.overduePenalty, detail: `${h.overdueCount} item${h.overdueCount === 1 ? "" : "s"} — ${byTier}` });
+    rows.push({ icon: "today", label: "Overdue routines", points: h.overduePenalty, detail: `${h.overdueCount} item${h.overdueCount === 1 ? "" : "s"} — ${byTier}`, nav: "today" });
   }
   if (h.stockPenalty > 0) {
-    rows.push({ icon: "stock", label: "Stock running low", points: h.stockPenalty, detail: `${h.outCount} out, ${h.lowCount} low` });
+    rows.push({ icon: "stock", label: "Stock running low", points: h.stockPenalty, detail: `${h.outCount} out, ${h.lowCount} low`, nav: "stock" });
   }
   if (h.assetPenalty > 0) {
-    rows.push({ icon: "warranty", label: "Asset service overdue", points: h.assetPenalty, detail: `${h.overdueAssets} asset${h.overdueAssets === 1 ? "" : "s"}` });
+    rows.push({ icon: "warranty", label: "Asset service overdue", points: h.assetPenalty, detail: `${h.overdueAssets} asset${h.overdueAssets === 1 ? "" : "s"}`, nav: null });
   }
   if (!rows.length) {
     return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">Nothing dragging this down — everything's on track.</p>`;
@@ -97,7 +97,7 @@ function scoreBreakdownHtml(h) {
   return rows
     .map(
       (r) => `
-    <div class="list-row" style="cursor:default;">
+    <div class="list-row" ${r.nav ? `data-breakdown-nav="${r.nav}" style="cursor:pointer;"` : `style="cursor:default;"`}>
       <div class="occ-row-icon">${Icon(r.icon, { size: 16 })}</div>
       <div class="occ-row-body">
         <div class="occ-row-title">${r.label}</div>
@@ -363,6 +363,17 @@ function forecastHtml(state) {
 }
 
 function wireEvents(state) {
+  // Score-breakdown rows jump to the screen that actually explains the
+  // number (2026-08-05, user request: "idelaly when clicked needs to take
+  // to stock or today page") — reuses the tabbar's own click wiring
+  // (same data-tab lookup pattern already used elsewhere) rather than a
+  // new cross-module navigation function.
+  mountEl.querySelectorAll("[data-breakdown-nav]").forEach((row) => {
+    row.addEventListener("click", () => {
+      document.querySelector(`[data-tab="${row.dataset.breakdownNav}"]`)?.click();
+    });
+  });
+
   mountEl.querySelectorAll("[data-disable-routine]").forEach((btn) => {
     btn.addEventListener("click", () => {
       toggleRoutineActive(btn.dataset.disableRoutine);

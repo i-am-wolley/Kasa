@@ -8,8 +8,11 @@
 //    household step below is what both "not signed in" and "signed in but
 //    no household yet" converge on, matching the flow the user described.
 // 2. Household: join an existing one by its 6-char code (a real UI, but a
-//    stub action — looking a code up needs Firestore, Phase 4) or create a
-//    new one, which hands off to the existing 6-question onboarding flow.
+//    stub action — looking a code up needs Firestore, Phase 4), create a
+//    new one (hands off to the existing 6-question onboarding flow), or
+//    Skip — lands straight in the app on a household this device already
+//    has (2026-08-05 follow-up), for anyone who just wants to look around
+//    without committing to either path yet.
 //
 // Gated behind a localStorage flag in boot.js so this only ever shows once
 // per browser, not on every reload — see boot.js's `showWelcome`/`startApp`.
@@ -17,6 +20,7 @@
 let mountEl = null;
 let step = "signin";
 let onCreateNew = null;
+let onSkip = null;
 
 function markHtml() {
   return `
@@ -55,6 +59,7 @@ function householdHtml() {
         <button type="button" class="btn btn-ghost welcome-btn" id="join-btn">Join household</button>
         <div class="welcome-or">or</div>
         <button type="button" class="btn btn-solid welcome-btn" id="create-btn">Create a new household</button>
+        <button type="button" class="welcome-skip" id="skip-household-btn">Skip — start with a household of your own for now</button>
       </div>
     </div>
   `;
@@ -96,6 +101,17 @@ function wireEvents() {
   document.getElementById("create-btn")?.addEventListener("click", () => {
     onCreateNew?.();
   });
+
+  // Skip (2026-08-05, user request): bypasses both join and the 6-question
+  // flow entirely, landing straight in the app on a household this device
+  // already has — state.js generates a fresh household code at every
+  // boot, so "skip" already means "a household of your own," not a shared
+  // fallback. Once Phase 4's real join exists, joining a real household
+  // later should replace this auto-created one, not sit alongside it —
+  // not implementable yet without a backend, flagged in CLAUDE.md.
+  document.getElementById("skip-household-btn")?.addEventListener("click", () => {
+    onSkip?.();
+  });
 }
 
 // Minimal inline toast — welcome.js intentionally doesn't import
@@ -127,9 +143,10 @@ function showPlaceholderToast() {
   showToast("Sign-in isn't built yet — needs Firebase (Phase 4). Use Skip for now.");
 }
 
-function mount(el, { onCreateNew: createNew } = {}) {
+function mount(el, { onCreateNew: createNew, onSkip: skip } = {}) {
   mountEl = el;
   onCreateNew = createNew;
+  onSkip = skip;
   step = "signin";
   render();
 }

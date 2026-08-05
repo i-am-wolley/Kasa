@@ -9,11 +9,14 @@
 // §5.2 burn-rate learning and §5.3 adaptive intervals. Every other §5
 // sub-section is covered.
 
+import { stateOf } from "./engine.js";
+
 // Deliberately NOT importing byId from state.js — this file is imported BY
 // state.js (regenerate() calls applyLoadSmoothing), and native, unbundled
 // ES module circular imports are fragile enough in-browser to avoid rather
 // than rely on live-binding hoisting working out. A one-line duplicate is
-// the safer trade.
+// the safer trade. engine.js is a safe import (a leaf module, doesn't
+// import state.js or intel.js), so stateOf is imported normally.
 function byId(list, id) {
   return list.find((x) => x.id === id);
 }
@@ -170,6 +173,7 @@ function spaceBatches(rows) {
     .map((b) => ({
       spaceId: b.space.id,
       spaceName: b.space.name,
+      spaceIcon: b.space.icon,
       count: b.rows.length,
       minutes: b.rows.reduce((sum, r) => sum + (EFFORT_MINUTES[r.effort] || 0), 0),
       titles: b.rows.map((r) => r.title),
@@ -195,17 +199,35 @@ function batches(state, rows) {
 
 // ---- §5.7 Load smoothing ---------------------------------------------------
 // If a week's total effort exceeds a ceiling, shift flexible occurrences
-// (cosmetic|degrading consequence, floating_since_last trigger only) ±7
-// days into whichever adjacent week has more headroom. Never touches
-// damaging/safety or fixed-calendar/seasonal/etc. Mutates the occurrence
-// objects it's given directly (same "pass the real state, mutate in
-// place" pattern engine.js's caller in state.js already uses) and returns
-// the list of moves so the caller can show what happened.
+// (cosmetic|degrading consequence, floating_since_last trigger only) +7
+// days into the following week. Never touches damaging/safety or
+// fixed-calendar/seasonal/etc. Mutates the occurrence objects it's given
+// directly (same "pass the real state, mutate in place" pattern
+// engine.js's caller in state.js already uses) and returns the list of
+// moves so the caller can show what happened.
+//
+// Forward-only, and overdue occurrences are excluded from consideration
+// entirely (2026-08-05 bug fix — found live: "its moving the routines to
+// past... i have the routines still on today"). The original version
+// picked whichever adjacent week — before OR after — had more headroom,
+// which could and did shift an occurrence's due date INTO A WEEK THAT HAD
+// ALREADY PASSED, making it instantly overdue instead of relieving
+// anything. It also never excluded already-overdue occurrences from being
+// "smoothed" in the first place, which doesn't make sense either — an
+// overdue item needs doing, not deferring further. Both fixed: only
+// pending/due occurrences (checked via the engine's own stateOf, not the
+// stored `occ.state`, which is rarely kept in sync with due/overdue — see
+// engine.js's own comment on that) are eligible, and a chosen candidate
+// only ever moves +7 days into the future.
 const DEFAULT_EFFORT_CEILING = 20;
 
 function applyLoadSmoothing(state, ceiling = DEFAULT_EFFORT_CEILING) {
   const moves = [];
-  const openOccs = state.occurrences.filter((o) => o.state !== "done" && o.state !== "snoozed");
+  const now = new Date();
+  const openOccs = state.occurrences.filter((o) => {
+    if (o.state === "done" || o.state === "snoozed") return false;
+    return stateOf({ dueAt: o.dueAt, windowDays: o.windowDays }, now) !== "overdue";
+  });
 
   const loadByWeek = {};
   const occsByWeek = {};
@@ -233,15 +255,10 @@ function applyLoadSmoothing(state, ceiling = DEFAULT_EFFORT_CEILING) {
 
     for (const { occ, routine, pts } of candidates) {
       if (excess <= 0) break;
-      const beforeKey = weekKey(addDays(wk, -7));
-      const afterKey = weekKey(addDays(wk, 7));
-      const beforeLoad = loadByWeek[beforeKey] || 0;
-      const afterLoad = loadByWeek[afterKey] || 0;
-      const targetKey = beforeLoad <= afterLoad ? beforeKey : afterKey;
-      const shiftDays = targetKey === beforeKey ? -7 : 7;
+      const targetKey = weekKey(addDays(wk, 7));
 
       const fromDueAt = occ.dueAt;
-      occ.dueAt = addDays(occ.dueAt, shiftDays).toISOString();
+      occ.dueAt = addDays(occ.dueAt, 7).toISOString();
       occ.smoothed = true;
       loadByWeek[wk] -= pts;
       loadByWeek[targetKey] = (loadByWeek[targetKey] || 0) + pts;

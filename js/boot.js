@@ -41,7 +41,7 @@ const TABS = [
 // (memo §8.1: 5-tab limit; People/Assets/onboarding live one level down).
 const MORE_ITEMS = [
   { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
-  { id: "people", icon: "person", label: "People", meta: "Members, help, leave, habits" },
+  { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
   { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the house from six questions" },
 ];
 
@@ -147,7 +147,7 @@ function switchTab(tabId) {
 function showWelcome() {
   document.getElementById("tabbar").innerHTML = "";
   document.getElementById("app-more-btn").style.display = "none";
-  mountWelcome(document.getElementById("screen-mount"), { onCreateNew: showFirstRunOnboarding });
+  mountWelcome(document.getElementById("screen-mount"), { onCreateNew: showFirstRunOnboarding, onSkip: finishIntro });
 }
 
 function showFirstRunOnboarding() {

@@ -256,6 +256,22 @@ function seedHousehold({ spaces, items, assets, routines, answers, packVersions 
     packVersions, code: generateHouseholdCode(),
   });
   regenerate();
+  // Grace period (2026-08-05, user request) — a freshly onboarded household
+  // shouldn't open to a wall of already-due/overdue items just because
+  // regenerate() computed some routines' first-ever occurrence as due
+  // today (floating routines with no lastDoneAt default to `dueAt: now`,
+  // per engine.js's computeNext). Every occurrence just generated for this
+  // brand-new household gets its due date pushed out to at least 4 days
+  // from now if the engine would otherwise have it due sooner — a natural
+  // due date further out than that is left alone, only ones that would
+  // otherwise be immediately due/overdue get clamped forward. One-time,
+  // right here at the seeding moment — NOT baked into regenerate() itself,
+  // which every other caller (mode switch, routine edits, etc.) also uses
+  // and shouldn't be affected by this.
+  const graceUntil = Date.now() + 4 * 86400000;
+  for (const occ of state.occurrences) {
+    if (new Date(occ.dueAt).getTime() < graceUntil) occ.dueAt = new Date(graceUntil).toISOString();
+  }
   notify();
 }
 
@@ -419,7 +435,7 @@ function markAssetServiced(id) {
 
 function addPerson(fields) {
   state.people.push({
-    id: genId(fields.kind === "help" ? "p" : "u"), role: null, schedule: null,
+    id: genId(fields.kind === "help" ? "p" : "u"), role: null, schedule: null, email: null,
     leave: [], payDay: null, payAmount: null, advances: [], handoverRoutineIds: [],
     avatarColor: "var(--gold)", ...fields,
   });

@@ -897,8 +897,11 @@ h1, h2, h3, p { margin: 0; }
 /* A scheduled day in the past that wasn't done — the app's existing
    themed danger red (2026-08-05, user request: "make sure the red goes
    with the theme"), same token used for delete buttons elsewhere rather
-   than a new one-off hex. */
-.habit-cell.missed { background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger); }
+   than a new one-off hex. Solid fill, not just a border (2026-08-05
+   follow-up: "i want red colored box not the border") — matches how
+   .done is a solid fill too, so the two "something happened" states read
+   the same way at a glance. */
+.habit-cell.missed { background: var(--danger); }
 .habit-cell.today { box-shadow: 0 0 0 1.5px var(--gold); }
 
 /* ---- Welcome gate (2026-08-05) — sign-in placeholder + household
