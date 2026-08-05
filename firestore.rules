@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User profile doc — which household code this uid belongs to.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Household metadata (name, memberUids) — readable by any signed-in
+    // user so "join by code" can check a code exists before adding
+    // yourself; only members (or someone adding themselves) can write.
+    match /households/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        request.auth.uid in resource.data.memberUids ||
+        (request.resource.data.memberUids.hasAll(resource.data.memberUids) &&
+         request.resource.data.memberUids.size() <= 8)
+      );
+
+      // The actual household data blob — gated to members only.
+      match /data/{key} {
+        allow read, write: if request.auth != null &&
+          request.auth.uid in get(/databases/$(database)/documents/households/$(code)).data.memberUids;
+      }
+    }
+
+  }
+}

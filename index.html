@@ -11,12 +11,19 @@
   <link rel="stylesheet" href="./tokens.css" />
   <link rel="stylesheet" href="./app.css" />
   <!--
-    importmap is empty for now — no bare-specifier deps until Firebase
-    lands in build-plan Phase 4 (e.g. "firebase/app": "https://www.gstatic.com/firebasejs/.../firebase-app.js").
-    All current imports are relative ES module paths, resolved natively.
+    Build-plan Phase 4 (2026-08-05) — Google Auth + Firestore only for now
+    (Apple/email-link auth and Storage deliberately not wired, per direct
+    instruction). Pinned CDN version, not "latest", so a Firebase release
+    doesn't silently change behavior mid-session.
   -->
   <script type="importmap">
-    { "imports": {} }
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"
+      }
+    }
   </script>
 </head>
 <body>

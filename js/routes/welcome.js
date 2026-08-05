@@ -1,26 +1,26 @@
-// Welcome gate (2026-08-05, user request) — the very first thing a new
-// browser sees, before the tab shell exists. Two steps:
+// Welcome gate — the very first thing a new browser sees, before the tab
+// shell exists. Two steps:
 //
-// 1. Sign-in: Google/Apple are honest placeholders (show what's coming,
-//    don't pretend it works) — only "Skip for now" actually advances.
-//    No real auth exists yet (build-plan Phase 4), so there's no "already
-//    signed in, load their household" branch to reach in practice; the
-//    household step below is what both "not signed in" and "signed in but
-//    no household yet" converge on, matching the flow the user described.
-// 2. Household: join an existing one by its 6-char code (a real UI, but a
-//    stub action — looking a code up needs Firestore, Phase 4), create a
-//    new one (hands off to the existing 6-question onboarding flow), or
-//    Skip — lands straight in the app on a household this device already
-//    has (2026-08-05 follow-up), for anyone who just wants to look around
-//    without committing to either path yet.
+// 1. Sign-in: Google is real (build-plan Phase 4, 2026-08-05) via
+//    auth.js's signInWithGoogle(). Apple is an honest placeholder — "we
+//    can do later" per direct instruction, so it still just explains
+//    that rather than pretending to work.
+// 2. Household: join an existing one by its 6-char code, or create a new
+//    one (hands off to the existing 6-question onboarding flow).
 //
-// Gated behind a localStorage flag in boot.js so this only ever shows once
-// per browser, not on every reload — see boot.js's `showWelcome`/`startApp`.
+// Sign-in is mandatory (2026-08-06, user request: "let's make it
+// mandatory to login to use the app... remove the skip for now... its
+// either new household or join existing one") — there's no local-only
+// path anymore, so this screen has no Skip option on either step. Gating
+// is entirely Firebase Auth's own session persistence (boot.js's
+// onAuthChange) — no localStorage flag needed.
+
+import { signInWithGoogle } from "../auth.js";
 
 let mountEl = null;
 let step = "signin";
 let onCreateNew = null;
-let onSkip = null;
+let onJoin = null;
 
 function markHtml() {
   return `
@@ -42,7 +42,6 @@ function signinHtml() {
       <div class="welcome-actions">
         <button type="button" class="btn btn-solid welcome-btn" id="google-btn">Continue with Google</button>
         <button type="button" class="btn btn-ghost welcome-btn" id="apple-btn">Continue with Apple</button>
-        <button type="button" class="welcome-skip" id="skip-btn">Skip for now</button>
       </div>
     </div>
   `;
@@ -59,7 +58,6 @@ function householdHtml() {
         <button type="button" class="btn btn-ghost welcome-btn" id="join-btn">Join household</button>
         <div class="welcome-or">or</div>
         <button type="button" class="btn btn-solid welcome-btn" id="create-btn">Create a new household</button>
-        <button type="button" class="welcome-skip" id="skip-household-btn">Skip — start with a household of your own for now</button>
       </div>
     </div>
   `;
@@ -71,15 +69,27 @@ function render() {
 }
 
 function wireEvents() {
-  document.getElementById("google-btn")?.addEventListener("click", () => {
-    showPlaceholderToast();
+  const googleBtn = document.getElementById("google-btn");
+  googleBtn?.addEventListener("click", async () => {
+    googleBtn.disabled = true;
+    googleBtn.textContent = "Signing in…";
+    try {
+      // boot.js's onAuthChange listener picks up the resulting sign-in and
+      // takes it from here (loads or asks for a household) — nothing else
+      // to do in this handler on success.
+      await signInWithGoogle();
+    } catch (err) {
+      googleBtn.disabled = false;
+      googleBtn.textContent = "Continue with Google";
+      // A closed popup isn't really a failure worth a toast.
+      if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
+        showToast("Google sign-in didn't go through — try again.");
+      }
+    }
   });
+
   document.getElementById("apple-btn")?.addEventListener("click", () => {
-    showPlaceholderToast();
-  });
-  document.getElementById("skip-btn")?.addEventListener("click", () => {
-    step = "household";
-    render();
+    showToast("Apple sign-in is coming later — use Google for now.");
   });
 
   const codeInput = document.getElementById("f-join-code");
@@ -89,28 +99,30 @@ function wireEvents() {
     codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
   });
 
-  document.getElementById("join-btn")?.addEventListener("click", () => {
+  const joinBtn = document.getElementById("join-btn");
+  joinBtn?.addEventListener("click", async () => {
     const code = codeInput?.value.trim();
     if (!code) {
       showToast("Enter a household code first");
       return;
     }
-    showToast("Joining a household needs Firebase (Phase 4) — not built yet. Try creating a new one instead.");
+    if (!onJoin) {
+      showToast("Sign in with Google first to join a household by code.");
+      return;
+    }
+    joinBtn.disabled = true;
+    joinBtn.textContent = "Joining…";
+    try {
+      await onJoin(code);
+    } catch (err) {
+      joinBtn.disabled = false;
+      joinBtn.textContent = "Join household";
+      showToast(err?.message || "Couldn't join — check the code and try again.");
+    }
   });
 
   document.getElementById("create-btn")?.addEventListener("click", () => {
     onCreateNew?.();
-  });
-
-  // Skip (2026-08-05, user request): bypasses both join and the 6-question
-  // flow entirely, landing straight in the app on a household this device
-  // already has — state.js generates a fresh household code at every
-  // boot, so "skip" already means "a household of your own," not a shared
-  // fallback. Once Phase 4's real join exists, joining a real household
-  // later should replace this auto-created one, not sit alongside it —
-  // not implementable yet without a backend, flagged in CLAUDE.md.
-  document.getElementById("skip-household-btn")?.addEventListener("click", () => {
-    onSkip?.();
   });
 }
 
@@ -139,15 +151,11 @@ function showToast(message) {
   }, 3200);
 }
 
-function showPlaceholderToast() {
-  showToast("Sign-in isn't built yet — needs Firebase (Phase 4). Use Skip for now.");
-}
-
-function mount(el, { onCreateNew: createNew, onSkip: skip } = {}) {
+function mount(el, { onCreateNew: createNew, onJoin: join, startStep = "signin" } = {}) {
   mountEl = el;
   onCreateNew = createNew;
-  onSkip = skip;
-  step = "signin";
+  onJoin = join;
+  step = startStep;
   render();
 }
 

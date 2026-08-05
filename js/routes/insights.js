@@ -189,26 +189,52 @@ function helpLeaveSectionHtml(state) {
 // Pure tracking now — check-in itself happens on Today (2026-08-04, user
 // request), so this section is the streak/history view, not a second
 // place to mark things done.
+//
+// Personal by nature (2026-08-06, user request: "shown only to the
+// person who is doing it, not to rest of household") — with more than
+// one person owning a habit, this section shows nothing until a specific
+// person is picked (same privacy default as Today's own habit section);
+// a single habit-owner has nothing to leak, so their grids always show.
+
+let habitsPersonFilter = null;
+
+function habitsPersonFilterHtml(state, owners) {
+  if (owners.length < 2) return "";
+  return `
+    <div class="member-filter-row" style="margin-bottom:12px;">
+      ${owners.map((p) => `<button type="button" class="member-chip" data-habits-person-filter="${p.id}" aria-pressed="${habitsPersonFilter === p.id}">${p.name}</button>`).join("")}
+    </div>
+  `;
+}
 
 function habitsSectionHtml(state) {
   if (!state.habits.length) return "";
+  const owners = [...new Set(state.habits.map((h) => h.personId))].map((id) => byId(state.people, id)).filter(Boolean);
+  const visible = owners.length < 2 ? state.habits : state.habits.filter((h) => h.personId === habitsPersonFilter);
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Habits</span></div>
       <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:12px;">Check these off on Today — this is just the tracking view.</p>
-      ${state.habits
-        .map((h) => {
-          const person = byId(state.people, h.personId);
-          const streak = habitStreak(h.id);
-          return `
-          <div style="margin-bottom:18px;">
-            <div class="occ-row-title named">${h.title}</div>
-            <div class="occ-row-meta" style="margin-bottom:8px;">${person?.name || "—"} · ${streak > 0 ? `${streak} day streak` : "no streak yet"}</div>
-            ${habitGridHtml(h)}
-          </div>
-        `;
-        })
-        .join("")}
+      ${habitsPersonFilterHtml(state, owners)}
+      ${
+        visible.length
+          ? visible
+              .map((h) => {
+                const person = byId(state.people, h.personId);
+                const streak = habitStreak(h.id);
+                return `
+              <div style="margin-bottom:18px;">
+                <div class="occ-row-title named">${h.title}</div>
+                <div class="occ-row-meta" style="margin-bottom:8px;">${person?.name || "—"} · ${streak > 0 ? `${streak} day streak` : "no streak yet"}</div>
+                ${habitGridHtml(h)}
+              </div>
+            `;
+              })
+              .join("")
+          : owners.length < 2
+            ? ""
+            : `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">Pick a person above to see their habits.</p>`
+      }
     </div>
   `;
 }
@@ -376,6 +402,14 @@ function wireEvents(state) {
   mountEl.querySelectorAll("[data-breakdown-nav]").forEach((row) => {
     row.addEventListener("click", () => {
       document.querySelector(`[data-tab="${row.dataset.breakdownNav}"]`)?.click();
+    });
+  });
+
+  mountEl.querySelectorAll("[data-habits-person-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.habitsPersonFilter;
+      habitsPersonFilter = habitsPersonFilter === id ? null : id;
+      render();
     });
   });
 

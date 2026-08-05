@@ -1,10 +1,11 @@
-// Boot — init, router mount (memo §1.1). No Firebase yet (Phase 4); this
-// just mounts the tab shell and routes to built screens. Auth gate is a
-// no-op stub until auth.js/db.js exist.
+// Boot — init, router mount (memo §1.1), auth-gated (build-plan Phase 4,
+// 2026-08-05 — Google sign-in + Firestore persistence; see auth.js/db.js).
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
-import { getState, subscribe, setActiveHouseIds, byId } from "./state.js";
+import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, byId } from "./state.js";
+import { onAuthChange, completeRedirectSignIn, signOutUser } from "./auth.js";
+import { getUserRecord, createHouseholdRemote, joinHouseholdRemote, loadHouseholdRemote, startAutoSave } from "./db.js";
 import { openSheet, closeSheet, field, chipGroup, wireChipGroup, readChipGroup, sheetActions, showToast } from "./ui/components.js";
 import { mount as mountToday } from "./routes/today.js";
 import { mount as mountHouse } from "./routes/house.js";
@@ -17,15 +18,17 @@ import { mount as mountHouses } from "./routes/houses.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
 import { mount as mountWelcome } from "./routes/welcome.js";
 
-// A new browser sees Welcome → (Skip) → Join/Create household → the
-// existing 6-question onboarding, once (2026-08-05, user request: "bring
-// the onboarding as first page for new users"). Gated on a localStorage
-// flag rather than any real auth/household check — there's no backend
-// yet (Phase 4) to actually know if this browser is "already part of a
-// household," so this is honestly just "has this browser seen the intro
-// once," not a real session check. Re-running onboarding later (via More)
-// is a separate, already-existing path and is unaffected by this gate.
-const INTRO_DONE_KEY = "kasa_intro_done";
+// A new browser sees Welcome → Join/Create household → the existing
+// 6-question onboarding, every time there's no session (2026-08-05, user
+// request: "bring the onboarding as first page for new users"; 2026-08-06,
+// user request: "make it mandatory to login... remove the skip"). Gating
+// is entirely Firebase Auth's own session persistence, resolved via
+// onAuthChange below — no localStorage flag, no local-only path anymore.
+// The signed-in user driving the current session — kept here so
+// onboard.js's onDone callback and the household step's onCreateNew/
+// onJoin can write through to Firestore, and so the More sheet can offer
+// Sign out.
+let currentUser = null;
 
 // Wishlist takes the 5th tab slot that "More" used to occupy — More moved
 // to a top-left header button instead (2026-08-03, user request), freeing
@@ -73,8 +76,7 @@ function renderPlaceholder(el, title, note) {
 
 function openMoreSheet() {
   // Household code surfaced here (2026-08-05) rather than only in the
-  // one-time creation toast — somewhere to actually find it again later,
-  // even though nothing can look it up yet without Firebase (Phase 4).
+  // one-time creation toast — somewhere to actually find it again later.
   const code = getState().household.code;
   openSheet({
     title: "More",
@@ -94,8 +96,22 @@ function openMoreSheet() {
         `,
         ).join("")}
       </div>
+      ${currentUser ? `
+        <div class="list-row" id="sign-out-row" style="margin-bottom:8px;">
+          <div class="occ-row-icon">${Icon("person", { size: 18 })}</div>
+          <div class="occ-row-body">
+            <div class="occ-row-title">Sign out</div>
+            <div class="occ-row-meta">Signed in as ${currentUser.email || "your Google account"}</div>
+          </div>
+        </div>
+      ` : ""}
       <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-top:4px;">Modes, notifications, and export live here in a later phase.</p>
     `,
+  });
+  document.getElementById("sign-out-row")?.addEventListener("click", async () => {
+    closeSheet();
+    await signOutUser();
+    location.reload();
   });
   document.querySelectorAll("[data-more-item]").forEach((row) => {
     row.addEventListener("click", () => {
@@ -180,7 +196,10 @@ function mountScreen(screenId) {
       mountHouses(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     case "onboard":
-      mountOnboard(screenEl, { onDone: () => switchTab("today") });
+      // "Re-run onboarding" from More always targets the currently-viewed
+      // house, never creates a new household — context: "house" so the
+      // completion toast reflects that (2026-08-06).
+      mountOnboard(screenEl, { context: "house", onDone: () => switchTab("today") });
       break;
     default:
       renderPlaceholder(screenEl, screenId, "Not built yet.");
@@ -199,15 +218,59 @@ function switchTab(tabId) {
 function showWelcome() {
   document.getElementById("tabbar").innerHTML = "";
   document.getElementById("app-more-btn").style.display = "none";
-  mountWelcome(document.getElementById("screen-mount"), { onCreateNew: showFirstRunOnboarding, onSkip: finishIntro });
+  // The signin step has no Create/Join of its own anymore (mandatory
+  // login, 2026-08-06) — those only ever show once boot.js's onAuthChange
+  // re-mounts this at startStep:"household" for a real signed-in user
+  // (see showHouseholdStep below), so no callbacks are needed here.
+  mountWelcome(document.getElementById("screen-mount"), {});
 }
 
-function showFirstRunOnboarding() {
-  mountOnboard(document.getElementById("screen-mount"), { onDone: finishIntro });
+// A signed-in user with no household on record yet (fresh Google sign-in,
+// or a returning session that never finished creating/joining one) skips
+// straight to the household step — sign-in is already done, no reason to
+// ask again. There's no local-only fallback anymore (2026-08-06, login is
+// mandatory) — Create or Join are the only two ways through.
+function showHouseholdStep(user) {
+  document.getElementById("tabbar").innerHTML = "";
+  document.getElementById("app-more-btn").style.display = "none";
+  mountWelcome(document.getElementById("screen-mount"), {
+    startStep: "household",
+    onCreateNew: () => showFirstRunOnboarding(user),
+    onJoin: (code) => joinAndEnter(code, user),
+  });
 }
 
-function finishIntro() {
-  localStorage.setItem(INTRO_DONE_KEY, "1");
+function showFirstRunOnboarding(user) {
+  // A genuinely new household (real sign-in, no prior Firestore record) —
+  // clear the mock demo's people/tasks/habits/wishlist before the user
+  // even sees the six questions, and seed them as the household's first
+  // member using their real Google name/email (2026-08-06, user report:
+  // "I see old tasks and habit still... needs to be empty," "remove the
+  // help, need to start blank").
+  resetForNewHousehold({ name: user.displayName, email: user.email });
+  mountOnboard(document.getElementById("screen-mount"), {
+    context: "household",
+    onDone: async () => {
+      const state = getState();
+      try {
+        await createHouseholdRemote({ code: state.household.code, uid: user.uid, email: user.email, name: state.household.name });
+        startAutoSave(state.household.code);
+        currentUser = user;
+      } catch (err) {
+        console.warn("[kasa] couldn't save new household to Firestore:", err);
+        showToast("Signed in, but couldn't reach Firestore just now — your data is safe on this device, it just isn't synced yet.");
+      }
+      startApp();
+    },
+  });
+}
+
+async function joinAndEnter(code, user) {
+  await joinHouseholdRemote({ code, uid: user.uid, email: user.email });
+  const data = await loadHouseholdRemote(code);
+  if (data) hydrateState(data);
+  startAutoSave(code);
+  currentUser = user;
   startApp();
 }
 
@@ -221,13 +284,54 @@ function startApp() {
   subscribe(renderHouseBtn);
 }
 
+function showLoading() {
+  document.getElementById("tabbar").innerHTML = "";
+  document.getElementById("app-more-btn").style.display = "none";
+  document.getElementById("screen-mount").innerHTML = "";
+}
+
+// Auth-gated boot (build-plan Phase 4, 2026-08-05; mandatory login,
+// 2026-08-06) — onAuthChange fires once with whatever Firebase Auth
+// already knows (from cached persistence, so a returning signed-in user
+// resumes without re-clicking anything) and again on any real sign-in/
+// out. A signed-in user with a household on record loads it from
+// Firestore and goes straight in; signed in with no household yet goes to
+// the household step; not signed in at all shows Welcome — there's no
+// local-only fallback anymore, sign-in is required.
 function boot() {
   loadPacks(); // fire-and-forget — cached for roomTemplates.js's sync reads
-  if (localStorage.getItem(INTRO_DONE_KEY)) {
-    startApp();
-  } else {
+  showLoading();
+  // Completes a signInWithRedirect() round trip, if this load is the
+  // return leg of one (popup-blocked fallback, see auth.js). Errors here
+  // (e.g. the user closed/cancelled the redirect) aren't fatal — the
+  // onAuthChange listener below still runs either way and falls back to
+  // Welcome for a not-signed-in user.
+  completeRedirectSignIn().catch((err) => {
+    console.warn("[kasa] redirect sign-in didn't complete:", err);
+  });
+  onAuthChange(async (user) => {
+    if (user) {
+      try {
+        const record = await getUserRecord(user.uid);
+        if (record?.householdCode) {
+          const data = await loadHouseholdRemote(record.householdCode);
+          if (data) hydrateState(data);
+          startAutoSave(record.householdCode);
+          currentUser = user;
+          startApp();
+          return;
+        }
+      } catch (err) {
+        console.warn("[kasa] couldn't resolve household for signed-in user:", err);
+        showToast("Signed in, but couldn't reach Firestore just now — try again shortly.");
+      }
+      currentUser = user;
+      showHouseholdStep(user);
+      return;
+    }
+    currentUser = null;
     showWelcome();
-  }
+  });
 }
 
 boot();

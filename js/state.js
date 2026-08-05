@@ -172,6 +172,36 @@ function getState() {
   return state;
 }
 
+// ---- Firestore persistence (build-plan Phase 4, 2026-08-05) --------------
+// db.js is the only caller of these — state.js itself stays unaware of
+// Firestore entirely, same "route/engine code doesn't change when the data
+// source swaps" boundary this file's own header comment describes.
+
+// A plain-object snapshot safe to hand to Firestore's setDoc. Excludes
+// `occurrences` (derived by the engine from routines/ledger/assets/items on
+// every load — regenerating them locally after a hydrate is both cheaper
+// and more correct than trying to keep a derived collection in sync across
+// devices) and `lastSmoothingMoves` (a transient "what just moved" notice,
+// not data worth persisting).
+function serializeState() {
+  const { occurrences, lastSmoothingMoves, ...rest } = state;
+  return JSON.parse(JSON.stringify(rest));
+}
+
+// Replaces the in-memory state wholesale with a Firestore-loaded snapshot —
+// mirrors seedHousehold()'s own "replace, then migrate/regenerate" pattern,
+// just for everything instead of one house. Always runs the result through
+// migrate() before use, so a snapshot written before a later schema change
+// still comes up current rather than needing its own one-off backfill.
+function hydrateState(blob) {
+  Object.assign(state, blob);
+  state.occurrences = [];
+  state.lastSmoothingMoves = [];
+  migrate(state);
+  regenerate();
+  notify();
+}
+
 function byId(list, id) {
   return list.find((x) => x.id === id);
 }
@@ -306,6 +336,41 @@ function seedHousehold({ spaces, items, assets, routines, answers, packVersions 
   notify();
 }
 
+// A brand-new household (real Google sign-in, no prior data) shouldn't
+// inherit the mock demo's people/tasks/habits/wishlist — seedHousehold()
+// only ever replaces ONE house's own spaces/items/assets/routines, so
+// without this, household-WIDE collections would otherwise leak the mock
+// "Vinod/Keerthana/Lakshmi" data into every fresh signup forever
+// (2026-08-06, user report: "I see old tasks and habit still... needs to
+// be empty," "remove the help, need to start blank"). Household name
+// defaults to the signed-in person's first name — editable afterward via
+// updateHouseholdName() (People & Household).
+function resetForNewHousehold({ name, email }) {
+  state.people = [];
+  state.tasks = [];
+  state.habits = [];
+  state.habitLog = [];
+  state.wishlist = [];
+  state.snoozeLog = [];
+  const firstName = (name || "").trim().split(/\s+/)[0] || "My";
+  state.household.name = `${firstName}'s home`;
+  if (email) {
+    state.people.push({
+      id: genId("u"), kind: "member", name: name || "You", role: null, schedule: null, email,
+      leave: [], payDay: null, payAmount: null, advances: [], handoverRoutineIds: [],
+      avatarColor: "var(--gold)",
+    });
+  }
+  notify();
+}
+
+function updateHouseholdName(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return;
+  state.household.name = trimmed;
+  notify();
+}
+
 function setActiveMode(key) {
   for (const m of state.modes) m.active = m.key === key;
   state.household.activeMode = key;
@@ -325,14 +390,25 @@ function setActiveMode(key) {
 // {houseId}` subcollection later, no reshaping needed, just a data-source
 // swap like everything else pre-Firebase.
 
+// Names must be unique within the household — case/whitespace-insensitive
+// (2026-08-06, user request: "don't allow same house name"). Returns null
+// on a collision so the caller can prompt for a different one instead of
+// closing the sheet.
 function addHouse({ name }) {
-  const house = { id: genId("house"), name: name || "New house", createdAt: new Date().toISOString() };
+  const trimmed = (name || "New house").trim();
+  if (state.houses.some((h) => h.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
+  const house = { id: genId("house"), name: trimmed, createdAt: new Date().toISOString() };
   state.houses.push(house);
-  // A brand-new house gets its mandatory Utility space immediately
-  // (mirrors the guarantee every onboarded/migrated house already has) —
-  // otherwise there'd be a window where this house exists but "Uses this
-  // stock"'s shared-supplies reach has nothing to find.
+  // A brand-new house gets both its mandatory spaces immediately (mirrors
+  // the guarantee every onboarded/migrated house already has) — otherwise
+  // there'd be a window where this house exists but "Uses this stock"'s
+  // shared-supplies reach (Utility) or the always-included Whole home
+  // space has nothing to find. The onboarding wizard that launches right
+  // after this (houses.js, 2026-08-06) will replace these via
+  // seedHousehold() with the reviewed set, which always includes both too
+  // — this is just the safety net if that wizard never gets finished.
   state.spaces.push({ id: genId("sp"), name: "Utility", type: "utility", icon: "utility", houseId: house.id, order: 1, active: true });
+  state.spaces.push({ id: genId("sp"), name: "Whole home", type: "whole_home", icon: "wholeHome", houseId: house.id, order: 2, active: true });
   // Switches focus to the house just created — same "jump to what you just
   // made" convention Add Space already follows.
   state.household.activeHouseIds = [house.id];
@@ -342,8 +418,15 @@ function addHouse({ name }) {
 
 function updateHouse(id, patch) {
   const house = byId(state.houses, id);
-  if (house) Object.assign(house, patch);
+  if (!house) return null;
+  if (patch.name != null) {
+    const trimmed = patch.name.trim();
+    if (state.houses.some((h) => h.id !== id && h.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
+    patch = { ...patch, name: trimmed };
+  }
+  Object.assign(house, patch);
   notify();
+  return house;
 }
 
 // A household always has at least one house — refused here at the actual
@@ -383,9 +466,16 @@ function visibleSpaceIds(st) {
 
 // ---- space CRUD (memo §4.1) --------------------------------------------
 
+// Space names must be unique within their own house — case/whitespace-
+// insensitive (2026-08-06, user request: "don't allow two spaces to have
+// same name (in same house), prompt to give another"). Returns null on a
+// collision so the caller can show a toast and let the user retry instead
+// of silently creating a confusing duplicate.
 function addSpace({ name, type, icon, houseId = null }) {
   const targetHouseId = houseId || (state.household.activeHouseIds?.length === 1 ? state.household.activeHouseIds[0] : null) || state.houses[0]?.id;
-  const space = { id: genId("sp"), name, type, icon, houseId: targetHouseId, order: state.spaces.length + 1, active: true };
+  const trimmed = (name || "").trim();
+  if (state.spaces.some((s) => s.houseId === targetHouseId && s.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
+  const space = { id: genId("sp"), name: trimmed, type, icon, houseId: targetHouseId, order: state.spaces.length + 1, active: true };
   state.spaces.push(space);
   notify();
   return space;
@@ -393,27 +483,36 @@ function addSpace({ name, type, icon, houseId = null }) {
 
 function updateSpace(id, patch) {
   const sp = byId(state.spaces, id);
-  if (sp) Object.assign(sp, patch);
+  if (!sp) return null;
+  if (patch.name != null) {
+    const trimmed = patch.name.trim();
+    if (state.spaces.some((s) => s.id !== id && s.houseId === sp.houseId && s.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
+    patch = { ...patch, name: trimmed };
+  }
+  Object.assign(sp, patch);
   notify();
+  return sp;
 }
+
+// Whole home and Utility are mandatory PER HOUSE — Utility since
+// 2026-08-05 (Uses-this-stock's shared-supplies reach needs somewhere to
+// find), Whole home added 2026-08-06 (user request: "let whole home &
+// utility be default – no deletion of those"). Every house always keeps
+// at least one of each type; exported so house.js/onboard.js can badge
+// these tiles instead of re-deriving the same list.
+const MANDATORY_SPACE_TYPES = ["utility", "whole_home"];
 
 // Deleting a space either reassigns its contents to `reassignToId` or
 // deletes them with it (memo §4.4: "Deleting a space asks whether to
-// delete contents or move them").
-// Utility is mandatory PER HOUSE (2026-08-05: scoped from household-wide
-// to per-house alongside multi-house support) — "Uses this stock" in the
-// routine builder always offers Utility's items alongside a routine's own
-// room, resolved within that routine's own house (see routine.js), so
-// every house needs its own Utility space, not just the household as a
-// whole. Guarded here, the actual mutation boundary, not just hidden in
-// the UI — house.js also disables the delete button so the guard is never
-// the first thing a user hits.
+// delete contents or move them"). Guarded here, the actual mutation
+// boundary, not just hidden in the UI — house.js also disables the delete
+// button so the guard is never the first thing a user hits.
 function deleteSpace(id, { reassignToId = null } = {}) {
   const space = byId(state.spaces, id);
   if (!space) return;
-  if (space.type === "utility") {
-    const siblingUtilities = state.spaces.filter((s) => s.houseId === space.houseId && s.type === "utility");
-    if (siblingUtilities.length <= 1) return;
+  if (MANDATORY_SPACE_TYPES.includes(space.type)) {
+    const siblings = state.spaces.filter((s) => s.houseId === space.houseId && s.type === space.type);
+    if (siblings.length <= 1) return;
   }
   const moveOrDrop = (list) => {
     if (reassignToId) {
@@ -766,7 +865,7 @@ function isHabitDueToday(habit) {
 // task has exactly one occurrence ever, by definition.
 
 function addTask(fields) {
-  const task = { id: genId("tsk"), spaceId: null, assigneeId: null, done: false, doneAt: null, createdAt: new Date().toISOString(), ...fields };
+  const task = { id: genId("tsk"), spaceId: null, assetId: null, assigneeId: null, done: false, doneAt: null, createdAt: new Date().toISOString(), ...fields };
   state.tasks.push(task);
   notify();
   return task;
@@ -829,11 +928,16 @@ export {
   setActiveMode,
   seedHousehold,
   undoLast,
+  serializeState,
+  hydrateState,
+  resetForNewHousehold,
+  updateHouseholdName,
   addHouse,
   updateHouse,
   deleteHouse,
   setActiveHouseIds,
   visibleSpaceIds,
+  MANDATORY_SPACE_TYPES,
   addSpace,
   updateSpace,
   deleteSpace,

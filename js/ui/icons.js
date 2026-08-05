@@ -29,11 +29,19 @@ const PATHS = {
   // this one consistent glyph when there's no more specific asset to show.
   routine: `<path d="M4 12a8 8 0 0 1 14-5"/><polyline points="18,3 18,7 14,7"/><path d="M20 12a8 8 0 0 1-14 5"/><polyline points="6,21 6,17 10,17"/>`,
   more: `<circle cx="5" cy="12" r="1.1" fill="currentColor"/><circle cx="12" cy="12" r="1.1" fill="currentColor"/><circle cx="19" cy="12" r="1.1" fill="currentColor"/>`,
+  // A small "this can't be removed" badge (2026-08-06, user request: "show
+  // that visually somehow with minimal or no text") — used on Whole home/
+  // Utility space tiles instead of a text label, in both House and
+  // onboarding's review step.
+  lock: `<rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>`,
 
   // ---- spaces ---------------------------------------------------------
   bath: `<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3z"/><path d="M6 12V6a2 2 0 0 1 3.2-1.6"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="16" y1="19" x2="16" y2="21"/>`,
   bedroom: `<path d="M3 19v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6"/><path d="M3 19v2M21 19v2"/><path d="M5 13v-2a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>`,
   living: `<path d="M4 12v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/><path d="M4 12a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2"/><path d="M6 18v2M18 18v2"/>`,
+  // 2026-08-06, user request — kitchen added as its own default space
+  // type (was missing entirely; every home has one, not just 1RK).
+  kitchen: `<path d="M5 3v7a2 2 0 0 0 2 2v9"/><path d="M9 3v7"/><line x1="5" y1="7" x2="9" y2="7"/><path d="M15 3c1.6 0 3 2 3 5s-1.4 5-3 5v8"/>`,
   utility: `<rect x="4" y="3" width="16" height="18" rx="2"/><circle cx="12" cy="13" r="4.5"/><line x1="8" y1="6.5" x2="9.6" y2="6.5"/>`,
   balcony: `<path d="M4 9h16v11" fill="none"/><line x1="4" y1="9" x2="4" y2="20"/><line x1="8" y1="9" x2="8" y2="20"/><line x1="12" y1="9" x2="12" y2="20"/><line x1="16" y1="9" x2="16" y2="20"/><line x1="20" y1="9" x2="20" y2="20"/><line x1="2" y1="9" x2="22" y2="9"/>`,
   entry: `<rect x="5" y="3" width="14" height="18" rx="1.5"/><circle cx="14.5" cy="12" r="0.9" fill="currentColor"/>`,

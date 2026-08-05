@@ -29,6 +29,11 @@ let view = "today"; // "today" | "week" (2026-08-05, user request)
 // rather than always on screen") — batching is a nice-to-have suggestion,
 // not something that should always claim space above Overdue/Due.
 let showBatches = false;
+// Set once per render() (2026-08-06, user request: "when multiple houses
+// are there house names should come") — read directly by rowHtml rather
+// than threaded through every call, same module-level-UI-state pattern
+// already used for effortOnly/memberFilter/view.
+let multiHouseActive = false;
 let mountEl = null;
 let unsubscribe = null;
 
@@ -59,6 +64,7 @@ function enrichRoutine(occ, state) {
     title: routine?.title, tier: routine?.consequence || "cosmetic", effort: routine?.effort ?? null,
     assigneeId: routine?.defaultAssigneeId ?? null,
     assetIcon: asset?.icon ?? null,
+    houseName: space ? byId(state.houses, space.houseId)?.name ?? null : null,
     state: stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()),
     days: overdueDays({ dueAt: occ.dueAt }, new Date()),
     offset: dayOffset(occ.dueAt),
@@ -67,10 +73,13 @@ function enrichRoutine(occ, state) {
 
 function enrichTask(task, state) {
   const space = task.spaceId ? byId(state.spaces, task.spaceId) : null;
+  const asset = task.assetId ? byId(state.assets, task.assetId) : null;
   return {
     type: "task", task, space,
     title: task.title, tier: "cosmetic", effort: null,
     assigneeId: task.assigneeId ?? null,
+    assetIcon: asset?.icon ?? null,
+    houseName: space ? byId(state.houses, space.houseId)?.name ?? null : null,
     state: taskState(task),
     days: taskOverdueDays(task),
     offset: dayOffset(task.dueDate),
@@ -126,7 +135,7 @@ function rowHtml(row) {
   // geyser" shows the geyser), otherwise fall back to one consistent
   // generic "routine" glyph, never a room icon and never anything that
   // could read as arbitrary.
-  const icon = type === "task" ? "task" : type === "routine" ? row.assetIcon || "routine" : space?.icon || "house";
+  const icon = type === "task" ? row.assetIcon || "task" : type === "routine" ? row.assetIcon || "routine" : space?.icon || "house";
   // Routines keep the done/snooze split peek; tasks have no snooze concept
   // — either swipe direction just completes it, so both peek panels read
   // "Done" (matches how habit rows already behave).
@@ -140,6 +149,13 @@ function rowHtml(row) {
       <div class="occ-row-action done" style="justify-content:flex-end;">Done ${Icon("check", { size: 18 })}</div>
     `;
 
+  // House name shown right-aligned whenever more than one house is
+  // currently active (2026-08-06, user request: "when multiple houses are
+  // there house names should come... can be on the right side" — also
+  // covers same-titled tasks/routines across different houses, since each
+  // gets its own house label). A space-less task has no house to show.
+  const houseTag = multiHouseActive && row.houseName ? `<div class="occ-row-house">${row.houseName}</div>` : "";
+
   return `
     <div class="occ-row-wrap" data-entry-type="${type}" data-entry-id="${entryId}">
       <div class="occ-row-actions">${actionsHtml}</div>
@@ -149,7 +165,10 @@ function rowHtml(row) {
           <div class="occ-row-title">${title}</div>
           <div class="${metaClass}">${meta}${space ? ` · ${space.name}` : ""}${type === "task" ? " · Task" : ""}</div>
         </div>
-        ${effort ? `<div class="occ-row-effort">${EFFORT_LABEL[effort] || ""}</div>` : ""}
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex-shrink:0;">
+          ${effort ? `<div class="occ-row-effort">${EFFORT_LABEL[effort] || ""}</div>` : ""}
+          ${houseTag}
+        </div>
       </div>
     </div>
   `;
@@ -196,8 +215,22 @@ function habitRowHtml(habit) {
   `;
 }
 
+// Habits are personal — a shared Today screen shouldn't surface one
+// household member's private check-in to whoever else happens to be
+// looking at the same device (2026-08-06, user request: "shown only to
+// the person who is doing it, not to rest of household"). With more than
+// one person in the household, habits only appear once a specific person
+// is picked via the member filter above; a single-person household has
+// nothing to leak, so its one person's habits always show.
+function visibleDueHabits(state) {
+  const relevantPeopleCount = state.people.filter((p) => p.kind === "member" || p.kind === "help").length;
+  return relevantPeopleCount < 2
+    ? state.habits.filter((h) => isHabitDueToday(h))
+    : state.habits.filter((h) => isHabitDueToday(h) && memberFilter && h.personId === memberFilter);
+}
+
 function habitsSectionHtml(state) {
-  const due = state.habits.filter((h) => isHabitDueToday(h) && (!memberFilter || h.personId === memberFilter));
+  const due = visibleDueHabits(state);
   if (!due.length) return "";
   return `
     <div class="today-section">
@@ -358,6 +391,7 @@ function modesSheetHtml(state) {
 
 function render() {
   const state = getState();
+  multiHouseActive = (state.household.activeHouseIds?.length ?? state.houses.length) > 1;
   const rows = visibleRows(state);
   const overdue = rows.filter((r) => r.state === "overdue");
   // "Today" view keeps the engine's window-gated due state (matches every
@@ -366,7 +400,7 @@ function render() {
   // window hasn't opened yet but whose due date already falls this week
   // (2026-08-05, user request: a toggle to see the whole week at a glance).
   const due = view === "week" ? rows.filter((r) => r.offset >= 0 && r.offset <= 6) : rows.filter((r) => r.state === "due");
-  const dueHabits = state.habits.filter((h) => isHabitDueToday(h) && (!memberFilter || h.personId === memberFilter));
+  const dueHabits = visibleDueHabits(state);
 
   mountEl.innerHTML = `
     ${topbarHtml(state)}

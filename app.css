@@ -525,6 +525,19 @@ h1, h2, h3, p { margin: 0; }
   font-family: var(--font-mono);
 }
 
+/* House label on a Today row, shown only when several houses are active
+   at once (2026-08-06, user request) — quiet by design, same weight as
+   the effort badge it sits above. */
+.occ-row-house {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--ink-faint);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ---- Empty state ----------------------------------------------------- */
 
 .empty-state {
@@ -609,6 +622,7 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .tile {
+  position: relative;
   aspect-ratio: 1;
   display: flex;
   flex-direction: column;
@@ -624,6 +638,44 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
   overflow: hidden; /* safety net — a too-wide child (e.g. a long stepper value) clips instead of spilling outside the rounded card */
 }
+
+/* A tile that can't be removed (Whole home/Utility, 2026-08-06) gets a
+   small corner badge instead of a text label — "minimal or no text" per
+   direct request. Used in both House's grid and onboarding's room review. */
+.tile-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunk);
+  color: var(--ink-faint);
+}
+
+/* Onboarding's room-review tiles are removable in place (unlike House's
+   own grid, which routes deletion through a detail sheet) — a small
+   corner "x" rather than a full delete confirmation, since nothing has
+   been saved yet at this step. */
+.tile-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--surface-sunk);
+  color: var(--ink-muted);
+  border: none;
+  cursor: pointer;
+}
+.tile-remove:active { transform: scale(0.92); }
 
 .tile-icon {
   flex-shrink: 0;

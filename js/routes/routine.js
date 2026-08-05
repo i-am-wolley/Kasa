@@ -74,8 +74,8 @@ function triggerParamsHtml(routine) {
       ${field("Day of week", chipGroup({ name: "byday", options: WEEKDAYS, value: rr.BYDAY || "SU" }))}
     </div>
     <div data-trigger-block="usage_meter">
-      ${field("Linked asset", chipGroup({ name: "assetId", options: state.assets.map((a) => ({ value: a.id, label: a.name })), value: t.assetId ?? routine?.assetId ?? null }))}
       ${field("Due after this many meter units", textInput({ id: "f-meterDelta", type: "number", value: t.meterDelta ?? 1000 }))}
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;">Counts meter units on whichever asset is linked below.</p>
     </div>
     <div data-trigger-block="condition">
       ${field("When this item runs out", chipGroup({ name: "conditionItemId", options: state.items.map((i) => ({ value: i.id, label: i.name })), value: t.condition?.itemId ?? null }))}
@@ -118,6 +118,23 @@ function requiresItemsFieldHtml(spaceId, selectedIds) {
   return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options, value: selectedIds, multi: true }));
 }
 
+// A task or routine can be linked to an asset within its own room
+// (2026-08-06, user request: "a task or routine can be with an asset
+// within that room") — same room-scoping principle already used for
+// "Uses this stock" (a routine shouldn't silently link to an asset from a
+// different room), minus the Utility carve-out since assets are usually
+// room-specific fixtures, not shared supplies. Re-rendered live whenever
+// the Space chip changes, same as the stock picker. Used for icon
+// resolution in Today (today.js's rowHtml already prefers the linked
+// asset's icon over a generic one) — that's also what usage_meter's own
+// "Linked asset" field used to be a special case of; it's now just this
+// same general field, whatever the trigger type.
+function assetFieldHtml(spaceId, selectedId, fieldName = "assetId") {
+  const state = getState();
+  const options = state.assets.filter((a) => a.spaceId === spaceId).map((a) => ({ value: a.id, label: a.name }));
+  return field("Linked asset (optional)", chipGroup({ name: fieldName, options: [{ value: "", label: "None" }, ...options], value: selectedId || "" }));
+}
+
 // Space options are scoped to the currently-visible house(s) (2026-08-05,
 // multi-house support) — plus the entity's own current space even if it
 // happens to belong to a house that isn't selected right now, so editing
@@ -136,6 +153,7 @@ function routineFieldsHtml(routine, spaceId, state) {
     ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
     ${triggerParamsHtml(routine)}
     <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
+    <div id="asset-field">${assetFieldHtml(initialSpaceId, routine?.assetId ?? null)}</div>
     ${field("Effort", chipGroup({ name: "effort", options: EFFORT_OPTIONS, value: String(routine?.effort ?? 1) }))}
     ${field("If skipped, it", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
     ${field("Usually done by", chipGroup({ name: "ownerClass", options: OWNER_OPTIONS, value: routine?.ownerClass ?? "either" }))}
@@ -165,9 +183,11 @@ function habitFieldsHtml(habit, defaultPersonId, state) {
 // above) and a due date, optionally scoped to a space and/or assigned to
 // someone — no recurrence, no trigger, no effort/consequence rating.
 function taskFieldsHtml(task, defaultSpaceId, state) {
+  const initialTaskSpaceId = task?.spaceId ?? defaultSpaceId ?? null;
   return `
     ${field("Due date", textInput({ id: "f-task-due", type: "date", value: task?.dueDate ?? new Date().toISOString().slice(0, 10) }))}
-    ${field("Space (optional)", chipGroup({ name: "taskSpaceId", options: spaceOptions(state, task?.spaceId ?? defaultSpaceId ?? null), value: task?.spaceId ?? defaultSpaceId ?? null }))}
+    ${field("Space (optional)", chipGroup({ name: "taskSpaceId", options: spaceOptions(state, initialTaskSpaceId), value: initialTaskSpaceId }))}
+    <div id="task-asset-field">${assetFieldHtml(initialTaskSpaceId, task?.assetId ?? null, "taskAssetId")}</div>
     ${field("Assign to (optional)", chipGroup({ name: "taskAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: task?.assigneeId ?? null }))}
   `;
 }
@@ -243,7 +263,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
   });
   const root = document.getElementById("sheet-root");
 
-  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays", "taskSpaceId", "taskAssigneeId"]
+  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays", "taskSpaceId", "taskAssetId", "taskAssigneeId"]
     .forEach((name) => wireChipGroup(root, name));
 
   // Kind toggle swaps which of the three field blocks shows — same sheet
@@ -291,6 +311,22 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
     const container = root.querySelector("#requires-items-field");
     container.innerHTML = requiresItemsFieldHtml(currentSpaceId, []);
     wireChipGroup(root, "requiresItemIds");
+    const assetContainer = root.querySelector("#asset-field");
+    assetContainer.innerHTML = assetFieldHtml(currentSpaceId, null);
+    wireChipGroup(root, "assetId");
+  });
+
+  // Same reset-on-room-change treatment for a task's own (optional) linked
+  // asset — a task's Space chip has no other listener yet, this is the
+  // first thing that needs to react to it changing.
+  let currentTaskSpaceId = task?.spaceId ?? defaultSpaceId ?? null;
+  root.querySelector('[data-field="taskSpaceId"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn || btn.dataset.value === currentTaskSpaceId) return;
+    currentTaskSpaceId = btn.dataset.value;
+    const container = root.querySelector("#task-asset-field");
+    container.innerHTML = assetFieldHtml(currentTaskSpaceId, null, "taskAssetId");
+    wireChipGroup(root, "taskAssetId");
   });
 
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
@@ -322,6 +358,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       const fields = {
         title, dueDate,
         spaceId: readChipGroup(root, "taskSpaceId"),
+        assetId: readChipGroup(root, "taskAssetId") || null,
         assigneeId: readChipGroup(root, "taskAssigneeId"),
       };
       if (task) updateTask(task.id, fields);
@@ -335,6 +372,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
     const fields = {
       title,
       spaceId: readChipGroup(root, "spaceId"),
+      assetId: readChipGroup(root, "assetId") || null,
       trigger: buildTrigger(root),
       effort: Number(readChipGroup(root, "effort")) || 1,
       consequence: readChipGroup(root, "consequence") || "cosmetic",
@@ -343,9 +381,6 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       requiresItemIds: readChipGroup(root, "requiresItemIds") || [],
       modeFilters: { pauseIn: readChipGroup(root, "pauseIn") || [], boostIn: routine?.modeFilters?.boostIn ?? [] },
     };
-    if (routine?.trigger?.type === "usage_meter" || fields.trigger.type === "usage_meter") {
-      fields.assetId = readChipGroup(root, "assetId");
-    }
     if (routine) updateRoutine(routine.id, fields);
     else addRoutine(fields);
     closeSheet();

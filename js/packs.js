@@ -31,11 +31,16 @@ function getCachedPacks() {
   return cachedPacks || [];
 }
 
-// Every home is assumed to have bath/utility for now — good enough until a
-// studio/no-help edge case actually needs modelling (memo doesn't specify
-// per-archetype space omission rules yet).
+// Every home is assumed to have bath/kitchen/utility for now — good
+// enough until a studio/no-help edge case actually needs modelling (memo
+// doesn't specify per-archetype space omission rules yet). Kitchen added
+// 2026-08-06 (user request: "1RK should have living room, kitchen, whole
+// home, utility, bathroom by default") — was missing entirely before;
+// every home has one, not just 1RK, so it's in the universal base list,
+// not size-gated the way bedroom count is (see packs.json's own
+// generateFromArchetype, which post-processes bedroom count separately).
 function impliedSpaceTypes(answers) {
-  const base = ["bath", "bedroom", "living", "utility", "entry", "whole_home"];
+  const base = ["bath", "bedroom", "living", "kitchen", "utility", "entry", "whole_home"];
   if ((answers.has || []).includes("Balcony/garden")) base.push("balcony");
   return base;
 }
@@ -60,6 +65,18 @@ let idSeq = 0;
 function makeId(prefix) {
   idSeq += 1;
   return `${prefix}_${idSeq}`;
+}
+
+// How many separate bedroom spaces a home's size implies (2026-08-06, user
+// request: "3BHK ideally 3 bedrooms should be shown up") — the pack-driven
+// space list below always produces exactly one deduped "bedroom" space
+// regardless of size (packs reference a spaceTYPE, not a count); this is
+// applied as a post-pass to expand or drop it. 1RK folds sleeping into the
+// one general room, same as Studio — no separate bedroom.
+function bedroomCountForSize(size) {
+  if (size === "1RK" || size === "Studio") return 0;
+  const match = /^(\d+)BHK/.exec(size || "");
+  return match ? Number(match[1]) : 1;
 }
 
 // Builds real {spaces, items, assets, routines} from every applicable pack.
@@ -134,7 +151,42 @@ function generateFromArchetype(answers, allPacks) {
     }
   }
 
+  // Guarantee every baseline implied space type actually exists, even if
+  // no applicable pack happens to declare or reference it (2026-08-06) —
+  // spaces have only ever been created as a side effect of a pack's own
+  // `pack.spaces` array or its assets/routines referencing a spaceType,
+  // which happened to cover every type EXCEPT the newly-added "kitchen"
+  // (no dedicated kitchen.json pack exists). A no-op for any type a pack
+  // already created (ensureSpace returns the existing id without
+  // touching it), so this only ever fills a real gap.
+  const BASE_SPACE_NAMES = { bath: "Bathroom", bedroom: "Bedroom", living: "Living room", kitchen: "Kitchen", utility: "Utility", entry: "Entry", whole_home: "Whole home", balcony: "Balcony" };
+  for (const type of impliedSpaceTypes(answers)) {
+    ensureSpace(type, BASE_SPACE_NAMES[type] || type);
+  }
+
+  // Expand/collapse the single deduped "bedroom" space to match the
+  // home's actual size (see bedroomCountForSize above). Any item/asset/
+  // routine that referenced the original single bedroom id is left
+  // pointing at a now-possibly-renumbered or removed space — harmless,
+  // since onboard.js's review step (2026-08-06) no longer seeds
+  // items/assets/routines at all, only the reviewed space list itself.
+  const bedroomIdx = spaces.findIndex((s) => s.type === "bedroom");
+  if (bedroomIdx !== -1) {
+    const count = bedroomCountForSize(answers.size);
+    const original = spaces[bedroomIdx];
+    if (count === 0) {
+      spaces.splice(bedroomIdx, 1);
+    } else if (count > 1) {
+      const expanded = [];
+      for (let i = 1; i <= count; i++) {
+        expanded.push({ ...original, id: i === 1 ? original.id : makeId("sp"), name: `Bedroom ${i}`, order: original.order + i - 1 });
+      }
+      spaces.splice(bedroomIdx, 1, ...expanded);
+    }
+    // count === 1: the single generated "Bedroom" space is left as-is.
+  }
+
   return { spaces, items, assets, routines, usedPackIds };
 }
 
-export { loadPacks, getCachedPacks, generateFromArchetype, packApplies, impliedSpaceTypes };
+export { loadPacks, getCachedPacks, generateFromArchetype, packApplies, impliedSpaceTypes, bedroomCountForSize };

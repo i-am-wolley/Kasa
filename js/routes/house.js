@@ -1,7 +1,7 @@
 // House screen (memo §8.2) — spaces grid → space detail with its routines,
 // stock, and assets. "Where users browse and prune."
 
-import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, byId } from "../state.js";
+import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, MANDATORY_SPACE_TYPES, byId } from "../state.js";
 import { templateFor } from "../roomTemplates.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -17,6 +17,7 @@ const SPACE_TYPES = [
   { value: "bath", label: "Bathroom" },
   { value: "bedroom", label: "Bedroom" },
   { value: "living", label: "Living room" },
+  { value: "kitchen", label: "Kitchen" },
   { value: "utility", label: "Utility" },
   { value: "balcony", label: "Balcony" },
   { value: "study", label: "Study" },
@@ -36,13 +37,13 @@ let unsubscribe = null;
 let view = "grid";
 let selectedSpaceId = null;
 
-// Utility is mandatory PER HOUSE (2026-08-05, scoped alongside multi-house
-// support) — a house's last remaining Utility space can't be deleted, same
+// Whole home and Utility are mandatory PER HOUSE (2026-08-05/06) — a
+// house's last remaining space of either type can't be deleted, same
 // guard state.js's deleteSpace() enforces at the actual mutation boundary;
 // this just keeps the button from ever being the first place a user hits it.
 function canDeleteSpace(space, state) {
-  if (space.type !== "utility") return true;
-  return state.spaces.filter((s) => s.houseId === space.houseId && s.type === "utility").length > 1;
+  if (!MANDATORY_SPACE_TYPES.includes(space.type)) return true;
+  return state.spaces.filter((s) => s.houseId === space.houseId && s.type === space.type).length > 1;
 }
 
 function gridHtml(state) {
@@ -58,8 +59,13 @@ function gridHtml(state) {
   const cards = spaces
     .map((sp) => {
       const houseName = multiHouse ? byId(state.houses, sp.houseId)?.name : null;
+      // Whole home/Utility get a small lock badge instead of a text label
+      // (2026-08-06, user request: "show that visually somehow with
+      // minimal or no text") — every other tile is unbadged, same as before.
+      const locked = MANDATORY_SPACE_TYPES.includes(sp.type);
       return `
     <div class="tile" data-space-id="${sp.id}">
+      ${locked ? `<div class="tile-badge" title="Always included">${Icon("lock", { size: 11 })}</div>` : ""}
       <div class="tile-icon">${Icon(sp.icon || "house", { size: 18 })}</div>
       <div class="tile-title named">${sp.name}</div>
       ${houseName ? `<div class="tile-meta">${houseName}</div>` : ""}
@@ -170,6 +176,10 @@ function openAddSpaceSheet() {
     if (!name) return;
     const type = readChipGroup(root, "spaceType");
     const space = addSpace({ name, type, icon: type === "whole_home" ? "wholeHome" : type });
+    if (!space) {
+      showToast(`This house already has a room named "${name}" — try another name`);
+      return;
+    }
     selectedSpaceId = space.id;
     view = "detail";
 
@@ -286,7 +296,11 @@ function openRenameSheet(space) {
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     const name = root.querySelector("#f-rename").value.trim();
     if (!name) return;
-    updateSpace(space.id, { name });
+    const updated = updateSpace(space.id, { name });
+    if (!updated) {
+      showToast(`This house already has a room named "${name}" — try another name`);
+      return;
+    }
     closeSheet();
     showToast("Space renamed");
   });
@@ -401,4 +415,4 @@ function mount(el) {
   render();
 }
 
-export { mount };
+export { mount, SPACE_TYPES };

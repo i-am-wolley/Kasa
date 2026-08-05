@@ -10,7 +10,7 @@
 // an email on file for that; help (maid/cook/driver) is added by a member
 // and never needs one of its own.
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
@@ -39,23 +39,43 @@ function rowHtml(person) {
   `;
 }
 
-// Household code + "join a different household" (2026-08-05, user
-// request) — the same honest join stub welcome.js's first-run flow uses,
-// reachable here anytime afterward too, not just on first launch.
+// Household code, name (editable — 2026-08-06, user request: "allow to
+// edit that as well"), and "join a different household" — the same
+// honest join stub welcome.js's first-run flow uses, reachable here
+// anytime afterward too, not just on first launch.
 function householdSectionHtml(state) {
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Household</span></div>
-      <div class="list-row" style="cursor:default;">
+      <div class="list-row" data-edit-household-name="1">
         <div class="occ-row-icon">${Icon("wholeHome", { size: 16 })}</div>
         <div class="occ-row-body">
           <div class="occ-row-title">${state.household.name || "Your household"}</div>
           <div class="occ-row-meta">Code: <span class="font-num">${state.household.code || "—"}</span></div>
         </div>
-        <button type="button" class="chip" id="join-household-btn">Join different</button>
+        ${Icon("edit", { size: 14 })}
       </div>
+      <button type="button" class="chip" id="join-household-btn" style="margin-top:8px;">Join different</button>
     </div>
   `;
+}
+
+function openEditHouseholdNameSheet(state) {
+  openSheet({
+    title: "Household name",
+    bodyHtml: `
+      <form id="household-name-form">${field("Name", textInput({ id: "f-household-name", value: state.household.name ?? "" }))}</form>
+      ${sheetActions({ saveLabel: "Save" })}
+    `,
+  });
+  const root = document.getElementById("sheet-root");
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const name = root.querySelector("#f-household-name").value.trim();
+    if (!name) return;
+    updateHouseholdName(name);
+    closeSheet();
+    showToast("Household renamed");
+  });
 }
 
 function render() {
@@ -81,9 +101,15 @@ function render() {
   wireEvents(state);
 }
 
-// Same honest stub as welcome.js's own join step — looking a code up
-// needs Firestore (Phase 4). Kept reachable here so joining a different
-// household isn't only offered once, on first launch.
+// Still a stub, but for a different reason than before (2026-08-05):
+// joining IS real now (welcome.js's own join step does it via
+// db.js/state.js), but switching an already-loaded, already-syncing
+// household to a different one mid-session needs its own careful handling
+// — stop the current household's autosave before hydrating a new one in,
+// or a stray save could land on the old household's Firestore doc. That's
+// a genuinely separate, riskier flow from "join once at first launch,"
+// not built yet. Use Sign out (More) and sign back in with a different
+// choice for now if you need to switch households.
 function openJoinHouseholdSheet() {
   openSheet({
     title: "Join a different household",
@@ -102,7 +128,7 @@ function openJoinHouseholdSheet() {
       showToast("Enter a household code first");
       return;
     }
-    showToast("Joining a household needs Firebase (Phase 4) — not built yet.");
+    showToast("Switching households mid-session isn't wired up yet — sign out (More) and sign back in to join a different one for now.");
   });
 }
 
@@ -294,6 +320,9 @@ function wireEvents(state) {
   document.getElementById("join-household-btn")?.addEventListener("click", (e) => {
     e.stopPropagation();
     openJoinHouseholdSheet();
+  });
+  document.querySelector("[data-edit-household-name]")?.addEventListener("click", () => {
+    openEditHouseholdNameSheet(state);
   });
   mountEl.querySelectorAll("[data-person-id]").forEach((row) => {
     row.addEventListener("click", () => openPersonSheet(byId(state.people, row.dataset.personId)));

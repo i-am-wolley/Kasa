@@ -8,6 +8,7 @@
 import { getState, subscribe, addHouse, updateHouse, deleteHouse, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
+import { mount as mountOnboard } from "./onboard.js";
 
 let mountEl = null;
 let unsubscribe = null;
@@ -42,12 +43,26 @@ function render() {
   wireEvents(state);
 }
 
+// Adding a house now hands straight off to the same six-question wizard
+// used for a brand-new household (2026-08-06, user request: "the new
+// onboarding is nice — let's trigger that when a new house is added").
+// addHouse() already stamps this house's mandatory Whole home/Utility
+// spaces and makes it the sole active house before the wizard opens, so
+// seedHousehold() (called when the wizard's own review step confirms)
+// correctly targets it without any extra plumbing here.
+function launchOnboardingForNewHouse() {
+  if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  mountOnboard(mountEl, {
+    context: "house",
+    onDone: () => mount(mountEl, { onBack }),
+  });
+}
+
 function openHouseSheet(house) {
   openSheet({
     title: house ? "Rename house" : "Add house",
     bodyHtml: `
       <form id="house-form">${field("Name", textInput({ id: "f-house-name", value: house?.name ?? "", placeholder: "e.g. Weekend home" }))}</form>
-      ${!house ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:12px;">A Utility space is set up automatically — add the rest from House once it's created.</p>` : ""}
       ${sheetActions({ saveLabel: house ? "Save" : "Add house", showDelete: !!house })}
     `,
   });
@@ -55,10 +70,23 @@ function openHouseSheet(house) {
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     const name = root.querySelector("#f-house-name").value.trim();
     if (!name) return;
-    if (house) updateHouse(house.id, { name });
-    else addHouse({ name });
-    closeSheet();
-    showToast(house ? "House renamed" : "House added");
+    if (house) {
+      const updated = updateHouse(house.id, { name });
+      if (!updated) {
+        showToast(`You already have a house named "${name}" — try another name`);
+        return;
+      }
+      closeSheet();
+      showToast("House renamed");
+    } else {
+      const created = addHouse({ name });
+      if (!created) {
+        showToast(`You already have a house named "${name}" — try another name`);
+        return;
+      }
+      closeSheet();
+      launchOnboardingForNewHouse();
+    }
   });
   if (house) {
     root.querySelector('[data-action="delete"]').addEventListener("click", () => {
