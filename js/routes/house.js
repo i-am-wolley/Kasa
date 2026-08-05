@@ -1,7 +1,7 @@
 // House screen (memo §8.2) — spaces grid → space detail with its routines,
 // stock, and assets. "Where users browse and prune."
 
-import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, byId } from "../state.js";
+import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, byId } from "../state.js";
 import { templateFor } from "../roomTemplates.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -36,16 +36,36 @@ let unsubscribe = null;
 let view = "grid";
 let selectedSpaceId = null;
 
+// Utility is mandatory PER HOUSE (2026-08-05, scoped alongside multi-house
+// support) — a house's last remaining Utility space can't be deleted, same
+// guard state.js's deleteSpace() enforces at the actual mutation boundary;
+// this just keeps the button from ever being the first place a user hits it.
+function canDeleteSpace(space, state) {
+  if (space.type !== "utility") return true;
+  return state.spaces.filter((s) => s.houseId === space.houseId && s.type === "utility").length > 1;
+}
+
 function gridHtml(state) {
-  const cards = state.spaces
-    .map(
-      (sp) => `
+  // Scoped to whichever house(s) the header picker currently has selected
+  // (2026-08-05, multi-house support) — the common single-house household
+  // sees every space exactly as before, since "visible" there is just
+  // "all of them." A house-name caption only appears on the tile when more
+  // than one house is active at once, so viewing a single house (the
+  // default) stays exactly as uncluttered as it always was.
+  const visible = visibleSpaceIds(state);
+  const multiHouse = state.household.activeHouseIds?.length > 1 || state.houses.length > 1 && !state.household.activeHouseIds?.length;
+  const spaces = state.spaces.filter((sp) => visible.has(sp.id));
+  const cards = spaces
+    .map((sp) => {
+      const houseName = multiHouse ? byId(state.houses, sp.houseId)?.name : null;
+      return `
     <div class="tile" data-space-id="${sp.id}">
       <div class="tile-icon">${Icon(sp.icon || "house", { size: 18 })}</div>
       <div class="tile-title named">${sp.name}</div>
+      ${houseName ? `<div class="tile-meta">${houseName}</div>` : ""}
     </div>
-  `,
-    )
+  `;
+    })
     .join("");
 
   return `
@@ -61,7 +81,10 @@ function gridHtml(state) {
 
 function detailHtml(state) {
   const space = byId(state.spaces, selectedSpaceId);
-  if (!space) { view = "grid"; return gridHtml(state); }
+  // Also bails back to the grid if this space's house was just deselected
+  // in the header house picker (2026-08-05) — a stale detail view for a
+  // room that's no longer in scope would be confusing to land back on.
+  if (!space || !visibleSpaceIds(state).has(space.id)) { view = "grid"; return gridHtml(state); }
 
   const routineRows = state.routines
     .filter((r) => r.spaceId === space.id)
@@ -112,7 +135,7 @@ function detailHtml(state) {
       <button class="btn btn-ghost" id="back-to-grid" style="padding:8px;">${Icon("chevronLeft", { size: 18 })}</button>
       <h1 style="flex:1;">${space.name}</h1>
       <button class="btn btn-ghost" id="rename-space-btn" style="padding:8px;">${Icon("edit", { size: 16 })}</button>
-      ${space.type !== "utility" ? `<button class="btn btn-ghost" id="delete-space-btn" style="padding:8px;">${Icon("trash", { size: 16 })}</button>` : ""}
+      ${canDeleteSpace(space, state) ? `<button class="btn btn-ghost" id="delete-space-btn" style="padding:8px;">${Icon("trash", { size: 16 })}</button>` : ""}
     </div>
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Routines</span><button class="chip" id="add-routine-btn">${Icon("plus", { size: 12 })} Add</button></div>
@@ -271,7 +294,11 @@ function openRenameSheet(space) {
 
 function openDeleteSpaceSheet(space) {
   const state = getState();
-  const others = state.spaces.filter((s) => s.id !== space.id);
+  // Reassign targets stay within the same house (2026-08-05) — moving a
+  // room's contents into a different house's space would silently relocate
+  // them across the new house boundary, which nothing about "delete this
+  // space" implies.
+  const others = state.spaces.filter((s) => s.id !== space.id && s.houseId === space.houseId);
   const hasContents =
     state.items.some((i) => i.spaceId === space.id) ||
     state.assets.some((a) => a.spaceId === space.id) ||

@@ -3,7 +3,7 @@
 // it doesn't order (memo §7) — the list goes to the clipboard for the
 // user to paste into WhatsApp, a quick-commerce app, whatever they use.
 
-import { getState, subscribe, addItem, updateItem, deleteItem, adjustItemQty, byId } from "../state.js";
+import { getState, subscribe, addItem, updateItem, deleteItem, adjustItemQty, visibleSpaceIds, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, stepper, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast, haptic } from "../ui/components.js";
 
@@ -53,6 +53,17 @@ function fromPerDay(perDay, period) {
 }
 function round2(n) {
   return Math.round(n * 100) / 100;
+}
+
+// Space options scoped to the currently-visible house(s), plus the item's
+// own current space even if it belongs to a house that isn't selected
+// right now (2026-08-05, multi-house support) — editing something from a
+// hidden house shouldn't strand it with no matching dropdown option.
+function itemSpaceOptions(state, currentSpaceId) {
+  const visible = visibleSpaceIds(state);
+  return state.spaces
+    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+    .map((s) => ({ value: s.id, label: s.name }));
 }
 
 function isProjectedSoon(item) {
@@ -112,8 +123,15 @@ function sectionHtml(title, items) {
 
 function render() {
   const state = getState();
+  // Scoped to whichever house(s) are currently active (2026-08-05,
+  // multi-house support) — a single-house household sees every item
+  // exactly as before.
+  const visible = visibleSpaceIds(state);
   const buckets = { out: [], low: [], expiring: [], ok: [] };
-  for (const item of state.items) buckets[bucketOf(item)].push(item);
+  for (const item of state.items) {
+    if (!visible.has(item.spaceId)) continue;
+    buckets[bucketOf(item)].push(item);
+  }
 
   mountEl.innerHTML = `
     <div class="topbar">
@@ -159,7 +177,7 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       ${item ? `<p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-bottom:10px;">${lastRestockedLabel(item)}${projectedUsesLeft(item) !== null ? ` · ~${projectedUsesLeft(item)} uses left` : projectedDaysLeft(item) !== null ? ` · ~${projectedDaysLeft(item)} days left at current rate` : ""}</p>` : ""}
       <form id="item-form">
         ${field("Name", catalogField({ id: "f-item-name", type: "item", value: item?.name ?? defaultName ?? "", placeholder: "Start typing — e.g. Toilet cleaner" }))}
-        ${field("Space", chipGroup({ name: "itemSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: item?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
+        ${field("Space", chipGroup({ name: "itemSpaceId", options: itemSpaceOptions(state, item?.spaceId), value: item?.spaceId ?? defaultSpaceId ?? [...visibleSpaceIds(state)][0] ?? state.spaces[0]?.id }))}
         ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
         <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
           ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
@@ -332,7 +350,8 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
 
 function buildShoppingList() {
   const state = getState();
-  const needed = state.items.filter((i) => i.status === "out" || i.status === "low");
+  const visible = visibleSpaceIds(state);
+  const needed = state.items.filter((i) => visible.has(i.spaceId) && (i.status === "out" || i.status === "low"));
   if (!needed.length) {
     showToast("Nothing to reorder right now");
     return;

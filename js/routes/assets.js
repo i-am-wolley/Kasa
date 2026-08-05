@@ -1,7 +1,7 @@
 // Assets screen (memo §8.2) — cards sorted by next service, warranty
 // countdown, detail with vendor call button and running service history.
 
-import { getState, subscribe, addAsset, updateAsset, deleteAsset, markAssetServiced, addRoutine, byId } from "../state.js";
+import { getState, subscribe, addAsset, updateAsset, deleteAsset, markAssetServiced, addRoutine, visibleSpaceIds, byId } from "../state.js";
 import { findByKey } from "../catalog.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -31,8 +31,12 @@ function serviceLabel(asset) {
   return `Service due in ${d} day${d === 1 ? "" : "s"}`;
 }
 
+// Scoped to whichever house(s) are currently active (2026-08-05, multi-
+// house support) — a single-house household sees every asset exactly as
+// before.
 function sortedAssets(state) {
-  return [...state.assets].sort((a, b) => {
+  const visible = visibleSpaceIds(state);
+  return state.assets.filter((a) => visible.has(a.spaceId)).sort((a, b) => {
     const da = a.nextServiceDue ? new Date(a.nextServiceDue) : Infinity;
     const db = b.nextServiceDue ? new Date(b.nextServiceDue) : Infinity;
     return da - db;
@@ -69,10 +73,21 @@ function render() {
   wireEvents(state);
 }
 
+// Scoped to the currently-visible house(s), plus the asset's own current
+// space even if it belongs to a house that isn't selected right now
+// (2026-08-05, multi-house support) — editing something from a hidden
+// house shouldn't strand it with no matching dropdown option.
+function assetSpaceOptions(state, currentSpaceId) {
+  const visible = visibleSpaceIds(state);
+  return state.spaces
+    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+    .map((s) => ({ value: s.id, label: s.name }));
+}
+
 function assetFormFields(asset, state, defaultSpaceId, defaultName) {
   return `
     ${field("Name", catalogField({ id: "f-asset-name", type: "asset", value: asset?.name ?? defaultName ?? "", placeholder: "Start typing — e.g. Geyser" }))}
-    ${field("Space", chipGroup({ name: "assetSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: asset?.spaceId ?? defaultSpaceId ?? state.spaces[0]?.id }))}
+    ${field("Space", chipGroup({ name: "assetSpaceId", options: assetSpaceOptions(state, asset?.spaceId), value: asset?.spaceId ?? defaultSpaceId ?? [...visibleSpaceIds(state)][0] ?? state.spaces[0]?.id }))}
     ${field("Brand / model", textInput({ id: "f-asset-brand", value: asset?.brand ?? "" }))}
     ${field("Purchase date", textInput({ id: "f-asset-purchased", type: "date", value: asset?.purchaseDate ?? "" }))}
     ${field("Warranty until", textInput({ id: "f-asset-warranty", type: "date", value: asset?.warrantyUntil ?? "" }))}

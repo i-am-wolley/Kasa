@@ -1,0 +1,55 @@
+// Schema-version migration mechanism (2026-08-05, user request: "when
+// certain attributes are made and we might need to migrate old data,
+// create a mechanism for version bump to migrate old data"). Numbered,
+// idempotent steps applied in order against whatever schemaVersion a
+// loaded household actually carries. The mock household starts
+// unversioned (no schemaVersion field at all — treated as version 1),
+// the same shape a Firestore-loaded household will have once Phase 4
+// lands: old documents don't gain new fields on their own just because
+// the code that reads them changed, something has to walk them forward.
+// Each step is written to be safe to run twice (guarded by checking
+// whether its own target shape already exists), so a household stuck on
+// an old version and one already current both come out the same either
+// way.
+//
+// To add a future migration: write a new numbered function below, bump
+// CURRENT_SCHEMA_VERSION. Nothing else changes — state.js calls migrate()
+// once at load and isn't aware of individual steps.
+
+let migIdSeq = 0;
+function migId(prefix) {
+  migIdSeq += 1;
+  return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
+}
+
+const CURRENT_SCHEMA_VERSION = 2;
+
+// Keyed by the version a step upgrades TO — migrations[2] takes a v1
+// household to v2, etc.
+const migrations = {
+  // v1 -> v2 (2026-08-05): introduces multi-house support ("a household
+  // can have more than one house, with its own spaces, routines, assets").
+  // A pre-v2 household has spaces with no houseId at all — wrap them into
+  // one default house so every space still resolves to a real house
+  // rather than needing a "houseless space" special case scattered
+  // through every screen that filters by house.
+  2: (state) => {
+    if (state.houses?.length) return; // already migrated
+    const house = { id: migId("house"), name: "My Home", createdAt: new Date().toISOString() };
+    state.houses = [house];
+    for (const space of state.spaces) {
+      if (!space.houseId) space.houseId = house.id;
+    }
+    state.household.activeHouseIds = [house.id];
+  },
+};
+
+function migrate(state) {
+  const from = state.household.schemaVersion || 1;
+  for (let v = from + 1; v <= CURRENT_SCHEMA_VERSION; v++) {
+    migrations[v]?.(state);
+  }
+  state.household.schemaVersion = CURRENT_SCHEMA_VERSION;
+}
+
+export { migrate, CURRENT_SCHEMA_VERSION };

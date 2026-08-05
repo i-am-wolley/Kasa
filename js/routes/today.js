@@ -9,7 +9,7 @@
 // Overdue/Due Today view, plus a subtle member filter and a quick-add
 // button that opens the shared routine/habit/task sheet directly from here.
 
-import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, byId } from "../state.js";
+import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, visibleSpaceIds, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
@@ -82,13 +82,18 @@ function enrichTask(task, state) {
 // row belongs to depends on the Today/This week toggle (see render()).
 function visibleRows(state) {
   const activeModeKey = state.household.activeMode;
+  // Scoped to whichever house(s) the header picker currently has selected
+  // (2026-08-05, multi-house support) — a task with no space at all is
+  // never house-scoped in the first place, so it always shows regardless.
+  const visibleSpaces = visibleSpaceIds(state);
   const routineRows = state.occurrences
     .filter((o) => o.state !== "done" && o.state !== "snoozed")
     .map((o) => enrichRoutine(o, state))
     .filter((r) => r.routine && !isPausedNow(r.routine, activeModeKey))
+    .filter((r) => visibleSpaces.has(r.routine.spaceId))
     .filter((r) => !effortOnly || r.effort === 1);
   const taskRows = state.tasks
-    .filter((t) => !t.done)
+    .filter((t) => !t.done && (!t.spaceId || visibleSpaces.has(t.spaceId)))
     .map((t) => enrichTask(t, state));
   const rows = [...routineRows, ...taskRows];
   return memberFilter ? rows.filter((r) => r.assigneeId === memberFilter) : rows;
@@ -264,14 +269,18 @@ function batchesSectionHtml(state, actionableRows) {
 
 function statRowHtml(state) {
   const activeModeKey = state.household.activeMode;
+  const visibleSpaces = visibleSpaceIds(state);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const openRoutineRows = state.occurrences
     .filter((occ) => occ.state !== "done" && occ.state !== "snoozed")
     .map((occ) => enrichRoutine(occ, state))
-    .filter((r) => r.routine && !isPausedNow(r.routine, activeModeKey));
-  const openTaskRows = state.tasks.filter((t) => !t.done).map((t) => enrichTask(t, state));
+    .filter((r) => r.routine && !isPausedNow(r.routine, activeModeKey))
+    .filter((r) => visibleSpaces.has(r.routine.spaceId));
+  const openTaskRows = state.tasks
+    .filter((t) => !t.done && (!t.spaceId || visibleSpaces.has(t.spaceId)))
+    .map((t) => enrichTask(t, state));
   const openRows = [...openRoutineRows, ...openTaskRows];
 
   const overdueCount = openRows.filter((r) => r.state === "overdue").length;
@@ -284,15 +293,19 @@ function statRowHtml(state) {
     const offset = Math.round((today - d) / 86400000);
     return offset >= 0 && offset <= 6;
   };
-  const completedCount = state.ledger.filter((entry) => withinLast7(entry.doneAt)).length
-    + state.tasks.filter((t) => t.done && t.doneAt && withinLast7(t.doneAt)).length;
+  const completedCount = state.ledger.filter((entry) => {
+      if (!withinLast7(entry.doneAt)) return false;
+      const routine = byId(state.routines, entry.routineId);
+      return routine && visibleSpaces.has(routine.spaceId);
+    }).length
+    + state.tasks.filter((t) => t.done && t.doneAt && withinLast7(t.doneAt) && (!t.spaceId || visibleSpaces.has(t.spaceId))).length;
 
   // Out/low/expiring stock, same bucketing Stock itself uses (js/routes/
   // stock.js's bucketOf) so this always matches what tapping through
   // actually shows. One extra number here beats a second list on Today
   // (2026-08-05, user request: see what needs restocking "without making
   // it cluttered").
-  const stockAlertCount = state.items.filter((i) => bucketOf(i) !== "ok").length;
+  const stockAlertCount = state.items.filter((i) => visibleSpaces.has(i.spaceId) && bucketOf(i) !== "ok").length;
 
   const tiles = [
     { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, action: "jump:section-overdue" },

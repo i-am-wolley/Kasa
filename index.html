@@ -36,17 +36,23 @@
           <circle cx="15.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
         </svg>
         <span class="app-wordmark">kasa</span>
-        <!-- More moved here from the bottom tab bar (2026-08-03, user
-             request) so Wishlist could take its slot as a primary tab.
-             Wired up in boot.js. -->
-        <button class="app-more-btn" id="app-more-btn" aria-label="More">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>
-            <circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"/>
-          </svg>
-          More
-        </button>
+        <div class="app-mark-actions">
+          <!-- House picker (2026-08-05, user request) — filled in by
+               boot.js (icon + label) and shown only once a household has
+               more than one house; empty/hidden shell here otherwise. -->
+          <button class="app-house-btn" id="app-house-btn" aria-label="Houses" style="display:none;"></button>
+          <!-- More moved here from the bottom tab bar (2026-08-03, user
+               request) so Wishlist could take its slot as a primary tab.
+               Wired up in boot.js. -->
+          <button class="app-more-btn" id="app-more-btn" aria-label="More">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+              <circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+              <circle cx="19" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+            </svg>
+            More
+          </button>
+        </div>
       </header>
       <div class="app-body">
         <nav class="tabbar" id="tabbar" aria-label="Primary"></nav>

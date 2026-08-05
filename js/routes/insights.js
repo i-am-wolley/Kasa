@@ -23,7 +23,7 @@
 //   Today already listing overdue/due items directly, it was redundant
 //   with both rather than adding a third view of the same handful of facts.
 
-import { getState, subscribe, habitStreak, byId, updateRoutine, toggleRoutineActive } from "../state.js";
+import { getState, subscribe, habitStreak, byId, updateRoutine, toggleRoutineActive, visibleSpaceIds } from "../state.js";
 import { stateOf } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { showToast } from "../ui/components.js";
@@ -41,13 +41,17 @@ function isPausedNow(routine, activeModeKey) {
 
 const TIER_PENALTY = { safety: 8, damaging: 5, degrading: 2, cosmetic: 1 };
 
+// Scoped to whichever house(s) the header picker currently has selected
+// (2026-08-05, multi-house support) — a single-house household sees the
+// exact same score as before.
 function computeHealth(state) {
   const activeModeKey = state.household.activeMode;
+  const visible = visibleSpaceIds(state);
   const overdueByTier = { safety: 0, damaging: 0, degrading: 0, cosmetic: 0 };
   for (const occ of state.occurrences) {
     if (occ.state === "done" || occ.state === "snoozed") continue;
     const routine = byId(state.routines, occ.routineId);
-    if (!routine || isPausedNow(routine, activeModeKey)) continue;
+    if (!routine || isPausedNow(routine, activeModeKey) || !visible.has(routine.spaceId)) continue;
     if (stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()) !== "overdue") continue;
     overdueByTier[routine.consequence] = (overdueByTier[routine.consequence] || 0) + 1;
   }
@@ -56,13 +60,14 @@ function computeHealth(state) {
   for (const [tier, count] of Object.entries(overdueByTier)) overduePenalty += (TIER_PENALTY[tier] || 1) * count;
   overduePenalty = Math.min(40, overduePenalty);
 
-  const outCount = state.items.filter((i) => i.status === "out").length;
-  const lowCount = state.items.filter((i) => i.status === "low").length;
+  const visibleItems = state.items.filter((i) => visible.has(i.spaceId));
+  const outCount = visibleItems.filter((i) => i.status === "out").length;
+  const lowCount = visibleItems.filter((i) => i.status === "low").length;
   const stockPenalty = Math.min(30, outCount * 3 + lowCount);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const overdueAssets = state.assets.filter((a) => a.nextServiceDue && new Date(a.nextServiceDue) < today).length;
+  const overdueAssets = state.assets.filter((a) => visible.has(a.spaceId) && a.nextServiceDue && new Date(a.nextServiceDue) < today).length;
   const assetPenalty = Math.min(30, overdueAssets * 5);
 
   const score = Math.max(0, Math.round(100 - overduePenalty - stockPenalty - assetPenalty));

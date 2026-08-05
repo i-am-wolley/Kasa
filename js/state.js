@@ -7,6 +7,7 @@ import { household, spaces, items, assets, routines, ledger, people, modes, wish
 import { generateOccurrences, stateOf } from "./engine.js";
 import { getOrCreate, findByKey } from "./catalog.js";
 import { applyLoadSmoothing } from "./intel.js";
+import { migrate } from "./migrations.js";
 
 const listeners = new Set();
 
@@ -65,6 +66,13 @@ const state = {
   snoozeLog: snoozeLog.map((s) => ({ ...s })),
   lastSmoothingMoves: [],
 };
+
+// Walks the (possibly unversioned, mock-seeded) state above forward to the
+// current schema — see migrations.js. Right now this is what actually
+// creates `state.houses` and stamps `houseId` onto the mock spaces; a
+// Firestore-loaded household in Phase 4 would run through the exact same
+// call on read.
+migrate(state);
 
 // A snoozed occurrence never woke back up on its own — nothing anywhere
 // transitioned `state: "snoozed"` back to due/overdue once `snoozedUntil`
@@ -239,37 +247,60 @@ function snoozeOccurrence(occId, days = 1) {
   notify();
 }
 
-// Replaces the household's spaces/items/assets/routines with freshly
-// pack-generated content (memo §3.1 Step 3 — "Generate"). People/modes are
-// left as-is: onboarding's 6 questions don't collect them ("Add your help"
-// is a later optional deepening card, memo §3.1 Step 5).
+// Replaces ONE house's spaces/items/assets/routines with freshly pack-
+// generated content (memo §3.1 Step 3 — "Generate"). People/modes are
+// household-wide, not per-house, and are left as-is: onboarding's 6
+// questions don't collect them ("Add your help" is a later optional
+// deepening card, memo §3.1 Step 5).
+//
+// Targets whichever house is currently the sole active selection, falling
+// back to the household's first house otherwise (2026-08-05, multi-house
+// support) — other houses in the same household are never touched by this,
+// whether this is the very first onboarding run (targeting the one
+// migrated/default house) or a later "Re-run onboarding" from More.
 function seedHousehold({ spaces, items, assets, routines, answers, packVersions }) {
-  state.spaces = spaces;
-  state.items = items;
-  state.assets = assets;
-  state.routines = routines;
-  state.ledger = [];
-  state.occurrences = [];
+  const active = state.household.activeHouseIds;
+  const targetHouseId = (active?.length === 1 ? active[0] : null) || state.houses[0]?.id;
+  const stampedSpaces = spaces.map((s) => ({ ...s, houseId: targetHouseId }));
+
+  const otherSpaceIds = new Set(state.spaces.filter((s) => s.houseId !== targetHouseId).map((s) => s.id));
+  state.spaces = [...state.spaces.filter((s) => s.houseId !== targetHouseId), ...stampedSpaces];
+  state.items = [...state.items.filter((i) => otherSpaceIds.has(i.spaceId)), ...items];
+  state.assets = [...state.assets.filter((a) => otherSpaceIds.has(a.spaceId)), ...assets];
+  state.routines = [...state.routines.filter((r) => otherSpaceIds.has(r.spaceId)), ...routines];
+
+  // Drop this house's old ledger/occurrence history along with its old
+  // routines (just replaced above) — anything still pointing at a routine
+  // that belongs to a different, untouched house survives.
+  const remainingRoutineIds = new Set(state.routines.map((r) => r.id));
+  state.ledger = state.ledger.filter((l) => remainingRoutineIds.has(l.routineId));
+  state.occurrences = state.occurrences.filter((o) => remainingRoutineIds.has(o.routineId));
+
+  state.household.activeHouseIds = [targetHouseId];
   Object.assign(state.household, {
     homeType: answers.homeType, size: answers.size, whoLivesHere: answers.whoLivesHere,
     householdHelp: answers.householdHelp, has: answers.has, city: answers.city,
-    packVersions, code: generateHouseholdCode(),
+    packVersions,
+    // Was unconditionally regenerated on every seedHousehold call, including
+    // a later "Re-run onboarding" against an ALREADY-existing household —
+    // silently changing its invite code every time someone re-ran the six
+    // questions (2026-08-05, caught while wiring multi-house re-onboarding).
+    // Now only assigned once, the first time a household is ever seeded.
+    code: state.household.code || generateHouseholdCode(),
   });
   regenerate();
-  // Grace period (2026-08-05, user request) — a freshly onboarded household
+  // Grace period (2026-08-05, user request) — a freshly onboarded house
   // shouldn't open to a wall of already-due/overdue items just because
   // regenerate() computed some routines' first-ever occurrence as due
   // today (floating routines with no lastDoneAt default to `dueAt: now`,
-  // per engine.js's computeNext). Every occurrence just generated for this
-  // brand-new household gets its due date pushed out to at least 4 days
-  // from now if the engine would otherwise have it due sooner — a natural
-  // due date further out than that is left alone, only ones that would
-  // otherwise be immediately due/overdue get clamped forward. One-time,
-  // right here at the seeding moment — NOT baked into regenerate() itself,
-  // which every other caller (mode switch, routine edits, etc.) also uses
-  // and shouldn't be affected by this.
+  // per engine.js's computeNext). Scoped to just the routines this call
+  // itself just seeded (`newRoutineIds`) — an untouched house's genuinely
+  // due/overdue occurrences must never get clamped forward by someone
+  // re-onboarding a DIFFERENT house in the same household.
+  const newRoutineIds = new Set(routines.map((r) => r.id));
   const graceUntil = Date.now() + 4 * 86400000;
   for (const occ of state.occurrences) {
+    if (!newRoutineIds.has(occ.routineId)) continue;
     if (new Date(occ.dueAt).getTime() < graceUntil) occ.dueAt = new Date(graceUntil).toISOString();
   }
   notify();
@@ -282,10 +313,79 @@ function setActiveMode(key) {
   notify();
 }
 
+// ---- house CRUD (2026-08-05, user request) -------------------------------
+// "A household can have more than one house, with its own spaces,
+// routines, assets." A house is the layer above Space — every space now
+// belongs to exactly one house (`space.houseId`), and items/assets/
+// routines inherit that scoping transitively through their own spaceId
+// rather than carrying a second houseId of their own. Firestore-shaped on
+// purpose (2026-08-05, user request: "will need to be incorporated in
+// firebase") — a flat `houses` collection keyed by id with a `houseId`
+// foreign key on spaces maps directly onto a `households/{code}/houses/
+// {houseId}` subcollection later, no reshaping needed, just a data-source
+// swap like everything else pre-Firebase.
+
+function addHouse({ name }) {
+  const house = { id: genId("house"), name: name || "New house", createdAt: new Date().toISOString() };
+  state.houses.push(house);
+  // A brand-new house gets its mandatory Utility space immediately
+  // (mirrors the guarantee every onboarded/migrated house already has) —
+  // otherwise there'd be a window where this house exists but "Uses this
+  // stock"'s shared-supplies reach has nothing to find.
+  state.spaces.push({ id: genId("sp"), name: "Utility", type: "utility", icon: "utility", houseId: house.id, order: 1, active: true });
+  // Switches focus to the house just created — same "jump to what you just
+  // made" convention Add Space already follows.
+  state.household.activeHouseIds = [house.id];
+  notify();
+  return house;
+}
+
+function updateHouse(id, patch) {
+  const house = byId(state.houses, id);
+  if (house) Object.assign(house, patch);
+  notify();
+}
+
+// A household always has at least one house — refused here at the actual
+// mutation boundary (same pattern as Utility's own mandatory-space guard),
+// not just hidden in the UI. Cascades: every space that belonged to this
+// house, and everything scoped to those spaces, goes with it.
+function deleteHouse(id) {
+  if (state.houses.length <= 1) return false;
+  const houseSpaceIds = new Set(state.spaces.filter((s) => s.houseId === id).map((s) => s.id));
+  state.items = state.items.filter((i) => !houseSpaceIds.has(i.spaceId));
+  state.assets = state.assets.filter((a) => !houseSpaceIds.has(a.spaceId));
+  state.routines = state.routines.filter((r) => !houseSpaceIds.has(r.spaceId));
+  state.occurrences = state.occurrences.filter((o) => byId(state.routines, o.routineId));
+  state.spaces = state.spaces.filter((s) => s.houseId !== id);
+  state.houses = state.houses.filter((h) => h.id !== id);
+  state.household.activeHouseIds = (state.household.activeHouseIds || []).filter((hid) => hid !== id);
+  if (!state.household.activeHouseIds.length) state.household.activeHouseIds = state.houses.map((h) => h.id);
+  notify();
+  return true;
+}
+
+function setActiveHouseIds(ids) {
+  state.household.activeHouseIds = ids?.length ? ids : state.houses.map((h) => h.id);
+  notify();
+}
+
+// Every space belonging to one of the currently-selected houses — the one
+// filter every space/item/asset/routine-listing screen reads through, so
+// "which houses are visible right now" lives in exactly one place rather
+// than being re-derived per screen.
+function visibleSpaceIds(st) {
+  const allIds = st.houses.map((h) => h.id);
+  const active = st.household.activeHouseIds?.length ? st.household.activeHouseIds : allIds;
+  const activeSet = new Set(active);
+  return new Set(st.spaces.filter((s) => activeSet.has(s.houseId)).map((s) => s.id));
+}
+
 // ---- space CRUD (memo §4.1) --------------------------------------------
 
-function addSpace({ name, type, icon }) {
-  const space = { id: genId("sp"), name, type, icon, order: state.spaces.length + 1, active: true };
+function addSpace({ name, type, icon, houseId = null }) {
+  const targetHouseId = houseId || (state.household.activeHouseIds?.length === 1 ? state.household.activeHouseIds[0] : null) || state.houses[0]?.id;
+  const space = { id: genId("sp"), name, type, icon, houseId: targetHouseId, order: state.spaces.length + 1, active: true };
   state.spaces.push(space);
   notify();
   return space;
@@ -300,16 +400,21 @@ function updateSpace(id, patch) {
 // Deleting a space either reassigns its contents to `reassignToId` or
 // deletes them with it (memo §4.4: "Deleting a space asks whether to
 // delete contents or move them").
-// Utility is mandatory (2026-08-05, user request) — "Uses this stock" in
-// the routine builder now always offers Utility's items alongside a
-// routine's own room (cleaning liquids etc. that live there, not
-// duplicated into every room), so a household without a Utility space
-// would silently lose that half of the feature. Guarded here, the actual
-// mutation boundary, not just hidden in the UI — house.js also disables
-// the delete button so the guard is never the first thing a user hits.
+// Utility is mandatory PER HOUSE (2026-08-05: scoped from household-wide
+// to per-house alongside multi-house support) — "Uses this stock" in the
+// routine builder always offers Utility's items alongside a routine's own
+// room, resolved within that routine's own house (see routine.js), so
+// every house needs its own Utility space, not just the household as a
+// whole. Guarded here, the actual mutation boundary, not just hidden in
+// the UI — house.js also disables the delete button so the guard is never
+// the first thing a user hits.
 function deleteSpace(id, { reassignToId = null } = {}) {
   const space = byId(state.spaces, id);
-  if (space?.type === "utility") return;
+  if (!space) return;
+  if (space.type === "utility") {
+    const siblingUtilities = state.spaces.filter((s) => s.houseId === space.houseId && s.type === "utility");
+    if (siblingUtilities.length <= 1) return;
+  }
   const moveOrDrop = (list) => {
     if (reassignToId) {
       for (const x of list) if (x.spaceId === id) x.spaceId = reassignToId;
@@ -724,6 +829,11 @@ export {
   setActiveMode,
   seedHousehold,
   undoLast,
+  addHouse,
+  updateHouse,
+  deleteHouse,
+  setActiveHouseIds,
+  visibleSpaceIds,
   addSpace,
   updateSpace,
   deleteSpace,

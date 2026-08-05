@@ -107,11 +107,48 @@ h1, h2, h3, p { margin: 0; }
   color: var(--ink);
 }
 
+/* Wraps the house picker + More so they sit together at the row's right
+   edge (2026-08-05) — margin-left:auto lives on this wrapper, not on
+   either button individually, so hiding the house picker (single-house
+   household, the common case) can't leave More stranded without its own
+   push-right margin. */
+.app-mark-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* House picker (2026-08-05, user request: "select on the top, same line as
+   logo left of more") — same pill shape as More, sits just to its left.
+   Hidden entirely (boot.js) for the common single-house household —
+   nothing to pick between yet. */
+.app-house-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 9px;
+  min-height: 30px;
+  max-width: 130px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+.app-house-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-house-btn:active { transform: scale(0.96); }
+
 .app-more-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: auto; /* logo/wordmark stay top-left, More sits top-right of the same row (2026-08-04, user request) */
   padding: 4px 9px;
   min-height: 30px;
   border: 1px solid var(--line);
@@ -889,7 +926,11 @@ h1, h2, h3, p { margin: 0; }
   background: var(--surface-sunk);
 }
 
-.habit-cell.done { background: var(--done); }
+/* Both done/missed fills blended toward the surface color rather than run
+   at full token strength (2026-08-05, user feedback: "the habit red and
+   green are not nice soothen it") — same hue, same at-a-glance legibility,
+   just dialed back so a grid of them reads calm instead of alarm-toned. */
+.habit-cell.done { background: color-mix(in srgb, var(--done) 62%, var(--surface)); }
 /* A day the habit's own frequency never scheduled (2026-08-05, user
    request: "let the unplanned be gray") — plain gray, distinct from both
    a genuinely missed day and the base unstyled cell. */
@@ -901,7 +942,7 @@ h1, h2, h3, p { margin: 0; }
    follow-up: "i want red colored box not the border") — matches how
    .done is a solid fill too, so the two "something happened" states read
    the same way at a glance. */
-.habit-cell.missed { background: var(--danger); }
+.habit-cell.missed { background: color-mix(in srgb, var(--danger) 55%, var(--surface)); }
 .habit-cell.today { box-shadow: 0 0 0 1.5px var(--gold); }
 
 /* ---- Welcome gate (2026-08-05) — sign-in placeholder + household

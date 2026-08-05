@@ -11,7 +11,7 @@
 // date, no recurrence, no required space/person) — but share this one
 // entry sheet with a Kind toggle up top switching which field block shows.
 
-import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit, addTask, updateTask, deleteTask } from "../state.js";
+import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit, addTask, updateTask, deleteTask, visibleSpaceIds, byId } from "../state.js";
 import { openSheet, closeSheet, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, showToast } from "../ui/components.js";
 
 const KIND_OPTIONS = [
@@ -103,7 +103,12 @@ function triggerParamsHtml(routine) {
 // live if the Space chip changes.
 function requiresItemsFieldHtml(spaceId, selectedIds) {
   const state = getState();
-  const utilitySpace = state.spaces.find((s) => s.type === "utility");
+  // Utility resolved within the routine's OWN house (2026-08-05, multi-
+  // house support) — a household can now have more than one house, each
+  // with its own Utility space, so "the" shared-supplies room only makes
+  // sense scoped to whichever house this routine's own space belongs to.
+  const houseId = byId(state.spaces, spaceId)?.houseId;
+  const utilitySpace = state.spaces.find((s) => s.type === "utility" && s.houseId === houseId);
   const relevantSpaceIds = new Set([spaceId, utilitySpace?.id].filter(Boolean));
   const items = state.items.filter((i) => relevantSpaceIds.has(i.spaceId));
   const options = items.map((i) => ({
@@ -113,10 +118,21 @@ function requiresItemsFieldHtml(spaceId, selectedIds) {
   return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options, value: selectedIds, multi: true }));
 }
 
+// Space options are scoped to the currently-visible house(s) (2026-08-05,
+// multi-house support) — plus the entity's own current space even if it
+// happens to belong to a house that isn't selected right now, so editing
+// something from a hidden house doesn't strand it with no matching option.
+function spaceOptions(state, currentSpaceId) {
+  const visible = visibleSpaceIds(state);
+  return state.spaces
+    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+    .map((s) => ({ value: s.id, label: s.name }));
+}
+
 function routineFieldsHtml(routine, spaceId, state) {
   const initialSpaceId = routine?.spaceId ?? spaceId;
   return `
-    ${field("Space", chipGroup({ name: "spaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: initialSpaceId }))}
+    ${field("Space", chipGroup({ name: "spaceId", options: spaceOptions(state, initialSpaceId), value: initialSpaceId }))}
     ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
     ${triggerParamsHtml(routine)}
     <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
@@ -151,7 +167,7 @@ function habitFieldsHtml(habit, defaultPersonId, state) {
 function taskFieldsHtml(task, defaultSpaceId, state) {
   return `
     ${field("Due date", textInput({ id: "f-task-due", type: "date", value: task?.dueDate ?? new Date().toISOString().slice(0, 10) }))}
-    ${field("Space (optional)", chipGroup({ name: "taskSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: task?.spaceId ?? defaultSpaceId ?? null }))}
+    ${field("Space (optional)", chipGroup({ name: "taskSpaceId", options: spaceOptions(state, task?.spaceId ?? defaultSpaceId ?? null), value: task?.spaceId ?? defaultSpaceId ?? null }))}
     ${field("Assign to (optional)", chipGroup({ name: "taskAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: task?.assigneeId ?? null }))}
   `;
 }

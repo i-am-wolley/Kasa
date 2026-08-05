@@ -4,8 +4,8 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
-import { getState } from "./state.js";
-import { openSheet, closeSheet } from "./ui/components.js";
+import { getState, subscribe, setActiveHouseIds, byId } from "./state.js";
+import { openSheet, closeSheet, field, chipGroup, wireChipGroup, readChipGroup, sheetActions, showToast } from "./ui/components.js";
 import { mount as mountToday } from "./routes/today.js";
 import { mount as mountHouse } from "./routes/house.js";
 import { mount as mountStock } from "./routes/stock.js";
@@ -13,6 +13,7 @@ import { mount as mountInsights } from "./routes/insights.js";
 import { mount as mountWishlist } from "./routes/wishlist.js";
 import { mount as mountPeople } from "./routes/people.js";
 import { mount as mountAssets } from "./routes/assets.js";
+import { mount as mountHouses } from "./routes/houses.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
 import { mount as mountWelcome } from "./routes/welcome.js";
 
@@ -41,8 +42,9 @@ const TABS = [
 // (memo §8.1: 5-tab limit; People/Assets/onboarding live one level down).
 const MORE_ITEMS = [
   { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
+  { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
-  { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the house from six questions" },
+  { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the currently-viewed house from six questions" },
 ];
 
 let activeTab = "today";
@@ -103,6 +105,53 @@ function openMoreSheet() {
   });
 }
 
+// House picker (2026-08-05, user request: "an option to select on the top,
+// same line as logo, left of more, to select one house or multiple
+// houses"). Hidden entirely for the common single-house household —
+// nothing to pick between yet. Multi-select, not single-choice ("one
+// house or multiple houses") — defaults to every house selected, same as
+// there being no filter at all for a single-house household.
+function renderHouseBtn() {
+  const state = getState();
+  const btn = document.getElementById("app-house-btn");
+  if (!btn) return;
+  if (state.houses.length < 2) {
+    btn.style.display = "none";
+    return;
+  }
+  btn.style.display = "";
+  const active = state.household.activeHouseIds?.length ? state.household.activeHouseIds : state.houses.map((h) => h.id);
+  const label =
+    active.length >= state.houses.length ? "All houses"
+    : active.length === 1 ? (byId(state.houses, active[0])?.name || "House")
+    : `${active.length} houses`;
+  btn.innerHTML = `${Icon("house", { size: 14 })} <span>${label}</span>`;
+}
+
+function openHousePickerSheet() {
+  const state = getState();
+  const active = state.household.activeHouseIds?.length ? state.household.activeHouseIds : state.houses.map((h) => h.id);
+  openSheet({
+    title: "Houses",
+    bodyHtml: `
+      <p style="color:var(--ink-muted);margin-bottom:16px;">View one house at a time, or select several to see them together.</p>
+      ${field("Showing", chipGroup({ name: "houseFilter", options: state.houses.map((h) => ({ value: h.id, label: h.name })), value: active, multi: true }))}
+      ${sheetActions({ saveLabel: "Done" })}
+    `,
+  });
+  const root = document.getElementById("sheet-root");
+  wireChipGroup(root, "houseFilter");
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const ids = readChipGroup(root, "houseFilter") || [];
+    if (!ids.length) {
+      showToast("Pick at least one house");
+      return;
+    }
+    setActiveHouseIds(ids);
+    closeSheet();
+  });
+}
+
 function mountScreen(screenId) {
   const screenEl = document.getElementById("screen-mount");
   switch (screenId) {
@@ -126,6 +175,9 @@ function mountScreen(screenId) {
       break;
     case "assets":
       mountAssets(screenEl, { onBack: () => switchTab(activeTab) });
+      break;
+    case "houses":
+      mountHouses(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     case "onboard":
       mountOnboard(screenEl, { onDone: () => switchTab("today") });
@@ -164,6 +216,9 @@ function startApp() {
   document.getElementById("app-more-btn").style.display = "";
   mountScreen("today");
   document.getElementById("app-more-btn").addEventListener("click", openMoreSheet);
+  document.getElementById("app-house-btn").addEventListener("click", openHousePickerSheet);
+  renderHouseBtn();
+  subscribe(renderHouseBtn);
 }
 
 function boot() {
