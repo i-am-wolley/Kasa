@@ -25,6 +25,10 @@ const EFFORT_LABEL = { 1: "2 min", 2: "15 min", 3: "1 hr", 4: "Half day", 5: "Ve
 let effortOnly = false;
 let memberFilter = null; // personId, or null for everyone
 let view = "today"; // "today" | "week" (2026-08-05, user request)
+// Off by default (2026-08-05, user request: "keep that as a toggle...
+// rather than always on screen") — batching is a nice-to-have suggestion,
+// not something that should always claim space above Overdue/Due.
+let showBatches = false;
 let mountEl = null;
 let unsubscribe = null;
 
@@ -210,7 +214,10 @@ function memberFilterHtml(state) {
 // shopping list" — this section is the two genuinely new clusters: same
 // space, same vendor. Tapping a card just jumps to the list below (reuses
 // the stat tiles' own data-tile-action wiring) rather than adding a third
-// filter dimension on top of the member filter and view toggle.
+// filter dimension on top of the member filter and view toggle. Gated
+// behind the "Batches" chip (default off, 2026-08-05 follow-up) — nice as
+// a suggestion, not something that should always claim space above
+// Overdue/Due.
 function batchesSectionHtml(state, actionableRows) {
   const { spaces, vendors } = intelBatches(state, actionableRows);
   if (!spaces.length && !vendors.length) return "";
@@ -347,10 +354,11 @@ function render() {
         ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
         ${chip("Today", { active: view === "today", dataAttrs: 'data-view="today"' })}
         ${chip("This week", { active: view === "week", dataAttrs: 'data-view="week"' })}
+        ${chip("Batches", { active: showBatches, dataAttrs: 'id="batches-toggle"' })}
       </div>
       ${memberFilterHtml(state)}
     </div>
-    ${batchesSectionHtml(state, [...overdue, ...due])}
+    ${showBatches ? batchesSectionHtml(state, [...overdue, ...due]) : ""}
     ${sectionHtml("Overdue", overdue)}
     ${sectionHtml(view === "week" ? "Due this week" : "Due today", due, { sortByOffset: view === "week" })}
     ${habitsSectionHtml(state)}
@@ -369,6 +377,11 @@ function wireEvents() {
 
   document.getElementById("effort-filter")?.addEventListener("click", () => {
     effortOnly = !effortOnly;
+    render();
+  });
+
+  document.getElementById("batches-toggle")?.addEventListener("click", () => {
+    showBatches = !showBatches;
     render();
   });
 

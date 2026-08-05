@@ -112,7 +112,7 @@ function detailHtml(state) {
       <button class="btn btn-ghost" id="back-to-grid" style="padding:8px;">${Icon("chevronLeft", { size: 18 })}</button>
       <h1 style="flex:1;">${space.name}</h1>
       <button class="btn btn-ghost" id="rename-space-btn" style="padding:8px;">${Icon("edit", { size: 16 })}</button>
-      <button class="btn btn-ghost" id="delete-space-btn" style="padding:8px;">${Icon("trash", { size: 16 })}</button>
+      ${space.type !== "utility" ? `<button class="btn btn-ghost" id="delete-space-btn" style="padding:8px;">${Icon("trash", { size: 16 })}</button>` : ""}
     </div>
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Routines</span><button class="chip" id="add-routine-btn">${Icon("plus", { size: 12 })} Add</button></div>

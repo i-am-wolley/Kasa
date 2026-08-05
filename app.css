@@ -891,11 +891,88 @@ h1, h2, h3, p { margin: 0; }
 
 .habit-cell.done { background: var(--done); }
 /* A day the habit's own frequency never scheduled (2026-08-05, user
-   request) — visually distinct from a plain missed day, not just a
-   lighter shade of the same "empty" fill, so it doesn't read as neglect. */
-.habit-cell.not-scheduled { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+   request: "let the unplanned be gray") — plain gray, distinct from both
+   a genuinely missed day and the base unstyled cell. */
+.habit-cell.not-scheduled { background: var(--surface-sunk); }
+/* A scheduled day in the past that wasn't done — the app's existing
+   themed danger red (2026-08-05, user request: "make sure the red goes
+   with the theme"), same token used for delete buttons elsewhere rather
+   than a new one-off hex. */
+.habit-cell.missed { background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger); }
 .habit-cell.today { box-shadow: 0 0 0 1.5px var(--gold); }
-.habit-cell.today.not-scheduled { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1.5px var(--gold); }
+
+/* ---- Welcome gate (2026-08-05) — sign-in placeholder + household
+   join-or-create, the very first screen a new browser sees. Centered card,
+   generous padding, same warm-paper/pill-button language as the rest of
+   the app rather than a separate visual style for "onboarding." ---------- */
+
+.welcome-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 15vh 24px 24px;
+}
+
+.welcome-mark {
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-card);
+  background: var(--gold-soft);
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+
+.welcome-wordmark {
+  font-size: var(--fs-title);
+  font-weight: var(--fw-heavy);
+  letter-spacing: var(--ls-tight);
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.welcome-tagline {
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-normal);
+  margin-bottom: 32px;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.welcome-btn { width: 100%; }
+
+.welcome-skip {
+  background: none;
+  border: none;
+  color: var(--ink-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  padding: 10px;
+  cursor: pointer;
+  min-height: var(--tap-min);
+}
+
+.welcome-or {
+  color: var(--ink-faint);
+  font-size: var(--fs-micro);
+  margin: 4px 0;
+}
+
+.welcome-code-input {
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-family: var(--font-mono);
+  font-size: var(--fs-heading);
+}
 
 /* ---- Skeleton loading shimmer ------------------------------------------- */
 

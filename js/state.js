@@ -23,6 +23,20 @@ function withCatalogLink(record, type) {
   return { ...record, catalogKey: entry.key, icon: record.icon || entry.icon };
 }
 
+// Household invite code — 6-char alphanumeric, same shape as Miso's own
+// households/{code} pattern (2026-08-05, user request). Charset excludes
+// visually-ambiguous characters (0/O, 1/I/L) — a code meant to be read off
+// one screen and typed into another shouldn't hinge on font rendering.
+// Session-only like everything else pre-Firebase (Phase 4): this doesn't
+// get looked up anywhere yet, it's just displayed so the shape of the
+// real thing exists before the backend that makes it functional does.
+const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function generateHouseholdCode() {
+  let code = "";
+  for (let i = 0; i < 6; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return code;
+}
+
 // Backfills expectedLifeYears from the catalog's researched default for any
 // asset that doesn't already have one set (2026-08-05, user request: keep
 // existing assets auto-updated from catalog research rather than only new
@@ -35,7 +49,7 @@ function withExpectedLife(asset) {
 }
 
 const state = {
-  household,
+  household: { code: generateHouseholdCode(), ...household },
   spaces: spaces.map((s) => ({ ...s })),
   items: items.map((i) => withCatalogLink({ ...i }, "item")),
   assets: assets.map((a) => withExpectedLife(withCatalogLink({ ...a }, "asset"))),
@@ -239,7 +253,7 @@ function seedHousehold({ spaces, items, assets, routines, answers, packVersions 
   Object.assign(state.household, {
     homeType: answers.homeType, size: answers.size, whoLivesHere: answers.whoLivesHere,
     householdHelp: answers.householdHelp, has: answers.has, city: answers.city,
-    packVersions,
+    packVersions, code: generateHouseholdCode(),
   });
   regenerate();
   notify();
@@ -270,7 +284,16 @@ function updateSpace(id, patch) {
 // Deleting a space either reassigns its contents to `reassignToId` or
 // deletes them with it (memo §4.4: "Deleting a space asks whether to
 // delete contents or move them").
+// Utility is mandatory (2026-08-05, user request) — "Uses this stock" in
+// the routine builder now always offers Utility's items alongside a
+// routine's own room (cleaning liquids etc. that live there, not
+// duplicated into every room), so a household without a Utility space
+// would silently lose that half of the feature. Guarded here, the actual
+// mutation boundary, not just hidden in the UI — house.js also disables
+// the delete button so the guard is never the first thing a user hits.
 function deleteSpace(id, { reassignToId = null } = {}) {
+  const space = byId(state.spaces, id);
+  if (space?.type === "utility") return;
   const moveOrDrop = (list) => {
     if (reassignToId) {
       for (const x of list) if (x.spaceId === id) x.spaceId = reassignToId;

@@ -5,7 +5,7 @@
 
 import { loadPacks, generateFromArchetype } from "../packs.js";
 import { seedHousehold, getState } from "../state.js";
-import { chipGroup, readChipGroup, wireChipGroup, field, textInput } from "../ui/components.js";
+import { chipGroup, readChipGroup, wireChipGroup, field, textInput, showToast } from "../ui/components.js";
 import { Icon } from "../ui/icons.js";
 
 const QUESTIONS = [
@@ -151,6 +151,10 @@ function wireEvents() {
         packVersions,
       });
       step = "questions";
+      // seedHousehold() generates a fresh 6-char code (state.js) — surfaced
+      // here so a brand-new household sees it once, same "nice and smooth"
+      // first-run spirit the welcome gate asks for (2026-08-05).
+      showToast(`Household created — code ${getState().household.code}`, { durationMs: 4000 });
       onDone?.();
     });
   }

@@ -15,6 +15,13 @@ import { isHabitDoneOn, isHabitScheduledOn } from "../state.js";
 // instead of looking like a missed one. weekly_count habits have no
 // specific scheduled days by design (matches isHabitScheduledOn's own
 // exception), so every day stays in the plain done/not-done binary for them.
+//
+// Three visual states, not two (2026-08-05 follow-up: "let the unplanned
+// be gray and missed be red"): a scheduled day in the past that wasn't
+// done is genuinely missed (red); a day never scheduled at all is neutral,
+// not a failure (gray); today, if not yet done, is neither — the day isn't
+// over, so it stays unstyled (just the gold "today" ring) rather than
+// jumping straight to "missed" before there's still time to do it.
 function habitGridHtml(habit, { days = 72 } = {}) {
   const cells = [];
   const today = new Date();
@@ -27,8 +34,18 @@ function habitGridHtml(habit, { days = 72 } = {}) {
     const done = isHabitDoneOn(habit.id, dateStr);
     const isToday = i === 0;
     const scheduled = d >= createdDate && isHabitScheduledOn(habit, d);
-    const cls = done ? "done" : !scheduled ? "not-scheduled" : "";
-    const label = done ? " — done" : !scheduled ? " — not planned" : " — not done";
+    let cls = "";
+    let label = " — not done yet";
+    if (done) {
+      cls = "done";
+      label = " — done";
+    } else if (!scheduled) {
+      cls = "not-scheduled";
+      label = " — not planned";
+    } else if (!isToday) {
+      cls = "missed";
+      label = " — missed";
+    }
     cells.push(`<div class="habit-cell${cls ? ` ${cls}` : ""}${isToday ? " today" : ""}" title="${dateStr}${label}"></div>`);
   }
   return `<div class="habit-grid">${cells.join("")}</div>`;

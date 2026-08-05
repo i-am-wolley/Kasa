@@ -4,6 +4,7 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
+import { getState } from "./state.js";
 import { openSheet, closeSheet } from "./ui/components.js";
 import { mount as mountToday } from "./routes/today.js";
 import { mount as mountHouse } from "./routes/house.js";
@@ -13,6 +14,17 @@ import { mount as mountWishlist } from "./routes/wishlist.js";
 import { mount as mountPeople } from "./routes/people.js";
 import { mount as mountAssets } from "./routes/assets.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
+import { mount as mountWelcome } from "./routes/welcome.js";
+
+// A new browser sees Welcome → (Skip) → Join/Create household → the
+// existing 6-question onboarding, once (2026-08-05, user request: "bring
+// the onboarding as first page for new users"). Gated on a localStorage
+// flag rather than any real auth/household check — there's no backend
+// yet (Phase 4) to actually know if this browser is "already part of a
+// household," so this is honestly just "has this browser seen the intro
+// once," not a real session check. Re-running onboarding later (via More)
+// is a separate, already-existing path and is unaffected by this gate.
+const INTRO_DONE_KEY = "kasa_intro_done";
 
 // Wishlist takes the 5th tab slot that "More" used to occupy — More moved
 // to a top-left header button instead (2026-08-03, user request), freeing
@@ -58,9 +70,14 @@ function renderPlaceholder(el, title, note) {
 }
 
 function openMoreSheet() {
+  // Household code surfaced here (2026-08-05) rather than only in the
+  // one-time creation toast — somewhere to actually find it again later,
+  // even though nothing can look it up yet without Firebase (Phase 4).
+  const code = getState().household.code;
   openSheet({
     title: "More",
     bodyHtml: `
+      ${code ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:12px;">Household code: <span class="font-num" style="color:var(--ink-muted);letter-spacing:0.1em;">${code}</span></p>` : ""}
       <div>
         ${MORE_ITEMS.map(
           (item) => `
@@ -124,11 +141,38 @@ function switchTab(tabId) {
   renderTabBar(document.getElementById("tabbar"));
 }
 
-function boot() {
-  loadPacks(); // fire-and-forget — cached for roomTemplates.js's sync reads
+// The tab bar and header "More" button don't make sense before a
+// household exists — left empty/hidden during Welcome and first-run
+// onboarding rather than showing 5 tabs with nothing behind them yet.
+function showWelcome() {
+  document.getElementById("tabbar").innerHTML = "";
+  document.getElementById("app-more-btn").style.display = "none";
+  mountWelcome(document.getElementById("screen-mount"), { onCreateNew: showFirstRunOnboarding });
+}
+
+function showFirstRunOnboarding() {
+  mountOnboard(document.getElementById("screen-mount"), { onDone: finishIntro });
+}
+
+function finishIntro() {
+  localStorage.setItem(INTRO_DONE_KEY, "1");
+  startApp();
+}
+
+function startApp() {
   renderTabBar(document.getElementById("tabbar"));
+  document.getElementById("app-more-btn").style.display = "";
   mountScreen("today");
   document.getElementById("app-more-btn").addEventListener("click", openMoreSheet);
+}
+
+function boot() {
+  loadPacks(); // fire-and-forget — cached for roomTemplates.js's sync reads
+  if (localStorage.getItem(INTRO_DONE_KEY)) {
+    startApp();
+  } else {
+    showWelcome();
+  }
 }
 
 boot();

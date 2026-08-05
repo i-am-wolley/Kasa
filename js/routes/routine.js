@@ -90,13 +90,27 @@ function triggerParamsHtml(routine) {
   `;
 }
 
-// Only items already in the routine's own room are offered — a routine in
-// the Bathroom shouldn't be able to consume Kitchen stock (2026-08-03,
-// user request). Re-rendered live if the Space chip changes.
+// Items from the routine's own room, PLUS Utility (2026-08-05, user
+// request: "make the stocks from that room and utility come up... certain
+// cleaning liquids... might not be kept in other spaces") — Utility is the
+// one room a routine anywhere in the house can reasonably reach into, since
+// that's where shared cleaning supplies tend to actually live rather than
+// being duplicated into every room. Still deliberately NOT every room (a
+// Bathroom routine still can't see Kitchen-only stock) — just the routine's
+// own space plus this one shared exception. Items already in Utility show
+// a "(Utility)" suffix when the routine's own room isn't Utility itself, so
+// a mixed list doesn't read as "these are all in this room." Re-rendered
+// live if the Space chip changes.
 function requiresItemsFieldHtml(spaceId, selectedIds) {
   const state = getState();
-  const items = state.items.filter((i) => i.spaceId === spaceId);
-  return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options: items.map((i) => ({ value: i.id, label: i.name })), value: selectedIds, multi: true }));
+  const utilitySpace = state.spaces.find((s) => s.type === "utility");
+  const relevantSpaceIds = new Set([spaceId, utilitySpace?.id].filter(Boolean));
+  const items = state.items.filter((i) => relevantSpaceIds.has(i.spaceId));
+  const options = items.map((i) => ({
+    value: i.id,
+    label: i.spaceId !== spaceId && i.spaceId === utilitySpace?.id ? `${i.name} (Utility)` : i.name,
+  }));
+  return field("Uses this stock (optional)", chipGroup({ name: "requiresItemIds", options, value: selectedIds, multi: true }));
 }
 
 function routineFieldsHtml(routine, spaceId, state) {
