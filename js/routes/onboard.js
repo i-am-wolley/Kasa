@@ -213,7 +213,16 @@ function wireEvents() {
       });
     });
 
+    // Re-entrancy guard (2026-08-08) — same reasoning as house.js's own
+    // room-template save handler: nothing previously stopped a second tap
+    // before the screen actually moved on from double-firing this.
+    // seedHousehold() itself is idempotent per house (a second call with
+    // the same working `spaces` list just replaces the same content again,
+    // not duplicates), but a double-fire would still double-call `onDone?.()`.
+    let confirming = false;
     document.getElementById("confirm-btn").addEventListener("click", () => {
+      if (confirming) return;
+      confirming = true;
       const packVersions = Object.fromEntries(generated.usedPackIds.map((id) => [id, 1]));
       seedHousehold({
         spaces,

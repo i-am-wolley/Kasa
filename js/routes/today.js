@@ -317,7 +317,9 @@ function statRowHtml(state) {
   const openRows = [...openRoutineRows, ...openTaskRows];
 
   const overdueCount = openRows.filter((r) => r.state === "overdue").length;
-  const dueTodayCount = openRows.filter((r) => r.state === "due").length;
+  // Same literal-today fix as render()'s own due bucket, so the stat tile
+  // and the section beneath it always agree.
+  const dueTodayCount = openRows.filter((r) => r.state === "due" && r.offset === 0).length;
   const weekCount = openRows.filter((r) => r.offset >= 0 && r.offset <= 6).length;
 
   const withinLast7 = (dateStr) => {
@@ -399,7 +401,14 @@ function render() {
   // date offset (0-6 days out), which also surfaces "pending" rows whose
   // window hasn't opened yet but whose due date already falls this week
   // (2026-08-05, user request: a toggle to see the whole week at a glance).
-  const due = view === "week" ? rows.filter((r) => r.offset >= 0 && r.offset <= 6) : rows.filter((r) => r.state === "due");
+  // "Due today" means literally due today, not merely inside the engine's
+  // multi-day due-window (2026-08-08, user report: "only today should
+  // come not the entire week") — a row whose actual due date is a few
+  // days out but already inside its `windowDays` head-start (memo §5.1)
+  // used to qualify as `state === "due"` and leak into this section early.
+  // The "This week" toggle is the intentional place to look ahead; the
+  // default view now strictly checks the literal day offset.
+  const due = view === "week" ? rows.filter((r) => r.offset >= 0 && r.offset <= 6) : rows.filter((r) => r.state === "due" && r.offset === 0);
   const dueHabits = visibleDueHabits(state);
 
   mountEl.innerHTML = `

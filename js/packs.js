@@ -5,6 +5,7 @@
 // test, memo build-plan Phase 3).
 
 import { getOrCreate } from "./catalog.js";
+import { genId } from "./state.js";
 
 const PACK_IDS = [
   "core", "bath", "laundry", "help", "appliances",
@@ -61,10 +62,34 @@ function packApplies(pack, answers) {
   return false;
 }
 
-let idSeq = 0;
+// 2026-08-08 fix — REAL BUG FOUND: this used to be a bare local counter
+// (`${prefix}_${idSeq}`, idSeq starting at 0 every fresh page load), with
+// no session differentiation at all. Any two separate app sessions that
+// each ran generateFromArchetype() (onboarding, or houses.js's "Add
+// house", which runs the exact same wizard) produced IDENTICAL space/
+// asset/item/routine ids for their Nth/Nth+1/etc. generated entity —
+// "sp_1", "sp_2", "sp_3"... every single time, regardless of what already
+// existed in the household from an earlier session. Reproduced directly:
+// a household with an existing "studio" house (spaces sp_1/sp_3/sp_4/
+// sp_10/sp_19/sp_60, from an earlier onboarding run) would get a BRAND
+// NEW house's spaces assigned those exact same ids again on this session's
+// very first onboarding run, since idSeq restarts at 0 on every load. That
+// silently creates two DIFFERENT space objects (different houseId,
+// different name) sharing one id in `state.spaces` — every byId() lookup
+// for that id (used constantly: icon resolution, space-name display,
+// edit-sheet targeting, delete) then resolves to whichever one Array.find
+// hits first, cross-contaminating data between the two houses. This is
+// very plausibly the root cause behind the "duplication happening on
+// mobile, not reproducible on web" report — a fresh app open (much more
+// frequent on mobile, where the OS/browser aggressively kills backgrounded
+// PWA tabs) is exactly the trigger, while a desktop browser tab tends to
+// stay in one long-lived session where idSeq just keeps counting up and
+// never collides with itself. Fixed by delegating to state.js's own
+// genId() (`${prefix}_${Date.now().toString(36)}${idSeq}` — a session
+// timestamp baked into every id, not just a bare counter), the same
+// generator every other entity in the app already safely uses.
 function makeId(prefix) {
-  idSeq += 1;
-  return `${prefix}_${idSeq}`;
+  return genId(prefix);
 }
 
 // How many separate bedroom spaces a home's size implies (2026-08-06, user

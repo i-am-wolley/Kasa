@@ -3,7 +3,7 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
-import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, updateNotifySettings, setSmoothingMode, byId } from "./state.js";
+import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, updateNotifySettings, setSmoothingMode, addPersonForJoiningUser, byId } from "./state.js";
 import { onAuthChange, completeRedirectSignIn, signOutUser } from "./auth.js";
 import { getUserRecord, createHouseholdRemote, joinHouseholdRemote, loadHouseholdRemote, startAutoSave } from "./db.js";
 import * as notify from "./notify.js";
@@ -355,6 +355,10 @@ async function joinAndEnter(code, user) {
   const data = await loadHouseholdRemote(code);
   if (data) hydrateState(data);
   startAutoSave(code, data);
+  // Auto-add the joining person to the roster (2026-08-08, user request) —
+  // called after startAutoSave so the mutation's notify() actually reaches
+  // a live save subscription instead of firing before one exists.
+  addPersonForJoiningUser({ name: user.displayName, email: user.email });
   currentUser = user;
   startApp();
 }
@@ -403,6 +407,11 @@ function boot() {
           const data = await loadHouseholdRemote(record.householdCode);
           if (data) hydrateState(data);
           startAutoSave(record.householdCode, data);
+          // Defensive backfill (2026-08-08) — covers a household that was
+          // joined before this feature existed; a no-op (idempotent by
+          // email) for every normal returning session where the person
+          // record is already there.
+          addPersonForJoiningUser({ name: user.displayName, email: user.email });
           currentUser = user;
           startApp();
           return;

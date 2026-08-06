@@ -863,14 +863,6 @@ h1, h2, h3, p { margin: 0; }
   gap: 6px;
 }
 
-/* Stock's consumption-rate period chips (day/week/month/usage) — 4 chips
-   need to share one line next to the rate number input on a phone-width
-   sheet, so this variant runs tighter than the default .chip (2026-08-03,
-   user report: they didn't fit on one line on mobile). nowrap prevents the
-   group falling back to 2 rows if it's ever a pixel short. */
-.rate-period-group.chip-group { flex-wrap: nowrap; gap: 4px; }
-.rate-period-group .chip { padding: 4px 6px; font-size: 10px; flex: 1; justify-content: center; }
-
 /* ---- Catalog typeahead dropdown ------------------------------------------ */
 
 .catalog-suggestions {

@@ -352,7 +352,21 @@ const ITEMS = [
 // the same"). A real backend would persist this per-household in Firestore
 // (Phase 4); for now it lives for the life of the tab.
 const custom = { asset: [], item: [] };
+// 2026-08-08 fix — same class of bug found and fixed in packs.js: a bare
+// per-session counter with no session differentiation. Unlike `custom`
+// itself (genuinely session-only, per the comment above), the generated
+// KEY gets stamped onto real items/assets via `catalogKey`, and those DO
+// persist to Firestore — so two different real-world custom entries typed
+// in two separate sessions (customSeq resetting to 0 each time) could both
+// mint "ITM-CUSTOM-1", silently aliasing them for lookup/dedup purposes
+// (e.g. the "already tracked in this room" check compares catalogKey).
+// Timestamp-salted the same way state.js's genId() already is, so a fresh
+// session's counter can never collide with an earlier session's.
 let customSeq = 0;
+function nextCustomSuffix() {
+  customSeq += 1;
+  return `${Date.now().toString(36)}${customSeq}`;
+}
 
 function baseFor(type) {
   return type === "asset" ? ASSETS : ITEMS;
@@ -388,9 +402,8 @@ function getOrCreate(name, type) {
   const existing = findExact(trimmed, type);
   if (existing) return existing;
 
-  customSeq += 1;
   const entry = {
-    key: `${type === "asset" ? "AST" : "ITM"}-CUSTOM-${customSeq}`,
+    key: `${type === "asset" ? "AST" : "ITM"}-CUSTOM-${nextCustomSuffix()}`,
     name: trimmed,
     icon: type === "asset" ? "customAsset" : "customItem",
     category: "custom",

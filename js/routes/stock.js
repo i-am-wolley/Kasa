@@ -40,11 +40,9 @@ function projectedUsesLeft(item) {
 }
 
 // burnRate is always stored per-day (projectedDaysLeft etc. depend on that);
-// the day/week/month chips are purely a display/entry convenience (user
-// request: "can i select perday/week/month?"). "/usage" is a different
-// axis entirely — not a time rate, so it's never run through this
-// conversion — see openItemSheet's period-switch handler.
-const PERIOD_DAYS = { day: 1, week: 7, month: 30 };
+// "Per month" is purely a display/entry convenience converted through this
+// on the way in — see consumeModeToFields below.
+const PERIOD_DAYS = { day: 1, month: 30 };
 function toPerDay(amount, period) {
   return amount / (PERIOD_DAYS[period] || 1);
 }
@@ -53,6 +51,37 @@ function fromPerDay(perDay, period) {
 }
 function round2(n) {
   return Math.round(n * 100) / 100;
+}
+
+// Consumption model, reworked for one intuitive control instead of three
+// (a rate number + a day/week/month/usage period chip + a separate
+// "auto-deplete" toggle) — 2026-08-08, user request: "keep it simple...
+// intuitive." One "Consumption" chip picks Off / Per day / Per month /
+// Per routine use; picking Day or Month always live-depletes the actual
+// quantity (the old "rate set but not actually counting down" middle
+// state is gone — if you told it a rate, it counts down). Countable units
+// (piece/pack/roll) and measured units (ml/g/kg/litre) share the exact
+// same three modes, just with a label that reads naturally either way
+// ("how many are used" vs. "how much (ml) is used").
+const COUNTABLE_UNITS = ["piece", "pack", "roll"];
+function isCountableUnit(unit) {
+  return COUNTABLE_UNITS.includes(unit);
+}
+function consumeAmountLabel(unit, mode) {
+  const what = isCountableUnit(unit) ? "How many are used" : `How much (${unit}) is used`;
+  if (mode === "usage") return `${what} each time a linked routine's "Uses this stock" completes.`;
+  return `${what} per ${mode === "month" ? "month" : "day"} — quantity counts down automatically.`;
+}
+
+// Derives an item's current consumption mode + display amount from its
+// stored fields, for pre-filling the edit sheet. Legacy items that had a
+// rate but autoDeplete off (the old middle state) just show as "Per day"/
+// "Per month" now — opening and re-saving turns live depletion on, which
+// is the whole point of the simplification, not a bug.
+function consumeModeOf(item) {
+  if (item?.perUseQty) return { mode: "usage", amount: item.perUseQty };
+  if (item?.burnRate) return { mode: "day", amount: round2(item.burnRate) };
+  return { mode: "off", amount: "" };
 }
 
 // Space options scoped to the currently-visible house(s), plus the item's
@@ -170,11 +199,8 @@ function lastRestockedLabel(item) {
 function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null, onSaved = null } = {}) {
   const state = getState();
   const isBinary = !!item?.binary;
-  // "/usage" means the number is "units consumed per completion of a
-  // linked routine" (item.perUseQty), not a time rate — a different field
-  // entirely from burnRate, so an item is in one mode or the other.
-  const initialPeriod = item?.perUseQty ? "usage" : "day";
-  const initialRateValue = initialPeriod === "usage" ? item.perUseQty : (item?.burnRate || "");
+  const initialUnit = item?.unit ?? "piece";
+  const { mode: initialMode, amount: initialAmount } = consumeModeOf(item);
   openSheet({
     title: item ? "Edit item" : "Add item",
     bodyHtml: `
@@ -184,19 +210,15 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
         ${field("Space", chipGroup({ name: "itemSpaceId", options: itemSpaceOptions(state, item?.spaceId), value: item?.spaceId ?? defaultSpaceId ?? [...visibleSpaceIds(state)][0] ?? state.spaces[0]?.id }))}
         ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
         <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
-          ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: item?.unit ?? "piece" }))}
+          ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: initialUnit }))}
           ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1, min: 0 }))}
-          ${field("Reorder at (par level)", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1, min: 0 }))}
+          ${field("Reorder when this many are left", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1, min: 0 }))}
           ${field(
-            "Consumption rate (optional)",
-            `<div style="display:flex;gap:6px;">
-              <div style="width:70px;flex-shrink:0;">${textInput({ id: "f-burnrate", type: "number", value: initialRateValue, placeholder: "0.5" })}</div>
-              <div class="rate-period-group" style="flex:1;min-width:0;">${chipGroup({ name: "burnPeriod", options: [{ value: "day", label: "/day" }, { value: "week", label: "/week" }, { value: "month", label: "/month" }, { value: "usage", label: "/usage" }], value: initialPeriod })}</div>
-            </div>
-            <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">"/usage" = units used each time a linked routine's "Uses this stock" completes — not a day rate.</p>
-            <div id="auto-deplete-row" style="margin-top:8px;display:${initialPeriod === "usage" ? "none" : "block"};">
-              <button type="button" class="chip" id="auto-deplete-toggle" aria-pressed="${item?.autoDeplete ? "true" : "false"}">${Icon("refresh", { size: 12 })} Auto-deplete on this schedule</button>
-              <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">When on, quantity actually counts down over time at this rate — not just the "~days left" estimate. Requires a day/week/month rate filled in.</p>
+            "Consumption",
+            `${chipGroup({ name: "consumeMode", options: [{ value: "off", label: "Off" }, { value: "day", label: "Per day" }, { value: "month", label: "Per month" }, { value: "usage", label: "Per routine use" }], value: initialMode })}
+            <div id="consume-amount-row" style="margin-top:8px;display:${initialMode === "off" ? "none" : "block"};">
+              ${textInput({ id: "f-consume-amount", type: "number", value: initialAmount, placeholder: "e.g. 1", min: 0 })}
+              <p id="consume-amount-label" style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">${consumeAmountLabel(initialUnit, initialMode === "off" ? "day" : initialMode)}</p>
             </div>`,
           )}
         </div>
@@ -210,8 +232,7 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
     `,
   });
   const root = document.getElementById("sheet-root");
-  ["itemSpaceId", "unit", "trackMode", "binaryInStock"].forEach((n) => wireChipGroup(root, n));
-  wireChipGroup(root, "burnPeriod");
+  ["itemSpaceId", "unit", "trackMode", "binaryInStock", "consumeMode"].forEach((n) => wireChipGroup(root, n));
 
   // "Track as" toggles which field block shows — a stocked item is either
   // a quantity you count, or a plain yes/no you have (2026-08-03, user
@@ -224,33 +245,37 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
     });
   });
 
-  // Re-express the entered number when the period chip changes, so
-  // switching /day -> /week doesn't silently change what will be saved.
-  // "/usage" isn't a time unit, so switching into or out of it never
-  // tries to convert the number — it just changes what it means.
-  let currentPeriod = initialPeriod;
-  const autoDepleteRow = root.querySelector("#auto-deplete-row");
-  const autoDepleteToggle = root.querySelector("#auto-deplete-toggle");
-  root.querySelectorAll('[data-field="burnPeriod"] [data-value]').forEach((btn) => {
+  // Consumption mode + unit both feed the amount field's live label
+  // ("How many are used per day" vs. "How much (ml) is used per day") —
+  // whichever changes, re-read both current values and re-render it.
+  let currentMode = initialMode;
+  let currentUnit = initialUnit;
+  const consumeAmountRow = root.querySelector("#consume-amount-row");
+  const consumeAmountLabelEl = root.querySelector("#consume-amount-label");
+  function refreshConsumeLabel() {
+    consumeAmountRow.style.display = currentMode === "off" ? "none" : "block";
+    if (currentMode !== "off") consumeAmountLabelEl.textContent = consumeAmountLabel(currentUnit, currentMode);
+  }
+  root.querySelectorAll('[data-field="consumeMode"] [data-value]').forEach((btn) => {
     btn.addEventListener("click", () => {
-      const newPeriod = btn.dataset.value;
-      if (newPeriod === currentPeriod) return;
-      if (newPeriod !== "usage" && currentPeriod !== "usage") {
-        const rateInput = root.querySelector("#f-burnrate");
-        const raw = Number(rateInput.value);
-        if (raw) rateInput.value = round2(fromPerDay(toPerDay(raw, currentPeriod), newPeriod));
+      const newMode = btn.dataset.value;
+      // Re-express the number when switching Day <-> Month specifically, so
+      // it doesn't silently mean something different once saved (e.g. "5"
+      // meant /day a moment ago, now means /month unless converted).
+      if ((newMode === "day" || newMode === "month") && (currentMode === "day" || currentMode === "month")) {
+        const amountInput = root.querySelector("#f-consume-amount");
+        const raw = Number(amountInput.value);
+        if (raw) amountInput.value = round2(fromPerDay(toPerDay(raw, currentMode), newMode));
       }
-      currentPeriod = newPeriod;
-      // Auto-deplete only makes sense against a day/week/month rate —
-      // "/usage" already depletes automatically via routine completion.
-      const isUsage = newPeriod === "usage";
-      autoDepleteRow.style.display = isUsage ? "none" : "block";
-      if (isUsage) autoDepleteToggle.setAttribute("aria-pressed", "false");
+      currentMode = newMode;
+      refreshConsumeLabel();
     });
   });
-
-  autoDepleteToggle.addEventListener("click", () => {
-    autoDepleteToggle.setAttribute("aria-pressed", autoDepleteToggle.getAttribute("aria-pressed") === "true" ? "false" : "true");
+  root.querySelectorAll('[data-field="unit"] [data-value]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentUnit = btn.dataset.value;
+      refreshConsumeLabel();
+    });
   });
 
   const nameInput = root.querySelector("#f-item-name");
@@ -263,9 +288,19 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       if (item) return;
       const unitGroup = root.querySelector('[data-field="unit"]');
       unitGroup.querySelectorAll("[data-value]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === entry.unit)));
+      currentUnit = entry.unit;
+      refreshConsumeLabel();
       if (entry.parLevel != null) root.querySelector("#f-par").value = entry.parLevel;
       if (entry.parLevel != null) root.querySelector("#f-qty").value = entry.parLevel;
-      if (entry.defaultBurnRate != null) root.querySelector("#f-burnrate").value = entry.defaultBurnRate;
+      if (entry.defaultBurnRate != null) {
+        root.querySelector("#f-consume-amount").value = entry.defaultBurnRate;
+        // A catalog default rate means something to consume, so switch the
+        // mode chip to Day too — otherwise the amount would be filled in
+        // but hidden behind an untouched "Off" selection.
+        currentMode = "day";
+        root.querySelectorAll('[data-field="consumeMode"] [data-value]').forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === "day")));
+        refreshConsumeLabel();
+      }
     },
   });
 
@@ -302,16 +337,20 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
     } else {
       qty = Math.max(0, Number(root.querySelector("#f-qty").value) || 0);
       parLevel = Math.max(0, Number(root.querySelector("#f-par").value) || 1);
-      const rateRaw = Number(root.querySelector("#f-burnrate").value) || 0;
-      const period = readChipGroup(root, "burnPeriod") || "day";
-      burnRate = period !== "usage" && rateRaw ? toPerDay(rateRaw, period) : 0;
-      perUseQty = period === "usage" ? rateRaw : 0;
-
-      autoDeplete = autoDepleteToggle.getAttribute("aria-pressed") === "true";
-      if (autoDeplete && (period === "usage" || !rateRaw)) {
-        showToast("Auto-deplete needs a day/week/month rate filled in first");
+      const mode = readChipGroup(root, "consumeMode") || "off";
+      const amountRaw = Math.max(0, Number(root.querySelector("#f-consume-amount").value) || 0);
+      if (mode !== "off" && !amountRaw) {
+        showToast("Enter how much is used, or set Consumption back to Off");
         return;
       }
+      // Per day/Per month both live-deplete the actual quantity now — the
+      // old separate "rate set but not counting down" state is gone
+      // (2026-08-08, user request: "keep it simple"). Per routine use still
+      // only depletes when a linked routine's "Uses this stock" completes,
+      // same as before.
+      burnRate = mode === "day" ? amountRaw : mode === "month" ? toPerDay(amountRaw, "month") : 0;
+      perUseQty = mode === "usage" ? amountRaw : 0;
+      autoDeplete = mode === "day" || mode === "month";
       // Fresh baseline when just turning it on (or on a new item); keep the
       // existing checkpoint if it was already running so an unrelated edit
       // doesn't reset how much time has "counted" toward depletion.

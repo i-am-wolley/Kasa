@@ -10,7 +10,7 @@
 // an email on file for that; help (maid/cook/driver) is added by a member
 // and never needs one of its own.
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, hydrateState, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, hydrateState, addPersonForJoiningUser, byId } from "../state.js";
 import { getCurrentUser } from "../auth.js";
 import { joinHouseholdRemote, loadHouseholdRemote, startAutoSave, stopAutoSave } from "../db.js";
 import { Icon } from "../ui/icons.js";
@@ -144,6 +144,8 @@ function openJoinHouseholdSheet() {
       const data = await loadHouseholdRemote(code);
       if (data) hydrateState(data);
       startAutoSave(code, data);
+      // Same auto-add-to-roster as boot.js's own join flow (2026-08-08).
+      addPersonForJoiningUser({ name: user.displayName, email: user.email });
       closeSheet();
       showToast(`Joined household ${code}`);
     } catch (err) {

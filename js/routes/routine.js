@@ -158,8 +158,18 @@ function spaceOptions(state, currentSpaceId) {
     });
 }
 
+// Whole home in whichever house is currently uniquely active, else the
+// household's first house (2026-08-08, user request: "for routine let
+// space be mandatory — and default is whole home") — resolved the same
+// way requiresItemsFieldHtml resolves Utility, just for the whole_home
+// type instead.
+function defaultWholeHomeSpaceId(state) {
+  const activeHouseId = state.household.activeHouseIds?.length === 1 ? state.household.activeHouseIds[0] : state.houses[0]?.id;
+  return state.spaces.find((s) => s.type === "whole_home" && s.houseId === activeHouseId)?.id ?? null;
+}
+
 function routineFieldsHtml(routine, spaceId, state) {
-  const initialSpaceId = routine?.spaceId ?? spaceId;
+  const initialSpaceId = routine?.spaceId ?? spaceId ?? defaultWholeHomeSpaceId(state);
   return `
     ${field("Space", chipGroup({ name: "spaceId", options: spaceOptions(state, initialSpaceId), value: initialSpaceId }))}
     ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
@@ -402,6 +412,11 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       return;
     }
 
+    const routineSpaceId = readChipGroup(root, "spaceId");
+    if (!routineSpaceId) {
+      showToast("Pick a space");
+      return;
+    }
     if (!root.querySelector("#f-startDate").value) {
       showToast("Pick a start date");
       return;
@@ -409,7 +424,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
 
     const fields = {
       title,
-      spaceId: readChipGroup(root, "spaceId"),
+      spaceId: routineSpaceId,
       assetId: readChipGroup(root, "assetId") || null,
       trigger: buildTrigger(root),
       effort: Number(readChipGroup(root, "effort")) || 1,

@@ -691,6 +691,32 @@ function markAssetServiced(id) {
   notify();
 }
 
+// A new person joining an existing household (2026-08-08, user request:
+// "when a new person logs in and adds themselves to a household with new
+// email id, new person to be created with their first and last name and
+// email automatically") — resetForNewHousehold above already does the
+// equivalent for a brand-new household's very first member; this is the
+// same idea for someone joining one that already exists. Skipped entirely
+// if a person with this email is already on the roster (the household
+// owner pre-added them as Help/Member in anticipation, or they're
+// rejoining after already having a record) — never creates a second entry
+// for the same real person. `name` is whatever Google's own displayName
+// gives (already first+last together — the Person model has no separate
+// first/last fields to split it into).
+function addPersonForJoiningUser({ name, email }) {
+  if (!email) return null;
+  const existing = state.people.find((p) => p.email && p.email.toLowerCase() === email.toLowerCase());
+  if (existing) return existing;
+  const person = {
+    id: genId("u"), kind: "member", name: name || email, role: null, schedule: null, email,
+    leave: [], payDay: null, payAmount: null, advances: [], handoverRoutineIds: [],
+    avatarColor: "var(--gold)",
+  };
+  state.people.push(person);
+  notify();
+  return person;
+}
+
 // ---- person CRUD (memo §2.1) --------------------------------------------
 
 function addPerson(fields) {
@@ -1014,6 +1040,7 @@ export {
   serializeState,
   hydrateState,
   resetForNewHousehold,
+  addPersonForJoiningUser,
   updateHouseholdName,
   updateNotifySettings,
   setSmoothingMode,

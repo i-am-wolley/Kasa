@@ -55,7 +55,10 @@ function gridHtml(state) {
   // default) stays exactly as uncluttered as it always was.
   const visible = visibleSpaceIds(state);
   const multiHouse = state.household.activeHouseIds?.length > 1 || state.houses.length > 1 && !state.household.activeHouseIds?.length;
-  const spaces = state.spaces.filter((sp) => visible.has(sp.id));
+  // Alphabetical (2026-08-08, user request) — was insertion order before,
+  // which meant a newly added space always landed at the end regardless of
+  // its name.
+  const spaces = state.spaces.filter((sp) => visible.has(sp.id)).sort((a, b) => a.name.localeCompare(b.name));
   const cards = spaces
     .map((sp) => {
       const houseName = multiHouse ? byId(state.houses, sp.houseId)?.name : null;
@@ -231,7 +234,26 @@ function openRoomTemplateSheet(space, template) {
     });
   });
 
-  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+  // Re-entrancy + content-level dedup guard (2026-08-08, user report: "new
+  // spaces are added, there is some duplication... routines are created
+  // twice" — not reproducible on web, but this handler ran every addItem/
+  // addAsset/addRoutine unconditionally in a synchronous loop with nothing
+  // stopping a second tap before `closeSheet()` at the end from re-running
+  // the whole thing, and mobile touchscreens are exactly where a double-tap
+  // on a button that hasn't visually responded yet is common). `saving`
+  // blocks a literal re-entrant call outright; the item/routine dedup
+  // checks below are a second, independent layer in case two genuinely
+  // separate taps both land before the first one's `disabled` takes visual
+  // effect. Assets are deliberately NOT deduped here — Round 7's own "no
+  // warning, add freely" call for assets (two ACs in one room is a real,
+  // legitimate case) stands; the `saving` guard alone still protects them
+  // against a same-tap double-fire.
+  let saving = false;
+  const saveBtn = root.querySelector('[data-action="save"]');
+  saveBtn.addEventListener("click", () => {
+    if (saving) return;
+    saving = true;
+    saveBtn.disabled = true;
     let added = 0;
 
     // Items first, then assets/routines — a suggestedRoutines lookup below
@@ -241,6 +263,10 @@ function openRoomTemplateSheet(space, template) {
     root.querySelectorAll('[data-item-index][aria-pressed="true"]').forEach((btn) => {
       const entry = itemEntries[Number(btn.dataset.itemIndex)];
       if (!entry) return;
+      // Same per-room duplicate-stock guard stock.js's own openItemSheet
+      // enforces (Round 7) — addItem() itself has no such check, so a
+      // direct caller like this one needs its own.
+      if (getState().items.some((i) => i.spaceId === space.id && i.catalogKey === entry.key)) return;
       addItem({ name: entry.name, catalogKey: entry.key, icon: entry.icon, spaceId: space.id, unit: entry.unit, qty: entry.parLevel, packSize: entry.packSize, parLevel: entry.parLevel, burnRate: entry.defaultBurnRate ?? 0 });
       added += 1;
     });
@@ -260,6 +286,7 @@ function openRoomTemplateSheet(space, template) {
       // request — routines shouldn't silently link to another room's item
       // just because it shares a catalog key).
       for (const tmpl of entry.suggestedRoutines || []) {
+        if (getState().routines.some((r) => r.spaceId === space.id && r.title === tmpl.title)) continue;
         const requiresItemIds = (tmpl.requiresItemKeys || [])
           .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === space.id)?.id)
           .filter(Boolean);
@@ -279,6 +306,7 @@ function openRoomTemplateSheet(space, template) {
     root.querySelectorAll('[data-routine-index][aria-pressed="true"]').forEach((btn) => {
       const tmpl = routines[Number(btn.dataset.routineIndex)];
       if (!tmpl) return;
+      if (getState().routines.some((r) => r.spaceId === space.id && r.title === tmpl.title)) return;
       addRoutine({ title: tmpl.title, spaceId: space.id, trigger: tmpl.trigger, effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass });
       added += 1;
     });
