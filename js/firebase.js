@@ -6,7 +6,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD4DPGdrM8mmVBrffHL1TQc6Aii9kbxQDE",
@@ -19,6 +19,18 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
+// Offline persistence (2026-08-06, performance/offline-hardening pass —
+// memo §12's own acceptance test: "airplane mode: full read/write,
+// correct due dates, sync on reconnect"). Without this, Firestore only
+// queues writes made while offline in memory for the current page
+// session — a reload while still offline would lose them and fail to
+// read anything. persistentLocalCache backs reads/writes with IndexedDB,
+// so state loads from the local cache immediately even with no network,
+// and queued writes survive a reload and flush once reconnected.
+// persistentMultipleTabManager lets more than one Kasa tab on the same
+// device share the cache instead of one tab locking the others out of it.
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 export { app, auth, db };

@@ -10,7 +10,9 @@
 // an email on file for that; help (maid/cook/driver) is added by a member
 // and never needs one of its own.
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, hydrateState, byId } from "../state.js";
+import { getCurrentUser } from "../auth.js";
+import { joinHouseholdRemote, loadHouseholdRemote, startAutoSave, stopAutoSave } from "../db.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
@@ -101,19 +103,18 @@ function render() {
   wireEvents(state);
 }
 
-// Still a stub, but for a different reason than before (2026-08-05):
-// joining IS real now (welcome.js's own join step does it via
-// db.js/state.js), but switching an already-loaded, already-syncing
-// household to a different one mid-session needs its own careful handling
-// — stop the current household's autosave before hydrating a new one in,
-// or a stray save could land on the old household's Firestore doc. That's
-// a genuinely separate, riskier flow from "join once at first launch,"
-// not built yet. Use Sign out (More) and sign back in with a different
-// choice for now if you need to switch households.
+// Real now (2026-08-06, user request) — joins by code, then swaps which
+// household is actively syncing on this device: stops the CURRENT
+// household's autosave/realtime-sync first, then loads and hydrates the
+// new one, then starts sync on that instead. Stopping before switching
+// matters — without it, a save already in flight for the old household
+// (or a stray mutation firing between hydrate and re-subscribe) could
+// land on the wrong Firestore document.
 function openJoinHouseholdSheet() {
   openSheet({
     title: "Join a different household",
     bodyHtml: `
+      <p style="color:var(--ink-muted);margin-bottom:16px;">This switches your device to a different household — you'll stop seeing this one.</p>
       ${field("Household code", textInput({ id: "f-join-code-people", placeholder: "ABC123" }))}
       ${sheetActions({ saveLabel: "Join" })}
     `,
@@ -123,12 +124,33 @@ function openJoinHouseholdSheet() {
   codeInput.addEventListener("input", () => {
     codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
   });
-  root.querySelector('[data-action="save"]').addEventListener("click", () => {
-    if (!codeInput.value.trim()) {
+  const saveBtn = root.querySelector('[data-action="save"]');
+  saveBtn.addEventListener("click", async () => {
+    const code = codeInput.value.trim();
+    if (!code) {
       showToast("Enter a household code first");
       return;
     }
-    showToast("Switching households mid-session isn't wired up yet — sign out (More) and sign back in to join a different one for now.");
+    const user = getCurrentUser();
+    if (!user) {
+      showToast("You need to be signed in to join a household.");
+      return;
+    }
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Joining…";
+    try {
+      await joinHouseholdRemote({ code, uid: user.uid, email: user.email });
+      stopAutoSave(); // stop syncing the OLD household before this device starts hydrating the new one
+      const data = await loadHouseholdRemote(code);
+      if (data) hydrateState(data);
+      startAutoSave(code, data);
+      closeSheet();
+      showToast(`Joined household ${code}`);
+    } catch (err) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Join";
+      showToast(err?.message || "Couldn't join — check the code and try again.");
+    }
   });
 }
 

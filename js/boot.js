@@ -328,7 +328,7 @@ async function joinAndEnter(code, user) {
   await joinHouseholdRemote({ code, uid: user.uid, email: user.email });
   const data = await loadHouseholdRemote(code);
   if (data) hydrateState(data);
-  startAutoSave(code);
+  startAutoSave(code, data);
   currentUser = user;
   startApp();
 }
@@ -376,7 +376,7 @@ function boot() {
         if (record?.householdCode) {
           const data = await loadHouseholdRemote(record.householdCode);
           if (data) hydrateState(data);
-          startAutoSave(record.householdCode);
+          startAutoSave(record.householdCode, data);
           currentUser = user;
           startApp();
           return;

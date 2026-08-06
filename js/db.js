@@ -19,8 +19,8 @@
 // (Pantry-OS-App/firestore.rules) rather than inventing a new shape.
 
 import { db } from "./firebase.js";
-import { doc, getDoc, setDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
-import { subscribe, serializeState } from "./state.js";
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { subscribe, serializeState, hydrateState } from "./state.js";
 
 function householdDocRef(code) {
   return doc(db, "households", code);
@@ -75,30 +75,84 @@ async function loadHouseholdRemote(code) {
 // every local mutation (any of the existing add/update/delete functions
 // across state.js) already calls notify(); this just also schedules a
 // write once things settle, rather than one Firestore write per tap.
+//
+// Real-time multi-device sync (2026-08-06, user request) lives alongside
+// it: an onSnapshot listener on the same document picks up changes another
+// signed-in device makes and hydrates them in — a household viewed on a
+// phone and a tablet at once now sees each other's edits without either
+// needing a manual reload. Two things keep this from fighting the local
+// save loop:
+//   1. `snap.metadata.hasPendingWrites` is true for this device's OWN
+//      optimistic local write, before the server has confirmed it —
+//      skipped, since hydrating from our own not-yet-committed write
+//      would be a pointless no-op at best.
+//   2. `lastSavedSnapshot` remembers the JSON we last wrote — when the
+//      server confirms OUR OWN write (hasPendingWrites flips to false),
+//      the snapshot content matches exactly what we already have locally,
+//      so it's skipped too. Only a snapshot that differs from anything
+//      this device itself wrote — i.e. a genuine change from elsewhere —
+//      actually triggers hydrateState().
+// This is still last-write-wins at the whole-document level (Round 18's
+// own locked decision — one doc per household, not a granular per-field
+// layout), not a real field-level merge: two devices editing at the exact
+// same moment can still have one's change overwrite the other's. What
+// this adds is that a device that's just sitting open now actually SEES
+// changes made elsewhere, close to immediately, instead of only ever
+// finding out on its own next reload.
 let saveTimer = null;
 let unsubscribeSave = null;
+let unsubscribeRealtime = null;
 let currentCode = null;
+let lastSavedSnapshot = null;
+let applyingRemote = false; // reentrancy guard — hydrateState()'s own notify() must not re-trigger a save of the data we just received
 const SAVE_DEBOUNCE_MS = 1500;
 
-function startAutoSave(code) {
+// `initialData` is the blob the caller already fetched via
+// loadHouseholdRemote() to hydrate local state right before calling this
+// — passing it here seeds lastSavedSnapshot so the very first onSnapshot
+// callback (which always fires immediately with current server data)
+// doesn't re-hydrate with data we just loaded a moment ago.
+function startAutoSave(code, initialData = null) {
   stopAutoSave();
   currentCode = code;
+  if (initialData) lastSavedSnapshot = JSON.stringify(initialData);
+
   unsubscribeSave = subscribe(() => {
+    if (applyingRemote) return; // this change came FROM Firestore — don't write it right back
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       if (!currentCode) return;
-      setDoc(householdDataRef(currentCode), serializeState()).catch((err) => {
+      const payload = serializeState();
+      lastSavedSnapshot = JSON.stringify(payload);
+      setDoc(householdDataRef(currentCode), payload).catch((err) => {
         console.warn("[kasa] Firestore save failed:", err);
       });
     }, SAVE_DEBOUNCE_MS);
   });
+
+  unsubscribeRealtime = onSnapshot(
+    householdDataRef(code),
+    (snap) => {
+      if (snap.metadata.hasPendingWrites || !snap.exists()) return;
+      const json = JSON.stringify(snap.data());
+      if (json === lastSavedSnapshot) return;
+      lastSavedSnapshot = json;
+      applyingRemote = true;
+      hydrateState(snap.data());
+      applyingRemote = false;
+    },
+    (err) => console.warn("[kasa] Firestore realtime sync error:", err),
+  );
 }
 
 function stopAutoSave() {
   clearTimeout(saveTimer);
   unsubscribeSave?.();
   unsubscribeSave = null;
+  unsubscribeRealtime?.();
+  unsubscribeRealtime = null;
   currentCode = null;
+  lastSavedSnapshot = null;
 }
 
 export {
