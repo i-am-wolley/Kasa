@@ -92,11 +92,21 @@ function consumeModeOf(item) {
 // own current space even if it belongs to a house that isn't selected
 // right now (2026-08-05, multi-house support) — editing something from a
 // hidden house shouldn't strand it with no matching dropdown option.
+// Sorted by house name first, then space name alphabetically within each
+// house (2026-08-09, user request — matches House's own grid).
+function sortSpaces(spaces, state) {
+  return [...spaces].sort((a, b) => {
+    const houseA = byId(state.houses, a.houseId)?.name || "";
+    const houseB = byId(state.houses, b.houseId)?.name || "";
+    if (houseA !== houseB) return houseA.localeCompare(houseB);
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function itemSpaceOptions(state, currentSpaceId) {
   const visible = visibleSpaceIds(state);
   const multiHouse = state.houses.length > 1;
-  return state.spaces
-    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+  return sortSpaces(state.spaces.filter((s) => visible.has(s.id) || s.id === currentSpaceId), state)
     .map((s) => {
       const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
       return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };

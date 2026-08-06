@@ -181,6 +181,10 @@ const PATHS = {
   laundrySupply: `<path d="M12 3c2.5 3 4 5 4 7.5a4 4 0 0 1-8 0C8 8 9.5 6 12 3z"/><path d="M5 21c1-2 2-2 3 0s2 2 3 0 2-2 3 0 2 2 3 0"/>`,
   cleaningSupply: `<rect x="9" y="8" width="6" height="13" rx="1.5"/><path d="M11 8V5a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v3"/><path d="M15 4h3v3h-3"/>`,
   paperGoods: `<rect x="4" y="4" width="10" height="16" rx="5"/><line x1="16" y1="8" x2="21" y2="8"/><line x1="16" y1="12" x2="21" y2="12"/><line x1="16" y1="16" x2="19" y2="16"/>`,
+  // 2026-08-09 — Kitchen pantry staples (rice, flour, sugar, salt, oil)
+  // never had a home in the catalog at all (see CLAUDE.md finding 4.2);
+  // a tied sack, same technique as the rest of this set.
+  pantryStaple: `<path d="M8 9c0-2 1.5-4 4-4s4 2 4 4"/><path d="M6 9h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"/><line x1="9" y1="13" x2="15" y2="13"/>`,
   pestControl: `<ellipse cx="12" cy="13" rx="4" ry="6"/><line x1="12" y1="7" x2="12" y2="19"/><line x1="8" y1="10" x2="4" y2="8"/><line x1="8" y1="16" x2="4" y2="18"/><line x1="16" y1="10" x2="20" y2="8"/><line x1="16" y1="16" x2="20" y2="18"/><circle cx="12" cy="5.5" r="1.3"/>`,
   utilityConsumable: `<path d="M9 2h6l1 4H8z"/><path d="M8 6h8v14a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2z"/><line x1="8" y1="12" x2="16" y2="12"/>`,
   batterySupply: `<rect x="3" y="8" width="16" height="9" rx="2"/><line x1="21" y1="11" x2="21" y2="14"/><line x1="7" y1="8" x2="7" y2="6"/><line x1="12" y1="8" x2="12" y2="6"/>`,

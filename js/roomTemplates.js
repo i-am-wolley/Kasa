@@ -31,6 +31,21 @@ import { findExact, findByKey } from "./catalog.js";
 import { getCachedPacks } from "./packs.js";
 
 const HAND_AUTHORED = {
+  // 2026-08-09 — Kitchen has been a universal implied space type since
+  // Round 18 (every household gets one, same as Bathroom/Living room/
+  // Utility) but never had suggested content of its own; "Add space ->
+  // Kitchen" offered nothing (see CLAUDE.md finding 4.2). Appliances below
+  // already existed in the asset catalog — just never surfaced — and the
+  // pantry-staple items are new (see catalog.js).
+  kitchen: {
+    assetKeys: ["AST-FRIDGE", "AST-GAS-STOVE", "AST-RO-UNIT", "AST-CHIMNEY", "AST-MIXER-GRINDER", "AST-MICROWAVE"],
+    itemKeys: ["ITM-DISHWASHING-LIQUID", "ITM-TRASH-BAGS", "ITM-RICE", "ITM-WHEAT-FLOUR", "ITM-SUGAR", "ITM-SALT", "ITM-COOKING-OIL"],
+    routines: [
+      { title: "Clean kitchen counters and stovetop", trigger: { type: "floating_since_last", intervalDays: 1 }, effort: 2, consequence: "unhygienic", ownerClass: "either" },
+      { title: "Take out kitchen trash", trigger: { type: "floating_since_last", intervalDays: 1 }, effort: 1, consequence: "unhygienic", ownerClass: "either" },
+      { title: "Deep clean kitchen (degrease, wipe cabinets)", trigger: { type: "fixed_calendar", rrule: "FREQ=MONTHLY;BYMONTHDAY=1" }, effort: 3, consequence: "cosmetic", ownerClass: "help" },
+    ],
+  },
   balcony: {
     assetKeys: [],
     itemKeys: ["ITM-PLANT-FERTILIZER"],
@@ -42,7 +57,7 @@ const HAND_AUTHORED = {
     assetKeys: [],
     itemKeys: ["ITM-NAPHTHALENE"],
     routines: [
-      { title: "Check storage for pests and damp", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Check storage for pests and damp", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "unhygienic", ownerClass: "either" },
     ],
   },
   outside: {

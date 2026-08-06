@@ -41,9 +41,9 @@
      Cosmetic gets NO colour — most routines are cosmetic; if everything is
      coloured, nothing reads as urgent. */
   --tier-cosmetic:   transparent;
-  --tier-degrading:  var(--gold);
+  --tier-unhygienic: var(--gold);
   --tier-damaging:   var(--terracotta);
-  --tier-safety:     #7A3428;   /* deep ember — used ~3 times ever */
+  --tier-unsafe:     #7A3428;   /* deep ember — used ~3 times ever */
 
   --done:            #6E7A56;   /* muted olive, completion state */
   --done-soft:       rgba(110,122,86,0.12);
@@ -139,7 +139,7 @@
   --terracotta:    #C4664A;
   --sand:          #8A7A64;
 
-  --tier-safety:   #A8503E;   /* lifted slightly for dark-surface contrast */
+  --tier-unsafe:   #A8503E;   /* lifted slightly for dark-surface contrast */
   --done:          #8A9670;
   --done-soft:     rgba(138,150,112,0.14);
 

@@ -17,7 +17,8 @@ import { openRoutineEditor } from "./routine.js";
 import { bucketOf } from "./stock.js";
 import { batches as intelBatches } from "../intel.js";
 
-const TIER_RANK = { safety: 4, damaging: 3, degrading: 2, cosmetic: 1 };
+// 2026-08-09: consequence tiers renamed (safety->unsafe, degrading->unhygienic)
+const TIER_RANK = { unsafe: 4, damaging: 3, unhygienic: 2, cosmetic: 1 };
 // Human labels instead of the old "E1"/"E4" shorthand (2026-08-04, user
 // feedback: "i dont understand the e4, e3 e1... remove it").
 const EFFORT_LABEL = { 1: "2 min", 2: "15 min", 3: "1 hr", 4: "Half day", 5: "Vendor" };
@@ -123,10 +124,10 @@ function dueLabel(row) {
 
 function rowHtml(row) {
   const { type, state, tier, title, space, effort } = row;
-  const loud = state === "overdue" && (tier === "damaging" || tier === "safety");
+  const loud = state === "overdue" && (tier === "damaging" || tier === "unsafe");
   const meta = dueLabel(row);
   let metaClass = "occ-row-meta";
-  if (loud) metaClass += tier === "safety" ? " safety-overdue" : " overdue";
+  if (loud) metaClass += tier === "unsafe" ? " safety-overdue" : " overdue";
   const entryId = type === "routine" ? row.occ.id : row.task.id;
   // A routine's icon was borrowing its SPACE's icon (2026-08-05, user
   // report: "for water tank cleaning there is washing machine" — Utility's
@@ -342,12 +343,14 @@ function statRowHtml(state) {
   // it cluttered").
   const stockAlertCount = state.items.filter((i) => visibleSpaces.has(i.spaceId) && bucketOf(i) !== "ok").length;
 
+  // Order: Overdue, Due today, This week, Completed, Low stock (2026-08-09,
+  // user request) — was Low stock before Completed.
   const tiles = [
     { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, action: "jump:section-overdue" },
     { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "jump:section-due" },
     { id: "this-week", value: weekCount, label: "This week", tone: null, action: "week:section-due" },
-    { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
     { id: "completed-week", value: completedCount, label: "Completed", tone: "var(--done)", action: null },
+    { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
   ];
 
   return `
@@ -415,7 +418,7 @@ function render() {
     ${topbarHtml(state)}
     ${statRowHtml(state)}
     <div class="today-section" style="padding-top:4px;">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div class="today-chip-row">
         ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
         ${chip("Today", { active: view === "today", dataAttrs: 'data-view="today"' })}
         ${chip("This week", { active: view === "week", dataAttrs: 'data-view="week"' })}

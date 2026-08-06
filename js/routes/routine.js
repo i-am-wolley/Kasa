@@ -37,7 +37,12 @@ const EFFORT_OPTIONS = [
   { value: "5", label: "Call vendor" },
 ];
 
-const CONSEQUENCE_OPTIONS = ["cosmetic", "degrading", "damaging", "safety"];
+// 2026-08-09, user request: "degrading" -> "unhygienic" (most of what was
+// tagged degrading was actually about cleanliness, not general wear —
+// "damaging" already covers the genuine wear/breakdown case, e.g. skipping
+// AC servicing); "safety" -> "unsafe" (same meaning, plainer word). See
+// migrations.js's v4->v5 step for the one-time rename of existing data.
+const CONSEQUENCE_OPTIONS = ["cosmetic", "unhygienic", "damaging", "unsafe"];
 const OWNER_OPTIONS = ["member", "help", "vendor", "either"];
 const WEEKDAYS = [
   { value: "SU", label: "Sun" }, { value: "MO", label: "Mon" }, { value: "TU", label: "Tue" },
@@ -147,11 +152,23 @@ function assetFieldHtml(spaceId, selectedId, fieldName = "assetId") {
 // user request: "smartly show which house the space belongs to... not in
 // a big way") whenever the household actually has more than one house —
 // a single-house household never sees it, nothing to disambiguate.
+// Sorted by house name first, then space name alphabetically within each
+// house (2026-08-09, user request: "let space appear in alphabetical
+// everywhere... when multiple houses are selected... sort by house then by
+// the space name alphabetical") — matches House's own grid (house.js).
+function sortSpaces(spaces, state) {
+  return [...spaces].sort((a, b) => {
+    const houseA = byId(state.houses, a.houseId)?.name || "";
+    const houseB = byId(state.houses, b.houseId)?.name || "";
+    if (houseA !== houseB) return houseA.localeCompare(houseB);
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function spaceOptions(state, currentSpaceId) {
   const visible = visibleSpaceIds(state);
   const multiHouse = state.houses.length > 1;
-  return state.spaces
-    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+  return sortSpaces(state.spaces.filter((s) => visible.has(s.id) || s.id === currentSpaceId), state)
     .map((s) => {
       const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
       return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };
@@ -174,12 +191,11 @@ function routineFieldsHtml(routine, spaceId, state) {
     ${field("Space", chipGroup({ name: "spaceId", options: spaceOptions(state, initialSpaceId), value: initialSpaceId }))}
     ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
     ${field("Start date", textInput({ id: "f-startDate", type: "date", value: routine?.trigger?.startDate ?? new Date().toISOString().slice(0, 10) }))}
-    <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;">In the future — that's the first occurrence. Today or in the past — the next occurrence is worked out from there using the repeat above.</p>
     ${triggerParamsHtml(routine)}
     <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
     <div id="asset-field">${assetFieldHtml(initialSpaceId, routine?.assetId ?? null)}</div>
     ${field("Effort", chipGroup({ name: "effort", options: EFFORT_OPTIONS, value: String(routine?.effort ?? 1) }))}
-    ${field("If skipped, it", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
+    ${field("If skipped, it is", chipGroup({ name: "consequence", options: CONSEQUENCE_OPTIONS, value: routine?.consequence ?? "cosmetic" }))}
     ${field("Usually done by", chipGroup({ name: "ownerClass", options: OWNER_OPTIONS, value: routine?.ownerClass ?? "either" }))}
     ${field("Default assignee", chipGroup({ name: "defaultAssigneeId", options: state.people.map((p) => ({ value: p.id, label: p.name })), value: routine?.defaultAssigneeId ?? null }))}
     ${field("Pause during", chipGroup({ name: "pauseIn", options: state.modes.filter((m) => m.key !== "normal").map((m) => ({ value: m.key, label: m.label })), value: routine?.modeFilters?.pauseIn ?? [], multi: true }))}

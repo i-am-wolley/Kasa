@@ -23,7 +23,8 @@ function byId(list, id) {
 
 // ---- shared helpers --------------------------------------------------------
 
-const CONSEQUENCE_WEIGHT = { cosmetic: 1, degrading: 2, damaging: 3, safety: 4 };
+// 2026-08-09: consequence tiers renamed (degrading->unhygienic, safety->unsafe)
+const CONSEQUENCE_WEIGHT = { cosmetic: 1, unhygienic: 2, damaging: 3, unsafe: 4 };
 
 function effortPoints(routine) {
   return (routine.effort || 1) * (CONSEQUENCE_WEIGHT[routine.consequence] || 1);
@@ -199,8 +200,8 @@ function batches(state, rows) {
 
 // ---- §5.7 Load smoothing ---------------------------------------------------
 // If a week's total effort exceeds a ceiling, shift flexible occurrences
-// (cosmetic|degrading consequence, floating_since_last trigger only) +7
-// days into the following week. Never touches damaging/safety or
+// (cosmetic|unhygienic consequence, floating_since_last trigger only) +7
+// days into the following week. Never touches damaging/unsafe or
 // fixed-calendar/seasonal/etc. Mutates the occurrence objects it's given
 // directly (same "pass the real state, mutate in place" pattern
 // engine.js's caller in state.js already uses) and returns the list of
@@ -257,7 +258,7 @@ function applyLoadSmoothing(state, ceiling = DEFAULT_EFFORT_CEILING) {
         ({ occ, routine }) =>
           !occ.smoothed &&
           routine.trigger?.type === "floating_since_last" &&
-          (routine.consequence === "cosmetic" || routine.consequence === "degrading"),
+          (routine.consequence === "cosmetic" || routine.consequence === "unhygienic"),
       )
       .sort((a, b) => b.pts - a.pts); // move the biggest contributors first — fewer moves needed to clear the ceiling
 

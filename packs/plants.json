@@ -23,19 +23,19 @@
       "title": "Fertilize plants",
       "spaceType": "balcony",
       "trigger": { "type": "floating_since_last", "intervalDays": 30 },
-      "effort": 1, "consequence": "degrading", "ownerClass": "either"
+      "effort": 1, "consequence": "damaging", "ownerClass": "either"
     },
     {
       "title": "Check plants for pests",
       "spaceType": "balcony",
       "trigger": { "type": "floating_since_last", "intervalDays": 14 },
-      "effort": 1, "consequence": "degrading", "ownerClass": "either"
+      "effort": 1, "consequence": "damaging", "ownerClass": "either"
     },
     {
       "title": "Repot plants that have outgrown their pots",
       "spaceType": "balcony",
       "trigger": { "type": "floating_since_last", "intervalDays": 365 },
-      "effort": 3, "consequence": "degrading", "ownerClass": "member"
+      "effort": 3, "consequence": "damaging", "ownerClass": "member"
     }
   ]
 }

@@ -27,7 +27,7 @@
       "title": "Test door lock and security chain",
       "spaceType": "entry",
       "trigger": { "type": "floating_since_last", "intervalDays": 180 },
-      "effort": 1, "consequence": "safety", "ownerClass": "member"
+      "effort": 1, "consequence": "unsafe", "ownerClass": "member"
     }
   ]
 }

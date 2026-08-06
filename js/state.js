@@ -734,9 +734,39 @@ function updatePerson(id, patch) {
   notify();
 }
 
+// What happens to a person's linked data when they leave the household
+// (2026-08-09, user question) — previously nothing: the person record just
+// vanished and every reference to their id was left dangling. Routines and
+// tasks are household-level things that merely happen to have an optional
+// assignee hint, so they survive with that hint cleared (unassigned, not
+// deleted — the chore itself doesn't stop needing doing). Habits are
+// different: they're inherently personal (person-scoped, no space, no
+// meaning without an owner per the original "Habits are personal" design
+// call), so they're deleted along with the person, taking their habit-log
+// history with them. Ledger completions (`doneBy`) are deliberately left
+// alone — they're a historical record of who actually did something, which
+// stays true even after that person leaves, same as how leaving an
+// employer doesn't retroactively un-happen the work already done.
 function deletePerson(id) {
+  state.routines.forEach((r) => { if (r.defaultAssigneeId === id) r.defaultAssigneeId = null; });
+  state.tasks.forEach((t) => { if (t.assigneeId === id) t.assigneeId = null; });
+  const habitIds = new Set(state.habits.filter((h) => h.personId === id).map((h) => h.id));
+  state.habits = state.habits.filter((h) => h.personId !== id);
+  state.habitLog = state.habitLog.filter((l) => !habitIds.has(l.habitId));
   state.people = state.people.filter((p) => p.id !== id);
   notify();
+}
+
+// Counts what deletePerson(id) above would actually change, so the
+// confirmation dialog can say so instead of the deletion being a silent
+// surprise (same "cascade-warning confirm" pattern already used for
+// deleting a house).
+function personDeletionImpact(id) {
+  return {
+    routines: state.routines.filter((r) => r.defaultAssigneeId === id).length,
+    tasks: state.tasks.filter((t) => t.assigneeId === id).length,
+    habits: state.habits.filter((h) => h.personId === id).length,
+  };
 }
 
 function addLeave(personId, { from, to, reason = "" }) {
@@ -1066,6 +1096,7 @@ export {
   addPerson,
   updatePerson,
   deletePerson,
+  personDeletionImpact,
   addLeave,
   addRoutine,
   updateRoutine,

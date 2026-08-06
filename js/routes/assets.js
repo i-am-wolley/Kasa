@@ -77,11 +77,21 @@ function render() {
 // space even if it belongs to a house that isn't selected right now
 // (2026-08-05, multi-house support) — editing something from a hidden
 // house shouldn't strand it with no matching dropdown option.
+// Sorted by house name first, then space name alphabetically within each
+// house (2026-08-09, user request — matches House's own grid).
+function sortSpaces(spaces, state) {
+  return [...spaces].sort((a, b) => {
+    const houseA = byId(state.houses, a.houseId)?.name || "";
+    const houseB = byId(state.houses, b.houseId)?.name || "";
+    if (houseA !== houseB) return houseA.localeCompare(houseB);
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function assetSpaceOptions(state, currentSpaceId) {
   const visible = visibleSpaceIds(state);
   const multiHouse = state.houses.length > 1;
-  return state.spaces
-    .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
+  return sortSpaces(state.spaces.filter((s) => visible.has(s.id) || s.id === currentSpaceId), state)
     .map((s) => {
       const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
       return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };
@@ -221,6 +231,20 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
     const serviceIntervalDays = interval ? Number(interval) : null;
     const lastServicedAt = root.querySelector("#f-asset-last-serviced")?.value || null;
     const spaceId = readChipGroup(root, "assetSpaceId");
+
+    // Soft nudge, not a block (2026-08-09 — Round 7's "no warning, add
+    // freely" call for assets stands: two ACs in one room is genuinely
+    // legitimate) — but a SAME-named asset in the SAME room is far more
+    // often an accidental double-add than a deliberate second one (see
+    // CLAUDE.md finding 4.3: an untitled duplicate "Geyser" sitting in one
+    // bathroom with zero way to tell the two apart is exactly the
+    // confusing case this catches). Only asked when adding fresh — editing
+    // an existing asset never triggers it against itself.
+    if (!asset) {
+      const dup = getState().assets.find((a) => a.spaceId === spaceId && a.name === entry.name);
+      if (dup && !confirm(`There's already a ${entry.name} in this room. Add another one anyway?`)) return;
+    }
+
     const fields = {
       name: entry.name,
       catalogKey: entry.key,
@@ -255,7 +279,10 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       } else {
         const routine = addRoutine({
           title: `Service ${savedAsset.name}`, spaceId, assetId, trigger,
-          effort: 3, consequence: "degrading", ownerClass: "vendor",
+          // Skipping a service interval leads to breakdown/wear, not a
+          // hygiene issue — "damaging" fits better than "unhygienic" here
+          // (2026-08-09 tier rename).
+          effort: 3, consequence: "damaging", ownerClass: "vendor",
         });
         updateAsset(assetId, { serviceRoutineId: routine.id });
       }

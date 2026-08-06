@@ -39,7 +39,8 @@ function isPausedNow(routine, activeModeKey) {
 
 // ---- House health score ---------------------------------------------------
 
-const TIER_PENALTY = { safety: 8, damaging: 5, degrading: 2, cosmetic: 1 };
+// 2026-08-09: consequence tiers renamed (degrading->unhygienic, safety->unsafe)
+const TIER_PENALTY = { unsafe: 8, damaging: 5, unhygienic: 2, cosmetic: 1 };
 
 // Scoped to whichever house(s) the header picker currently has selected
 // (2026-08-05, multi-house support) — a single-house household sees the
@@ -47,7 +48,7 @@ const TIER_PENALTY = { safety: 8, damaging: 5, degrading: 2, cosmetic: 1 };
 function computeHealth(state) {
   const activeModeKey = state.household.activeMode;
   const visible = visibleSpaceIds(state);
-  const overdueByTier = { safety: 0, damaging: 0, degrading: 0, cosmetic: 0 };
+  const overdueByTier = { unsafe: 0, damaging: 0, unhygienic: 0, cosmetic: 0 };
   for (const occ of state.occurrences) {
     if (occ.state === "done" || occ.state === "snoozed") continue;
     const routine = byId(state.routines, occ.routineId);
@@ -249,7 +250,7 @@ function smoothingNoticeHtml(state) {
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">This week was smoothed</span></div>
-      <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:8px;">${moves.length} flexible routine${moves.length === 1 ? "" : "s"} moved to keep the week under the household's effort ceiling — never anything damaging/safety, never a fixed-calendar item.</p>
+      <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:8px;">${moves.length} flexible routine${moves.length === 1 ? "" : "s"} moved to keep the week under the household's effort ceiling — never anything damaging/unsafe, never a fixed-calendar item.</p>
       ${moves
         .map(
           (m) => `
@@ -433,7 +434,7 @@ function wireEvents(state) {
     btn.addEventListener("click", () => {
       const routine = byId(state.routines, btn.dataset.lowerRoutine);
       if (!routine) return;
-      const order = ["safety", "damaging", "degrading", "cosmetic"];
+      const order = ["unsafe", "damaging", "unhygienic", "cosmetic"];
       const idx = order.indexOf(routine.consequence);
       const alreadyLowest = idx === -1 || idx >= order.length - 1;
       if (alreadyLowest) {

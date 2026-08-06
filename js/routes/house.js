@@ -55,10 +55,19 @@ function gridHtml(state) {
   // default) stays exactly as uncluttered as it always was.
   const visible = visibleSpaceIds(state);
   const multiHouse = state.household.activeHouseIds?.length > 1 || state.houses.length > 1 && !state.household.activeHouseIds?.length;
-  // Alphabetical (2026-08-08, user request) — was insertion order before,
-  // which meant a newly added space always landed at the end regardless of
-  // its name.
-  const spaces = state.spaces.filter((sp) => visible.has(sp.id)).sort((a, b) => a.name.localeCompare(b.name));
+  // Alphabetical (2026-08-08), grouped by house first when more than one
+  // house is active at once (2026-08-09, user request: "sort by house then
+  // by the space name alphabetical") — was a flat alphabetical mix across
+  // houses before, which could interleave e.g. one house's Balcony next to
+  // another's Bathroom.
+  const spaces = state.spaces.filter((sp) => visible.has(sp.id)).sort((a, b) => {
+    if (multiHouse) {
+      const houseA = byId(state.houses, a.houseId)?.name || "";
+      const houseB = byId(state.houses, b.houseId)?.name || "";
+      if (houseA !== houseB) return houseA.localeCompare(houseB);
+    }
+    return a.name.localeCompare(b.name);
+  });
   const cards = spaces
     .map((sp) => {
       const houseName = multiHouse ? byId(state.houses, sp.houseId)?.name : null;

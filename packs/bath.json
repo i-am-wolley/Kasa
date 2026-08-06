@@ -24,7 +24,7 @@
       "title": "Descale showerhead and taps",
       "spaceType": "bath",
       "trigger": { "type": "floating_since_last", "intervalDays": 60 },
-      "effort": 2, "consequence": "degrading", "ownerClass": "either",
+      "effort": 2, "consequence": "unhygienic", "ownerClass": "either",
       "regionalOverrides": { "hard_water_city": { "intervalDays": 30 } }
     },
     {

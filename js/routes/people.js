@@ -10,7 +10,7 @@
 // an email on file for that; help (maid/cook/driver) is added by a member
 // and never needs one of its own.
 
-import { getState, subscribe, addPerson, updatePerson, deletePerson, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, hydrateState, addPersonForJoiningUser, byId } from "../state.js";
+import { getState, subscribe, addPerson, updatePerson, deletePerson, personDeletionImpact, addLeave, deleteHabit, toggleHabitToday, habitStreak, isHabitDoneOn, updateHouseholdName, hydrateState, addPersonForJoiningUser, byId } from "../state.js";
 import { getCurrentUser } from "../auth.js";
 import { joinHouseholdRemote, loadHouseholdRemote, startAutoSave, stopAutoSave } from "../db.js";
 import { Icon } from "../ui/icons.js";
@@ -348,7 +348,18 @@ function openPersonSheet(person) {
 
   if (person) {
     root.querySelector('[data-action="delete"]').addEventListener("click", () => {
-      if (!confirm(`Remove ${person.name}?`)) return;
+      // Cascade-warning confirm (2026-08-09, user question: "when a person
+      // leaves a household what happens to the task and routines and
+      // habits linked to them?") — same pattern already used for deleting
+      // a house. Routines/tasks just lose the assignee hint (unassigned,
+      // not deleted); habits are personal and go with the person.
+      const impact = personDeletionImpact(person.id);
+      const parts = [];
+      if (impact.routines) parts.push(`${impact.routines} routine${impact.routines === 1 ? "" : "s"} will be unassigned`);
+      if (impact.tasks) parts.push(`${impact.tasks} task${impact.tasks === 1 ? "" : "s"} will be unassigned`);
+      if (impact.habits) parts.push(`${impact.habits} habit${impact.habits === 1 ? "" : "s"} will be deleted`);
+      const detail = parts.length ? ` — ${parts.join(", ")}.` : "";
+      if (!confirm(`Remove ${person.name}?${detail}`)) return;
       deletePerson(person.id);
       closeSheet();
       showToast("Person removed");

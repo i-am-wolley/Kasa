@@ -19,7 +19,7 @@
       "title": "Review and file warranty documents",
       "spaceType": "whole_home",
       "trigger": { "type": "floating_since_last", "intervalDays": 180 },
-      "effort": 2, "consequence": "degrading", "ownerClass": "member"
+      "effort": 2, "consequence": "cosmetic", "ownerClass": "member"
     },
     {
       "title": "Review recurring subscriptions",

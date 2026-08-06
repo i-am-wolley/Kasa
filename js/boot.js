@@ -48,7 +48,6 @@ const MORE_ITEMS = [
   { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
   { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
-  { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the currently-viewed house from six questions" },
   { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device" },
   { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Automatic, or trigger it yourself from Today" },
 ];
@@ -279,12 +278,6 @@ function mountScreen(screenId) {
       break;
     case "houses":
       mountHouses(screenEl, { onBack: () => switchTab(activeTab) });
-      break;
-    case "onboard":
-      // "Re-run onboarding" from More always targets the currently-viewed
-      // house, never creates a new household — context: "house" so the
-      // completion toast reflects that (2026-08-06).
-      mountOnboard(screenEl, { context: "house", onDone: () => switchTab("today") });
       break;
     default:
       renderPlaceholder(screenEl, screenId, "Not built yet.");

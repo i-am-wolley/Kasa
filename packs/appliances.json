@@ -25,20 +25,20 @@
       "spaceType": "utility",
       "assetRef": "RO / water purifier",
       "trigger": { "type": "usage_meter", "meterDelta": 3000 },
-      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+      "effort": 3, "consequence": "unhygienic", "ownerClass": "vendor"
     },
     {
       "title": "Pre-summer AC servicing",
       "spaceType": "bedroom",
       "assetRef": "Split AC",
       "trigger": { "type": "seasonal", "months": [2, 3] },
-      "effort": 4, "consequence": "degrading", "ownerClass": "vendor"
+      "effort": 4, "consequence": "damaging", "ownerClass": "vendor"
     },
     {
       "title": "Clean overhead water tank",
       "spaceType": "utility",
       "trigger": { "type": "floating_since_last", "intervalDays": 180 },
-      "effort": 4, "consequence": "safety", "ownerClass": "vendor"
+      "effort": 4, "consequence": "unsafe", "ownerClass": "vendor"
     }
   ]
 }

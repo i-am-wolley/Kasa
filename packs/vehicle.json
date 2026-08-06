@@ -20,7 +20,7 @@
       "spaceType": "outside",
       "assetRef": "Car",
       "trigger": { "type": "floating_since_last", "intervalDays": 180 },
-      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+      "effort": 3, "consequence": "damaging", "ownerClass": "vendor"
     },
     {
       "title": "Check tire pressure",
@@ -34,7 +34,7 @@
       "spaceType": "outside",
       "assetRef": "Motorcycle / scooter",
       "trigger": { "type": "floating_since_last", "intervalDays": 90 },
-      "effort": 2, "consequence": "degrading", "ownerClass": "vendor"
+      "effort": 2, "consequence": "damaging", "ownerClass": "vendor"
     },
     {
       "title": "Renew vehicle insurance",
@@ -53,7 +53,7 @@
       "title": "Top up engine oil and wiper fluid",
       "spaceType": "outside",
       "trigger": { "type": "floating_since_last", "intervalDays": 90 },
-      "effort": 1, "consequence": "degrading", "ownerClass": "member"
+      "effort": 1, "consequence": "damaging", "ownerClass": "member"
     }
   ]
 }

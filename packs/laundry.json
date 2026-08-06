@@ -22,7 +22,7 @@
       "spaceType": "utility",
       "assetRef": "Washing machine",
       "trigger": { "type": "usage_meter", "meterDelta": 150 },
-      "effort": 3, "consequence": "degrading", "ownerClass": "vendor"
+      "effort": 3, "consequence": "damaging", "ownerClass": "vendor"
     }
   ]
 }

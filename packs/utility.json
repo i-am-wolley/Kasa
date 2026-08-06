@@ -47,7 +47,7 @@
       "title": "Check gas pipeline and regulator for leaks",
       "spaceType": "utility",
       "trigger": { "type": "floating_since_last", "intervalDays": 180 },
-      "effort": 2, "consequence": "safety", "ownerClass": "vendor"
+      "effort": 2, "consequence": "unsafe", "ownerClass": "vendor"
     }
   ]
 }

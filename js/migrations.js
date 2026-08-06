@@ -22,7 +22,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -60,6 +60,36 @@ const migrations = {
   4: (state) => {
     if (state.household.smoothingMode) return;
     state.household.smoothingMode = "auto";
+  },
+
+  // v4 -> v5 (2026-08-09): consequence tier rename — "safety" -> "unsafe"
+  // (same meaning, plainer word) and "degrading" retired in favour of
+  // "unhygienic" for the routines that were actually about cleanliness
+  // (RO/water filters, showerheads, pest/damp, coffee makers, pool
+  // filters, etc.) or "damaging" for the rest (appliance servicing,
+  // vehicle maintenance, financial paperwork) — mirrors the exact
+  // reclassification applied to catalog.js/packs/roomTemplates.js this
+  // same round, keyed by routine title so it's a real per-routine
+  // decision, not a blind find-replace. Anything not in the list (a
+  // household's own custom routine) falls back to "damaging", the safer
+  // generic bucket. Idempotent — matches based on the OLD values, so
+  // running it twice is a no-op the second time.
+  5: (state) => {
+    const UNHYGIENIC_TITLES = new Set([
+      "Service RO unit", "Replace furnace filter", "Clean evaporative cooler pads",
+      "Replace air purifier filter", "Clean chimney filter mesh", "Sanitize water dispenser",
+      "Descale coffee maker", "Clean pool pump filter", "Descale showerhead and taps",
+      "Check storage for pests and damp",
+    ]);
+    const COSMETIC_TITLES = new Set(["Review and file warranty documents"]);
+    for (const routine of state.routines || []) {
+      if (routine.consequence === "safety") routine.consequence = "unsafe";
+      else if (routine.consequence === "degrading") {
+        routine.consequence = COSMETIC_TITLES.has(routine.title)
+          ? "cosmetic"
+          : UNHYGIENIC_TITLES.has(routine.title) ? "unhygienic" : "damaging";
+      }
+    }
   },
 };
 

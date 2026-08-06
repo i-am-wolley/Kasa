@@ -49,7 +49,7 @@
       "title": "Back up important files",
       "spaceType": "study",
       "trigger": { "type": "floating_since_last", "intervalDays": 90 },
-      "effort": 2, "consequence": "degrading", "ownerClass": "member"
+      "effort": 2, "consequence": "damaging", "ownerClass": "member"
     },
     {
       "title": "File and shred loose paperwork",

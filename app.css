@@ -477,9 +477,15 @@ h1, h2, h3, p { margin: 0; }
    majority of routines) stays untinted on purpose — same "don't colour
    everything or nothing reads as urgent" principle the tier system always
    had, just expressed as a wash instead of a stripe. */
-.occ-row[data-tier="degrading"] { background: color-mix(in srgb, var(--tier-degrading) 7%, var(--surface)); }
-.occ-row[data-tier="damaging"]  { background: color-mix(in srgb, var(--tier-damaging) 7%, var(--surface)); }
-.occ-row[data-tier="safety"]    { background: color-mix(in srgb, var(--tier-safety) 9%, var(--surface)); }
+/* 2026-08-09: consequence tiers renamed (degrading->unhygienic, safety->
+   unsafe) — wash intensity now graduates with severity (6/8/10%) instead
+   of unhygienic and damaging both sitting at 7% with unsafe barely
+   stronger at 9%; makes the three visually distinct at a glance, still
+   subtle enough that unsafe doesn't read as a loud alert on its own (the
+   overdue-safety text styling below already carries that). */
+.occ-row[data-tier="unhygienic"] { background: color-mix(in srgb, var(--tier-unhygienic) 6%, var(--surface)); }
+.occ-row[data-tier="damaging"]   { background: color-mix(in srgb, var(--tier-damaging) 8%, var(--surface)); }
+.occ-row[data-tier="unsafe"]     { background: color-mix(in srgb, var(--tier-unsafe) 10%, var(--surface)); }
 
 .occ-row-icon {
   flex-shrink: 0;
@@ -516,7 +522,7 @@ h1, h2, h3, p { margin: 0; }
 }
 
 .occ-row-meta.overdue { color: var(--tier-damaging); font-weight: var(--fw-semibold); }
-.occ-row-meta.safety-overdue { color: var(--tier-safety); font-weight: var(--fw-bold); }
+.occ-row-meta.safety-overdue { color: var(--tier-unsafe); font-weight: var(--fw-bold); }
 
 .occ-row-effort {
   flex-shrink: 0;
@@ -855,12 +861,41 @@ h1, h2, h3, p { margin: 0; }
 .text-input[type="time"] {
   -webkit-appearance: none;
   appearance: none;
+  /* Chrome/Edge on Windows right-align (or visually center) a native date/
+     time value inside the input by default — inconsistent with every other
+     .text-input's left-aligned text (2026-08-09, user request). */
+  text-align: left;
 }
 
 .chip-group {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* Today's own filter row — "10 free minutes?"/Today/This week/Batches/
+   Smoothen need to fit on one line even on a narrow phone (2026-08-09,
+   user request) — "10 free minutes?" is long enough that the default
+   .chip sizing wraps to two rows well before the others do. Same
+   nowrap+flex:1+tighter-everything technique already used for Stock's
+   period chips, just with a smaller floor since there are 5 of these
+   instead of 4 and one label is much longer. */
+.today-chip-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+.today-chip-row .chip {
+  flex: 1;
+  justify-content: center;
+  padding: 5px 2px;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 600px) {
+  .today-chip-row .chip { font-size: var(--fs-micro); padding: 6px 10px; }
 }
 
 /* ---- Catalog typeahead dropdown ------------------------------------------ */

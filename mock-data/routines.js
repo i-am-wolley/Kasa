@@ -12,7 +12,7 @@ export const routines = [
   {
     id: "rt_descale_showerhead", title: "Descale showerhead and taps", spaceId: "sp_bath", assetId: null,
     trigger: { type: "floating_since_last", intervalDays: 60 },
-    effort: 2, consequence: "degrading", ownerClass: "either", defaultAssigneeId: null,
+    effort: 2, consequence: "unhygienic", ownerClass: "either", defaultAssigneeId: null,
     requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
     steps: [], notes: "", active: true, source: "pack", packId: "bath", userEdited: false,
   },
@@ -26,7 +26,7 @@ export const routines = [
   {
     id: "rt_service_ro", title: "Service RO unit", spaceId: "sp_utility", assetId: "ast_ro",
     trigger: { type: "usage_meter", meterDelta: 3000 },
-    effort: 3, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    effort: 3, consequence: "unhygienic", ownerClass: "vendor", defaultAssigneeId: null,
     requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
     steps: [], notes: "", active: true, source: "pack", packId: "utility", userEdited: false,
   },
@@ -47,7 +47,7 @@ export const routines = [
   {
     id: "rt_presummer_ac", title: "Pre-summer AC servicing", spaceId: "sp_bed", assetId: "ast_ac",
     trigger: { type: "seasonal", months: [2, 3], window: "pre_summer" },
-    effort: 4, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    effort: 4, consequence: "damaging", ownerClass: "vendor", defaultAssigneeId: null,
     requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
     steps: [], notes: "", active: true, source: "pack", packId: "appliances", userEdited: false,
   },
@@ -75,14 +75,14 @@ export const routines = [
   {
     id: "rt_service_wm", title: "Service washing machine", spaceId: "sp_utility", assetId: "ast_wm",
     trigger: { type: "usage_meter", meterDelta: 150 },
-    effort: 3, consequence: "degrading", ownerClass: "vendor", defaultAssigneeId: null,
+    effort: 3, consequence: "damaging", ownerClass: "vendor", defaultAssigneeId: null,
     requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
     steps: [], notes: "", active: true, source: "pack", packId: "laundry", userEdited: false,
   },
   {
     id: "rt_watertank", title: "Clean overhead water tank", spaceId: "sp_utility", assetId: null,
     trigger: { type: "floating_since_last", intervalDays: 180 },
-    effort: 4, consequence: "safety", ownerClass: "vendor", defaultAssigneeId: null,
+    effort: 4, consequence: "unsafe", ownerClass: "vendor", defaultAssigneeId: null,
     requiresItemIds: [], modeFilters: { pauseIn: [], boostIn: [] },
     steps: [], notes: "", active: true, source: "pack", packId: "utility", userEdited: false,
   },

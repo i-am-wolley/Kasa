@@ -36,58 +36,58 @@ const ASSETS = [
   // Water heating
   { key: "AST-GEYSER", name: "Geyser", icon: "waterHeaterTank", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 9,
     suggestedRoutines: [
-      { title: "Service geyser", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
-      { title: "Check pressure relief valve", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" },
+      { title: "Service geyser", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
+      { title: "Check pressure relief valve", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "unsafe", ownerClass: "member" },
     ] },
   { key: "AST-WATER-HEATER-TANKLESS", name: "Tankless / instant water heater", icon: "waterHeaterTankless", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 20,
-    suggestedRoutines: [{ title: "Descale tankless heater", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Descale tankless heater", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "damaging", ownerClass: "vendor" }] },
   { key: "AST-WATER-HEATER-TANK", name: "Tank water heater", icon: "waterHeaterTank", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 10,
-    suggestedRoutines: [{ title: "Flush water heater tank", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Flush water heater tank", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "damaging", ownerClass: "member" }] },
   { key: "AST-SOLAR-WATER-HEATER", name: "Solar water heater", icon: "solarWaterHeater", category: "water_heating", serviceIntervalDays: 365, expectedLifeYears: 15,
-    suggestedRoutines: [{ title: "Inspect solar water heater panel", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Inspect solar water heater panel", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "damaging", ownerClass: "vendor" }] },
 
   // Water treatment & supply
   { key: "AST-RO-UNIT", name: "RO / water purifier", icon: "roUnit", category: "water_treatment", serviceIntervalDays: 180, serviceIntervalMeter: 3000, expectedLifeYears: 7,
-    suggestedRoutines: [{ title: "Service RO unit", trigger: { type: "usage_meter", meterDelta: 3000 }, effort: 3, consequence: "degrading", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Service RO unit", trigger: { type: "usage_meter", meterDelta: 3000 }, effort: 3, consequence: "unhygienic", ownerClass: "vendor" }] },
   { key: "AST-WATER-SOFTENER", name: "Water softener", icon: "waterSoftener", category: "water_treatment", serviceIntervalDays: 180, expectedLifeYears: 12,
-    suggestedRoutines: [{ title: "Refill water softener salt", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "degrading", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Refill water softener salt", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "damaging", ownerClass: "member" }] },
   { key: "AST-OVERHEAD-TANK", name: "Overhead water tank", icon: "waterTank", category: "water_treatment", serviceIntervalDays: 180, expectedLifeYears: 15,
-    suggestedRoutines: [{ title: "Clean overhead water tank", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 4, consequence: "safety", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Clean overhead water tank", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 4, consequence: "unsafe", ownerClass: "vendor" }] },
   { key: "AST-SUMP-PUMP", name: "Sump pump", icon: "sumpPump", category: "water_treatment", serviceIntervalDays: 365, expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Test sump pump", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "damaging", ownerClass: "member" }] },
   { key: "AST-WELL-PUMP", name: "Well pump", icon: "wellPump", category: "water_treatment", serviceIntervalDays: 365, expectedLifeYears: 12,
     suggestedRoutines: [{ title: "Inspect well pump", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "damaging", ownerClass: "vendor" }] },
   { key: "AST-SEPTIC-TANK", name: "Septic tank", icon: "septicTank", category: "water_treatment", serviceIntervalDays: 1095, expectedLifeYears: 30,
-    suggestedRoutines: [{ title: "Pump septic tank", trigger: { type: "floating_since_last", intervalDays: 1095 }, effort: 4, consequence: "safety", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Pump septic tank", trigger: { type: "floating_since_last", intervalDays: 1095 }, effort: 4, consequence: "unsafe", ownerClass: "vendor" }] },
 
   // Climate control
   { key: "AST-AC-SPLIT", name: "Split AC", icon: "acSplit", category: "climate", serviceIntervalDays: 180, expectedLifeYears: 12,
     suggestedRoutines: [
-      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Clean AC filter", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either", requiresItemKeys: ["ITM-AC-FILTER"] },
     ] },
   { key: "AST-AC-WINDOW", name: "Window AC", icon: "acWindow", category: "climate", serviceIntervalDays: 180, expectedLifeYears: 8,
     suggestedRoutines: [
-      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Clean AC filter", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either", requiresItemKeys: ["ITM-AC-FILTER"] },
     ] },
   { key: "AST-AC-CENTRAL", name: "Central air conditioning", icon: "acCentral", category: "climate", serviceIntervalDays: 180, expectedLifeYears: 15,
     suggestedRoutines: [
-      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service AC", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Clean AC filter", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either", requiresItemKeys: ["ITM-AC-FILTER"] },
     ] },
   { key: "AST-FURNACE", name: "Furnace", icon: "furnace", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 18,
     suggestedRoutines: [
-      { title: "Service furnace", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "safety", ownerClass: "vendor" },
-      { title: "Replace furnace filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Service furnace", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "unsafe", ownerClass: "vendor" },
+      { title: "Replace furnace filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "unhygienic", ownerClass: "either" },
     ] },
   { key: "AST-BOILER", name: "Boiler", icon: "boiler", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 15,
-    suggestedRoutines: [{ title: "Service boiler", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "safety", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Service boiler", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "unsafe", ownerClass: "vendor" }] },
   { key: "AST-HEAT-PUMP", name: "Heat pump", icon: "heatPump", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 15,
-    suggestedRoutines: [{ title: "Service heat pump", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "degrading", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Service heat pump", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "damaging", ownerClass: "vendor" }] },
   { key: "AST-SPACE-HEATER", name: "Space heater", icon: "spaceHeater", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 6 },
   { key: "AST-EVAP-COOLER", name: "Evaporative cooler", icon: "evapCooler", category: "climate", serviceIntervalDays: 120, expectedLifeYears: 8,
-    suggestedRoutines: [{ title: "Clean evaporative cooler pads", trigger: { type: "floating_since_last", intervalDays: 120 }, effort: 2, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean evaporative cooler pads", trigger: { type: "floating_since_last", intervalDays: 120 }, effort: 2, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-CEILING-FAN", name: "Ceiling fan", icon: "ceilingFan", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Clean ceiling fan blades", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-EXHAUST-FAN", name: "Exhaust fan", icon: "exhaustFan", category: "climate", serviceIntervalDays: 365, expectedLifeYears: 8,
@@ -97,31 +97,31 @@ const ASSETS = [
   { key: "AST-HUMIDIFIER", name: "Humidifier", icon: "humidifier", category: "climate", serviceIntervalDays: 90, expectedLifeYears: 5,
     suggestedRoutines: [{ title: "Clean humidifier tank", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-AIR-PURIFIER", name: "Air purifier", icon: "airPurifier", category: "climate", serviceIntervalDays: 90, expectedLifeYears: 6,
-    suggestedRoutines: [{ title: "Replace air purifier filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Replace air purifier filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
 
   // Power
   { key: "AST-INVERTER", name: "Inverter / UPS", icon: "inverter", category: "power", serviceIntervalDays: 365, expectedLifeYears: 5,
     suggestedRoutines: [{ title: "Top up inverter battery water", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "damaging", ownerClass: "member" }] },
   { key: "AST-GENERATOR", name: "Generator", icon: "generator", category: "power", serviceIntervalDays: 180, expectedLifeYears: 15,
     suggestedRoutines: [
-      { title: "Service generator", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service generator", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Test-run generator", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "damaging", ownerClass: "member" },
     ] },
   { key: "AST-SOLAR-PANEL", name: "Solar panel system", icon: "solarPanel", category: "power", serviceIntervalDays: 365, expectedLifeYears: 25,
-    suggestedRoutines: [{ title: "Clean solar panels", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean solar panels", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "damaging", ownerClass: "either" }] },
 
   // Laundry appliances (service tracking only — pantry stock stays in Miso)
   { key: "AST-WASHING-MACHINE", name: "Washing machine", icon: "washingMachine", category: "appliance", serviceIntervalMeter: 150, expectedLifeYears: 10,
     suggestedRoutines: [
-      { title: "Service washing machine", trigger: { type: "usage_meter", meterDelta: 150 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service washing machine", trigger: { type: "usage_meter", meterDelta: 150 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Clean washing machine drum and filter", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" },
     ] },
   { key: "AST-DRYER", name: "Clothes dryer", icon: "dryer", category: "appliance", serviceIntervalMeter: 150, expectedLifeYears: 12,
-    suggestedRoutines: [{ title: "Clean dryer lint trap", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "safety", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean dryer lint trap", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "unsafe", ownerClass: "either" }] },
   { key: "AST-FRIDGE", name: "Refrigerator", icon: "fridge", category: "appliance", serviceIntervalDays: 365, expectedLifeYears: 12,
     suggestedRoutines: [
       { title: "Defrost and clean fridge", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "cosmetic", ownerClass: "either" },
-      { title: "Clean fridge coils", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 2, consequence: "degrading", ownerClass: "either" },
+      { title: "Clean fridge coils", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 2, consequence: "damaging", ownerClass: "either" },
     ] },
   { key: "AST-DISHWASHER", name: "Dishwasher", icon: "dishwasher", category: "appliance", serviceIntervalMeter: 150, expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Clean dishwasher filter", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
@@ -130,23 +130,23 @@ const ASSETS = [
   { key: "AST-ROBOT-VACUUM", name: "Robot vacuum", icon: "robotVacuum", category: "appliance", expectedLifeYears: 5,
     suggestedRoutines: [
       { title: "Empty robot vacuum bin and clean sensors", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "cosmetic", ownerClass: "either" },
-      { title: "Replace robot vacuum brushes and filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Replace robot vacuum brushes and filter", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "damaging", ownerClass: "either" },
     ] },
 
   // Safety & security
   { key: "AST-SMOKE-DETECTOR", name: "Smoke / CO detector", icon: "detector", category: "safety", serviceIntervalDays: 180, expectedLifeYears: 10,
     suggestedRoutines: [
-      { title: "Test smoke / CO detector", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "safety", ownerClass: "member" },
-      { title: "Replace detector battery", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 1, consequence: "safety", ownerClass: "member", requiresItemKeys: ["ITM-BATTERIES-AA"] },
+      { title: "Test smoke / CO detector", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "unsafe", ownerClass: "member" },
+      { title: "Replace detector battery", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 1, consequence: "unsafe", ownerClass: "member", requiresItemKeys: ["ITM-BATTERIES-AA"] },
     ] },
   { key: "AST-FIRE-EXTINGUISHER", name: "Fire extinguisher", icon: "fireExtinguisher", category: "safety", serviceIntervalDays: 365, expectedLifeYears: 12,
-    suggestedRoutines: [{ title: "Check fire extinguisher pressure", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Check fire extinguisher pressure", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "unsafe", ownerClass: "member" }] },
   { key: "AST-SECURITY-CAMERA", name: "Security camera", icon: "securityCamera", category: "safety", serviceIntervalDays: 365, expectedLifeYears: 6,
-    suggestedRoutines: [{ title: "Check security camera footage and storage", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "degrading", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Check security camera footage and storage", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "damaging", ownerClass: "member" }] },
   { key: "AST-GARAGE-DOOR-OPENER", name: "Garage door opener", icon: "garageDoorOpener", category: "safety", serviceIntervalDays: 365, expectedLifeYears: 12,
     suggestedRoutines: [
-      { title: "Test garage door auto-reverse safety", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" },
-      { title: "Lubricate garage door tracks", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Test garage door auto-reverse safety", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "unsafe", ownerClass: "member" },
+      { title: "Lubricate garage door tracks", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "damaging", ownerClass: "either" },
     ] },
 
   // Electronics & AV (added 2026-08-03, user request for broader coverage —
@@ -166,7 +166,7 @@ const ASSETS = [
   { key: "AST-HOME-THEATER", name: "Home theater system", icon: "homeTheater", category: "electronics", expectedLifeYears: 8 },
   { key: "AST-GAMING-CONSOLE", name: "Gaming console", icon: "gamingConsole", category: "electronics", expectedLifeYears: 6 },
   { key: "AST-PROJECTOR", name: "Projector", icon: "projector", category: "electronics", serviceIntervalDays: 365, expectedLifeYears: 6,
-    suggestedRoutines: [{ title: "Clean projector filter and lens", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean projector filter and lens", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "damaging", ownerClass: "either" }] },
   { key: "AST-MOBILE-PHONE", name: "Mobile phone", icon: "mobilePhone", category: "electronics", expectedLifeYears: 3 },
   { key: "AST-TABLET", name: "Tablet", icon: "tablet", category: "electronics", expectedLifeYears: 4 },
   { key: "AST-SMARTWATCH", name: "Smartwatch", icon: "smartwatch", category: "electronics", expectedLifeYears: 3 },
@@ -192,17 +192,17 @@ const ASSETS = [
   { key: "AST-MICROWAVE", name: "Microwave", icon: "microwave", category: "appliance", serviceIntervalDays: 365, expectedLifeYears: 9,
     suggestedRoutines: [{ title: "Deep clean microwave", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-CHIMNEY", name: "Chimney / exhaust hood", icon: "chimney", category: "appliance", serviceIntervalDays: 180, expectedLifeYears: 10,
-    suggestedRoutines: [{ title: "Clean chimney filter mesh", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 2, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean chimney filter mesh", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 2, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-INDUCTION-COOKTOP", name: "Induction cooktop", icon: "inductionCooktop", category: "appliance", expectedLifeYears: 8 },
   { key: "AST-GAS-STOVE", name: "Gas stove", icon: "gasStove", category: "appliance", serviceIntervalDays: 365, expectedLifeYears: 10,
     suggestedRoutines: [
       { title: "Clean gas stove burners", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "cosmetic", ownerClass: "either" },
-      { title: "Check gas stove for leaks", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "vendor" },
+      { title: "Check gas stove for leaks", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "unsafe", ownerClass: "vendor" },
     ] },
   { key: "AST-WATER-DISPENSER", name: "Water dispenser", icon: "waterDispenser", category: "appliance", serviceIntervalDays: 180, expectedLifeYears: 7,
-    suggestedRoutines: [{ title: "Sanitize water dispenser", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Sanitize water dispenser", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-COFFEE-MAKER", name: "Coffee maker", icon: "coffeeMaker", category: "appliance", expectedLifeYears: 5,
-    suggestedRoutines: [{ title: "Descale coffee maker", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Descale coffee maker", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-KETTLE", name: "Electric kettle", icon: "kettle", category: "appliance", expectedLifeYears: 4,
     suggestedRoutines: [{ title: "Descale kettle", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-TOASTER", name: "Toaster", icon: "toaster", category: "appliance", expectedLifeYears: 5 },
@@ -211,24 +211,24 @@ const ASSETS = [
   // Outdoor & garden equipment
   { key: "AST-LAWN-MOWER", name: "Lawn mower", icon: "lawnMower", category: "outdoor", serviceIntervalDays: 365, expectedLifeYears: 8,
     suggestedRoutines: [
-      { title: "Service lawn mower", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "degrading", ownerClass: "vendor" },
-      { title: "Sharpen mower blade", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "degrading", ownerClass: "either" },
+      { title: "Service lawn mower", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 2, consequence: "damaging", ownerClass: "vendor" },
+      { title: "Sharpen mower blade", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "damaging", ownerClass: "either" },
     ] },
   { key: "AST-HEDGE-TRIMMER", name: "Hedge trimmer", icon: "hedgeTrimmer", category: "outdoor", expectedLifeYears: 7 },
   { key: "AST-PRESSURE-WASHER", name: "Pressure washer", icon: "pressureWasher", category: "outdoor", expectedLifeYears: 8 },
   { key: "AST-POOL-PUMP", name: "Pool pump", icon: "poolPump", category: "outdoor", serviceIntervalDays: 90, expectedLifeYears: 10,
-    suggestedRoutines: [{ title: "Clean pool pump filter", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "degrading", ownerClass: "either" }] },
+    suggestedRoutines: [{ title: "Clean pool pump filter", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-BBQ-GRILL", name: "BBQ grill", icon: "bbqGrill", category: "outdoor", expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Deep clean BBQ grill", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 2, consequence: "cosmetic", ownerClass: "either" }] },
 
   // Vehicles
   { key: "AST-CAR", name: "Car", icon: "car", category: "vehicle", serviceIntervalDays: 180, expectedLifeYears: 12,
     suggestedRoutines: [
-      { title: "Service car", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Service car", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
       { title: "Check tire pressure", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "damaging", ownerClass: "member" },
     ] },
   { key: "AST-MOTORCYCLE", name: "Motorcycle / scooter", icon: "motorcycle", category: "vehicle", serviceIntervalDays: 90, expectedLifeYears: 10,
-    suggestedRoutines: [{ title: "Service motorcycle", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "degrading", ownerClass: "vendor" }] },
+    suggestedRoutines: [{ title: "Service motorcycle", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 2, consequence: "damaging", ownerClass: "vendor" }] },
   { key: "AST-BICYCLE", name: "Bicycle", icon: "bicycle", category: "vehicle", expectedLifeYears: 10,
     suggestedRoutines: [{ title: "Oil bicycle chain", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
 
@@ -239,7 +239,7 @@ const ASSETS = [
   { key: "AST-HIGH-CHAIR", name: "High chair", icon: "highChair", category: "baby", expectedLifeYears: 4,
     suggestedRoutines: [{ title: "Deep clean high chair", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-CAR-SEAT", name: "Child car seat", icon: "carSeat", category: "baby", expectedLifeYears: 6,
-    suggestedRoutines: [{ title: "Check car seat expiry and straps", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "safety", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Check car seat expiry and straps", trigger: { type: "floating_since_last", intervalDays: 180 }, effort: 1, consequence: "unsafe", ownerClass: "member" }] },
 
   // Office & admin furniture
   { key: "AST-DESK", name: "Desk", icon: "desk", category: "furniture", expectedLifeYears: 15 },
@@ -248,13 +248,13 @@ const ASSETS = [
   // Lighting & fixtures
   { key: "AST-CEILING-LIGHT", name: "Ceiling light fixture", icon: "ceilingLight", category: "electrical", expectedLifeYears: 10 },
   { key: "AST-DOORBELL", name: "Video doorbell", icon: "doorbell", category: "safety", expectedLifeYears: 6,
-    suggestedRoutines: [{ title: "Check doorbell battery and footage", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "member" }] },
+    suggestedRoutines: [{ title: "Check doorbell battery and footage", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "damaging", ownerClass: "member" }] },
 
   // Fitness equipment
   { key: "AST-TREADMILL", name: "Treadmill", icon: "treadmill", category: "fitness", serviceIntervalDays: 365, expectedLifeYears: 8,
     suggestedRoutines: [
-      { title: "Lubricate treadmill belt", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "degrading", ownerClass: "either" },
-      { title: "Service treadmill", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "degrading", ownerClass: "vendor" },
+      { title: "Lubricate treadmill belt", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "damaging", ownerClass: "either" },
+      { title: "Service treadmill", trigger: { type: "floating_since_last", intervalDays: 365 }, effort: 3, consequence: "damaging", ownerClass: "vendor" },
     ] },
   { key: "AST-EXERCISE-BIKE", name: "Exercise bike", icon: "exerciseBike", category: "fitness", expectedLifeYears: 8,
     suggestedRoutines: [{ title: "Wipe and check exercise bike resistance", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
@@ -288,6 +288,17 @@ const ITEMS = [
   { key: "ITM-SPONGES", name: "Sponges", icon: "cleaningSupply", category: "cleaning", unit: "piece", parLevel: 2, packSize: 4, defaultBurnRate: 0.1 },
   { key: "ITM-DISHWASHING-LIQUID", name: "Dishwashing liquid", icon: "cleaningSupply", category: "cleaning", unit: "ml", parLevel: 150, packSize: 500, defaultBurnRate: 10 },
   { key: "ITM-DISHWASHER-TABLETS", name: "Dishwasher tablets", icon: "cleaningSupply", category: "cleaning", unit: "piece", parLevel: 5, packSize: 20, defaultBurnRate: 1 },
+
+  // Pantry staples (2026-08-09 — Kitchen had no catalog coverage at all,
+  // despite being a universal implied space type since Round 18; see
+  // CLAUDE.md finding 4.2. Burn rates are rough family-of-a-few defaults,
+  // same "honest starting point, editable" spirit as every other default
+  // in this catalog.)
+  { key: "ITM-RICE", name: "Rice", icon: "pantryStaple", category: "pantry", unit: "kg", parLevel: 2, packSize: 5, defaultBurnRate: 0.08 },
+  { key: "ITM-WHEAT-FLOUR", name: "Wheat flour", icon: "pantryStaple", category: "pantry", unit: "kg", parLevel: 1, packSize: 5, defaultBurnRate: 0.1 },
+  { key: "ITM-SUGAR", name: "Sugar", icon: "pantryStaple", category: "pantry", unit: "kg", parLevel: 1, packSize: 1, defaultBurnRate: 0.07 },
+  { key: "ITM-SALT", name: "Salt", icon: "pantryStaple", category: "pantry", unit: "kg", parLevel: 1, packSize: 1, defaultBurnRate: 0.02 },
+  { key: "ITM-COOKING-OIL", name: "Cooking oil", icon: "pantryStaple", category: "pantry", unit: "litre", parLevel: 1, packSize: 1, defaultBurnRate: 0.05 },
 
   // Paper & disposables
   { key: "ITM-PAPER-TOWELS", name: "Paper towels", icon: "paperGoods", category: "paper", unit: "roll", parLevel: 2, packSize: 6, defaultBurnRate: 0.15 },
