@@ -158,7 +158,7 @@ function loadBalance(state) {
 
 // ---- §5.6 Batching ----------------------------------------------------------
 // Same-space and same-vendor clustering for Today's due/overdue list.
-// Same-effort-tier batching already exists as Today's "10 free minutes?"
+// Same-effort-tier batching already exists as Today's "10 free min?"
 // filter; same-trip shopping batching already exists as Stock's "Build
 // shopping list" — both predate this file and aren't duplicated here.
 const EFFORT_MINUTES = { 1: 2, 2: 15, 3: 60, 4: 240 }; // effort 5 (vendor) has no "your time" minutes

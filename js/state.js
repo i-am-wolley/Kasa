@@ -155,6 +155,23 @@ function subscribe(fn) {
 // (elapsedDays <= 0 short-circuits), and correct regardless of how long the
 // tab was closed, since it's driven by real elapsed wall-clock time against
 // each item's own lastDepletedAt checkpoint rather than a running clock.
+// A real bug, found 2026-08-09 while chasing a "Batches/Smoothen chip needs
+// several clicks" report: getState() runs this on every call, including the
+// ones render()/wireEvents() make on themselves right after a notify() this
+// function just fired. Each pass stamped lastDepletedAt to "now", so the
+// very next (synchronous, re-entrant) pass always saw a technically-nonzero
+// but microscopic elapsed time — the reentrancy guard only blocks a call
+// that's DIRECTLY nested inside its own notify(), not one that comes back
+// around after that notify() call returns — so a chain of render -> getState
+// -> tiny depletion -> notify -> render (recursive) -> ... -> back to the
+// outer render's own wireEvents -> getState -> still-nonzero elapsed time ->
+// notify again could cascade 5-10+ synchronous re-renders off a SINGLE
+// click, replacing the chip row's DOM (and rebinding its listeners) out from
+// under the user's actual next click. A minimum meaningful elapsed time
+// fixes this at the root — real depletion only ever needs day-scale
+// granularity, so 60 real seconds is a floor no legitimate catch-up would
+// ever hit, while every re-entrant call above is microseconds.
+const MIN_DEPLETION_ELAPSED_MS = 60000;
 let applyingDepletion = false;
 function applyAutoDepletion() {
   if (applyingDepletion) return; // reentrancy guard — notify() below can loop back into getState()
@@ -162,8 +179,9 @@ function applyAutoDepletion() {
   let changed = false;
   for (const item of state.items) {
     if (!item.autoDeplete || !item.burnRate || !item.lastDepletedAt) continue;
-    const elapsedDays = (now - new Date(item.lastDepletedAt).getTime()) / 86400000;
-    if (elapsedDays <= 0) continue;
+    const elapsedMs = now - new Date(item.lastDepletedAt).getTime();
+    if (elapsedMs < MIN_DEPLETION_ELAPSED_MS) continue;
+    const elapsedDays = elapsedMs / 86400000;
     const newQty = Math.max(0, item.qty - item.burnRate * elapsedDays);
     if (newQty !== item.qty) {
       item.qty = newQty;

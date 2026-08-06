@@ -257,7 +257,7 @@ function memberFilterHtml(state) {
 
 // §5.6 batching (2026-08-05) — "you're already in the room, do these
 // together" clustering for whatever's actually overdue/due right now.
-// Same-effort-tier batching already exists as the "10 free minutes?" chip
+// Same-effort-tier batching already exists as the "10 free min?" chip
 // and same-trip shopping batching already exists as Stock's "Build
 // shopping list" — this section is the two genuinely new clusters: same
 // space, same vendor. Tapping a card just jumps to the list below (reuses
@@ -419,7 +419,7 @@ function render() {
     ${statRowHtml(state)}
     <div class="today-section" style="padding-top:4px;">
       <div class="today-chip-row">
-        ${chip("10 free minutes?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
+        ${chip("10 free min?", { active: effortOnly, dataAttrs: 'id="effort-filter"' })}
         ${chip("Today", { active: view === "today", dataAttrs: 'data-view="today"' })}
         ${chip("This week", { active: view === "week", dataAttrs: 'data-view="week"' })}
         ${chip("Batches", { active: showBatches, dataAttrs: 'id="batches-toggle"' })}
