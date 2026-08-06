@@ -339,28 +339,44 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
     });
   }
 
-  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+  // Reads + validates the form's current field values — shared by "Save
+  // changes" AND "Mark acquired" below. Bug found and fixed (2026-08-09,
+  // caught during a live simulation pass): "Mark acquired" checked the
+  // closed-over `entry.spaceId` — the value from when the sheet first
+  // opened — instead of whatever the user had just picked in the Space
+  // chip-group on screen. Picking a space and immediately clicking "Mark
+  // acquired" (the natural flow — nothing suggests you need to hit "Save
+  // changes" first) silently failed the "pick a space first" check even
+  // though a space was clearly selected right there in the form. Returns
+  // null if the form doesn't validate (having already returned early, same
+  // as before).
+  function readWishFields() {
     const type = readChipGroup(root, "wishType") || "asset";
     let title, catalogKey, icon;
     if (type === "project") {
       title = root.querySelector("#f-wish-title").value.trim();
-      if (!title) return;
+      if (!title) return null;
       catalogKey = null;
       icon = "wishlist";
     } else {
       const resolved = resolveCatalogField(root, "f-wish-name", type);
-      if (!resolved) return;
+      if (!resolved) return null;
       title = resolved.name;
       catalogKey = resolved.key;
       icon = resolved.icon;
     }
-    const fields = {
+    return {
       title, type, catalogKey, icon,
       spaceId: readChipGroup(root, "wishSpaceId"),
       priority: readChipGroup(root, "wishPriority") || "someday",
       estimatedCost: Math.max(0, Number(root.querySelector("#f-wish-cost").value) || 0) || null,
       notes: root.querySelector("#f-wish-notes").value.trim(),
     };
+  }
+
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const fields = readWishFields();
+    if (!fields) return;
     if (entry) updateWishlistItem(entry.id, fields);
     else addWishlistItem(fields);
     closeSheet();
@@ -378,14 +394,19 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
       showToast("Marked done");
       return;
     }
-    if (!entry.spaceId) {
+    // Save whatever's currently in the form first, so a space picked (or
+    // any other field changed) just before clicking this isn't lost.
+    const fields = readWishFields();
+    if (!fields) return;
+    updateWishlistItem(entry.id, fields);
+    if (!fields.spaceId) {
       showToast("Pick a space first so this can be added there");
       return;
     }
-    const openFn = entry.type === "asset" ? openAssetSheet : openItemSheet;
+    const openFn = fields.type === "asset" ? openAssetSheet : openItemSheet;
     openFn({
-      defaultName: entry.title,
-      defaultSpaceId: entry.spaceId,
+      defaultName: fields.title,
+      defaultSpaceId: fields.spaceId,
       onSaved: () => {
         updateWishlistItem(entry.id, { status: "acquired", acquiredAt: new Date().toISOString() });
       },
