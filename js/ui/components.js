@@ -68,8 +68,16 @@ function stepper(value, { min = 0, dataAttrs = "" } = {}) {
 
 // ---- Sheet form fields — labeled input / chip-group, for add/edit sheets ----
 
+// Plain div, not <label> — a <label> with no `for` attribute forwards any
+// click on itself (including blank padding) to its first labelable
+// descendant per the HTML spec. Harmless for a single <input>, but for a
+// chip-group field (many <button> descendants) it meant clicking blank
+// space anywhere in the field silently re-selected the first chip,
+// discarding whatever was actually chosen (2026-08-09, user report:
+// clicking white space near a routine's Space field reset it to the
+// alphabetically-first space).
 function field(label, inputHtml) {
-  return `<label class="field"><span class="field-label">${label}</span>${inputHtml}</label>`;
+  return `<div class="field"><span class="field-label">${label}</span>${inputHtml}</div>`;
 }
 
 function textInput({ id, value = "", placeholder = "", type = "text", min = null }) {

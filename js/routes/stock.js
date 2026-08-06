@@ -424,10 +424,17 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
         const reorderUses = Math.max(0, Number(root.querySelector("#f-reorder-uses").value) || 0);
         parLevel = round2(reorderUses * perTimeAmount) || 0;
       }
-      // Fresh baseline when just turning it on (or on a new item); keep the
-      // existing checkpoint if it was already running so an unrelated edit
-      // doesn't reset how much time has "counted" toward depletion.
-      lastDepletedAt = autoDeplete ? (item?.autoDeplete && item?.lastDepletedAt ? item.lastDepletedAt : new Date().toISOString()) : null;
+      // Fresh baseline when just turning it on, on a new item, or when the
+      // user explicitly typed a new quantity (restocking/correcting a
+      // count) — otherwise the OLD checkpoint's already-elapsed time would
+      // apply against the freshly-typed number the moment state is next
+      // read, silently shaving a whole-number entry down to a decimal
+      // (2026-08-09, user report: "whole number... gets reduced to some
+      // decimals"). Keep the existing checkpoint only for a genuinely
+      // unrelated edit (rename, space change, etc.) with quantity untouched,
+      // so that doesn't reset how much time has "counted" toward depletion.
+      const qtyChanged = !item || Math.abs((item.qty ?? 0) - qty) > 0.001;
+      lastDepletedAt = autoDeplete ? (item?.autoDeplete && item?.lastDepletedAt && !qtyChanged ? item.lastDepletedAt : new Date().toISOString()) : null;
       status = qty <= 0 ? "out" : qty <= parLevel ? "low" : "ok";
     }
     const fields = {

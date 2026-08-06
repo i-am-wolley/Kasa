@@ -16,7 +16,7 @@
 // purchase record (that's Assets/Stock once acquired) — this is the
 // staging area before an idea becomes real.
 
-import { getState, subscribe, addWishlistItem, updateWishlistItem, deleteWishlistItem, genId, byId } from "../state.js";
+import { getState, subscribe, addWishlistItem, updateWishlistItem, deleteWishlistItem, genId, visibleSpaceIds, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
 import { openAssetSheet } from "./assets.js";
@@ -148,6 +148,27 @@ function subItemsChecklistHtml(entry) {
   `;
 }
 
+// Sorted by house name first, then space name alphabetically within each
+// house, with a house-name hint on the chip when more than one house is
+// active — same pattern already used in routine.js/stock.js/assets.js
+// (2026-08-09, user report: wishlist's own Space field was neither tagged
+// nor sorted, just `state.spaces` in raw insertion order).
+function wishSpaceOptions(state, currentSpaceId) {
+  const visible = visibleSpaceIds(state);
+  const multiHouse = state.houses.length > 1;
+  return [...state.spaces.filter((s) => visible.has(s.id) || s.id === currentSpaceId)]
+    .sort((a, b) => {
+      const houseA = byId(state.houses, a.houseId)?.name || "";
+      const houseB = byId(state.houses, b.houseId)?.name || "";
+      if (multiHouse && houseA !== houseB) return houseA.localeCompare(houseB);
+      return a.name.localeCompare(b.name);
+    })
+    .map((s) => {
+      const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
+      return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };
+    });
+}
+
 function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
   const state = getState();
   const initialType = entry?.type ?? "asset";
@@ -164,7 +185,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
         <div id="plain-name-wrap" style="display:${isProject ? "block" : "none"};">
           ${field("Title", textInput({ id: "f-wish-title", value: isProject ? (entry?.title ?? "") : "", placeholder: "e.g. Repaint living room walls" }))}
         </div>
-        ${field("Space (optional)", chipGroup({ name: "wishSpaceId", options: state.spaces.map((s) => ({ value: s.id, label: s.name })), value: entry?.spaceId ?? defaultSpaceId ?? null }))}
+        ${field("Space (optional)", chipGroup({ name: "wishSpaceId", options: wishSpaceOptions(state, entry?.spaceId), value: entry?.spaceId ?? defaultSpaceId ?? null }))}
         ${field("Priority", chipGroup({ name: "wishPriority", options: PRIORITIES, value: entry?.priority ?? "someday" }))}
         ${field("Estimated cost (optional)", textInput({ id: "f-wish-cost", type: "number", value: entry?.estimatedCost ?? "", placeholder: "e.g. 12000", min: 0 }))}
         ${field("Notes (optional)", textInput({ id: "f-wish-notes", value: entry?.notes ?? "", placeholder: "Why, or what to look for" }))}

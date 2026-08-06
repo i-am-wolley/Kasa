@@ -347,7 +347,7 @@ function statRowHtml(state) {
   // user request) — was Low stock before Completed.
   const tiles = [
     { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, action: "jump:section-overdue" },
-    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "jump:section-due" },
+    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "today:section-due" },
     { id: "this-week", value: weekCount, label: "This week", tone: null, action: "week:section-due" },
     { id: "completed-week", value: completedCount, label: "Completed", tone: "var(--done)", action: null },
     { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
@@ -504,17 +504,20 @@ function wireEvents() {
     attachSwipe(row, { onSwipeRight: () => markHabitDone(habitId), onSwipeLeft: () => markHabitDone(habitId) });
   });
 
-  // Stat tiles: "jump" scrolls to a section already on screen, "week"
-  // switches to the This week view first (then scrolls once it's
-  // rendered), "tab" hands off to the Stock tab's own tabbar button
-  // (2026-08-05) rather than duplicating boot.js's routing here.
+  // Stat tiles: "jump" scrolls to a section already on screen, "today"/
+  // "week" switch to that view first (then scroll once it's rendered —
+  // 2026-08-09, user report: clicking "Due today" while already in the
+  // This week view just scrolled to whatever was on screen instead of
+  // actually showing today's due list), "tab" hands off to the Stock
+  // tab's own tabbar button (2026-08-05) rather than duplicating boot.js's
+  // routing here.
   mountEl.querySelectorAll("[data-tile-action]").forEach((tile) => {
     tile.addEventListener("click", () => {
       const [kind, target] = tile.dataset.tileAction.split(":");
       if (kind === "jump") {
         document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else if (kind === "week") {
-        view = "week";
+      } else if (kind === "today" || kind === "week") {
+        view = kind;
         render();
         requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "start" }));
       } else if (kind === "tab") {
