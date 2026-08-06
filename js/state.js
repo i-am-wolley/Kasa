@@ -119,7 +119,10 @@ function regenerate() {
   // the same engine pass regenerate() already does, not a separate manual
   // action; each occurrence is only ever smoothed once (applyLoadSmoothing
   // marks `occ.smoothed`), so repeat regenerate() calls don't re-shuffle
-  // things that already moved.
+  // things that already moved. A routine's very first-ever occurrence is
+  // never eligible (2026-08-07 bug fix, see intel.js) — otherwise a
+  // brand-new asset's suggested routine could get shoved a week out
+  // before ever showing up on Today once.
   state.lastSmoothingMoves = applyLoadSmoothing(state);
 }
 
@@ -688,6 +691,23 @@ function updateRoutine(id, patch) {
   const routine = byId(state.routines, id);
   if (!routine) return;
   Object.assign(routine, patch, { userEdited: true });
+  // A routine that's never been completed yet has an open occurrence
+  // sitting at whatever date it was originally generated for — editing
+  // its start date should actually move that occurrence, not leave it
+  // stale until the routine happens to regenerate on its own (which,
+  // per engine.js's own "no open occurrence exists" rule, it won't,
+  // since one already exists). Only ever the FIRST occurrence's date;
+  // once completed once, engine.js's own floating-since-last logic takes
+  // back over (2026-08-07, user request: "when a routine's start date is
+  // changed to a future date, adjust the existing routine[s occurrence]
+  // to start on the future date").
+  if (routine.trigger?.type === "floating_since_last" && routine.trigger.startDate) {
+    const everCompleted = state.ledger.some((l) => l.routineId === id);
+    if (!everCompleted) {
+      const openOcc = state.occurrences.find((o) => o.routineId === id && o.state !== "done" && o.state !== "snoozed");
+      if (openOcc) openOcc.dueAt = new Date(routine.trigger.startDate).toISOString();
+    }
+  }
   regenerate();
   notify();
 }

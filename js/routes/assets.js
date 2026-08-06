@@ -106,8 +106,17 @@ function assetFormFields(asset, state, defaultSpaceId, defaultName) {
 // the sheet's #suggested-routines-field placeholder. Re-called whenever the
 // catalog selection changes (add mode) or the "+ Add suggested routines"
 // button is pressed (edit mode) — memo §4.2-shaped templates, see catalog.js.
-function renderSuggestedRoutines(root, routines) {
-  currentSuggested = routines || [];
+//
+// `existingTitles` (2026-08-07, user report: "it shouldn't again prompt
+// for suggested routines unless the old one was deleted... duplicate
+// routines can be created") — a template whose title already exists as a
+// real routine linked to this asset is dropped from the offered list
+// entirely, not just left unchecked, so re-opening "+ Add suggested
+// routines" on an asset that already has them all linked has nothing
+// left to offer. Only relevant in edit mode; a brand-new asset being
+// created has no existing routines to check against.
+function renderSuggestedRoutines(root, routines, existingTitles = new Set()) {
+  currentSuggested = (routines || []).filter((r) => !existingTitles.has(r.title));
   const container = root.querySelector("#suggested-routines-field");
   if (!container) return;
   if (!currentSuggested.length) {
@@ -137,7 +146,10 @@ function renderSuggestedRoutines(root, routines) {
 function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = null, onSaved = null } = {}) {
   const state = getState();
   const catalogEntry = asset?.catalogKey ? findByKey(asset.catalogKey, "asset") : null;
-  const canOfferMore = asset && catalogEntry?.suggestedRoutines?.length;
+  // Titles already linked to this asset — offering them again would just
+  // create duplicates (2026-08-07 fix, see renderSuggestedRoutines).
+  const existingRoutineTitles = asset ? new Set(state.routines.filter((r) => r.assetId === asset.id).map((r) => r.title)) : new Set();
+  const canOfferMore = asset && catalogEntry?.suggestedRoutines?.some((r) => !existingRoutineTitles.has(r.title));
 
   const extraActions = asset
     ? `
@@ -177,7 +189,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
   });
 
   root.querySelector("#show-suggested-btn")?.addEventListener("click", (e) => {
-    renderSuggestedRoutines(root, catalogEntry.suggestedRoutines);
+    renderSuggestedRoutines(root, catalogEntry.suggestedRoutines, existingRoutineTitles);
     e.target.remove();
   });
 
@@ -211,10 +223,15 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
 
     const checkedIndices = [...root.querySelectorAll('#suggested-routines-field [data-routine-index][aria-pressed="true"]')]
       .map((b) => Number(b.dataset.routineIndex));
+    // Defensive re-check at the actual save point, not just the render-
+    // time filter above (2026-08-07 fix) — the same "don't duplicate an
+    // already-linked suggested routine" guard, re-read fresh in case
+    // anything changed between opening this sheet and clicking save.
+    const alreadyLinkedTitles = new Set(getState().routines.filter((r) => r.assetId === assetId).map((r) => r.title));
     let addedRoutines = 0;
     for (const i of checkedIndices) {
       const tmpl = currentSuggested[i];
-      if (!tmpl) continue;
+      if (!tmpl || alreadyLinkedTitles.has(tmpl.title)) continue;
       // Same-room only — an AC filter routine in the Bedroom shouldn't
       // silently link to a filter item that happens to live in Utility
       // (2026-08-03, user request, same principle as the manual routine

@@ -811,6 +811,14 @@ h1, h2, h3, p { margin: 0; }
 
 .text-input {
   width: 100%;
+  /* height, not just min-height (2026-08-07, user report: "date
+     selection boxes are longer than other boxes across the modals") —
+     native type="date"/type="time" controls render their own internal
+     calendar/clock-icon UI, which on some browsers (mobile Chrome/Safari
+     especially) computes a taller intrinsic content box than a plain
+     type="text" input even with identical padding, so min-height alone
+     let them grow past their siblings. An explicit height caps it. */
+  height: var(--tap-min);
   min-height: var(--tap-min);
   padding: 9px 12px;
   /* Deliberately NOT shrunk below 16px (var(--fs-body)) — iOS Safari
@@ -822,9 +830,18 @@ h1, h2, h3, p { margin: 0; }
   border-radius: var(--radius-chip);
   background: var(--surface);
   color: var(--ink);
+  box-sizing: border-box;
 }
 
 .text-input:focus-visible { border-color: var(--gold); }
+
+/* Normalizes the native calendar/clock icon's own box so it doesn't push
+   type="date"/type="time" taller than a plain text input on WebKit-based
+   mobile browsers (same report as above). */
+.text-input::-webkit-calendar-picker-indicator {
+  padding: 4px;
+  margin: 0;
+}
 
 .chip-group {
   display: flex;
