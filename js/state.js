@@ -371,6 +371,13 @@ function updateHouseholdName(name) {
   notify();
 }
 
+// Daily notification preference (2026-08-06, user request) — see notify.js
+// for what actually reads this.
+function updateNotifySettings(patch) {
+  state.household.notifySettings = { ...state.household.notifySettings, ...patch };
+  notify();
+}
+
 function setActiveMode(key) {
   for (const m of state.modes) m.active = m.key === key;
   state.household.activeMode = key;
@@ -932,6 +939,7 @@ export {
   hydrateState,
   resetForNewHousehold,
   updateHouseholdName,
+  updateNotifySettings,
   addHouse,
   updateHouse,
   deleteHouse,

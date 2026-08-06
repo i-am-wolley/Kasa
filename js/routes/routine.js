@@ -67,6 +67,8 @@ function triggerParamsHtml(routine) {
   return `
     <div data-trigger-block="floating_since_last">
       ${field("Repeat every (days)", textInput({ id: "f-intervalDays", type: "number", value: t.intervalDays ?? 30 }))}
+      ${field("Start date (optional)", textInput({ id: "f-startDate", type: "date", value: t.startDate ?? "" }))}
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;">Only affects when this first becomes due — leave blank to have it due right away. Once it's done once, it goes back to floating from the actual completion date.</p>
     </div>
     <div data-trigger-block="fixed_calendar">
       ${field("Cadence", chipGroup({ name: "rruleFreq", options: ["Monthly", "Weekly"], value: rr.FREQ === "WEEKLY" ? "Weekly" : "Monthly" }))}
@@ -139,11 +141,19 @@ function assetFieldHtml(spaceId, selectedId, fieldName = "assetId") {
 // multi-house support) — plus the entity's own current space even if it
 // happens to belong to a house that isn't selected right now, so editing
 // something from a hidden house doesn't strand it with no matching option.
+// Each option's label carries a small muted house-name hint (2026-08-06,
+// user request: "smartly show which house the space belongs to... not in
+// a big way") whenever the household actually has more than one house —
+// a single-house household never sees it, nothing to disambiguate.
 function spaceOptions(state, currentSpaceId) {
   const visible = visibleSpaceIds(state);
+  const multiHouse = state.houses.length > 1;
   return state.spaces
     .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
-    .map((s) => ({ value: s.id, label: s.name }));
+    .map((s) => {
+      const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
+      return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };
+    });
 }
 
 function routineFieldsHtml(routine, spaceId, state) {
@@ -217,8 +227,10 @@ function showTriggerBlock(root, type) {
 function buildTrigger(root) {
   const type = readChipGroup(root, "triggerType");
   switch (type) {
-    case "floating_since_last":
-      return { type, intervalDays: Number(root.querySelector("#f-intervalDays").value) || 30 };
+    case "floating_since_last": {
+      const startDate = root.querySelector("#f-startDate").value || null;
+      return { type, intervalDays: Number(root.querySelector("#f-intervalDays").value) || 30, startDate };
+    }
     case "fixed_calendar": {
       const freq = readChipGroup(root, "rruleFreq");
       const rrule = freq === "Weekly"

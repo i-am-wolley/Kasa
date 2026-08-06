@@ -22,7 +22,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -41,6 +41,15 @@ const migrations = {
       if (!space.houseId) space.houseId = house.id;
     }
     state.household.activeHouseIds = [house.id];
+  },
+
+  // v2 -> v3 (2026-08-06): a household-level notification preference — a
+  // daily consolidated "what's due" summary, off by default, toggleable
+  // in More (see notify.js). A pre-v3 household has no notifySettings
+  // field at all.
+  3: (state) => {
+    if (state.household.notifySettings) return;
+    state.household.notifySettings = { enabled: false, time: "07:00" };
   },
 };
 

@@ -525,6 +525,19 @@ h1, h2, h3, p { margin: 0; }
   font-family: var(--font-mono);
 }
 
+/* A space chip's small house-name hint (2026-08-06, user request:
+   "smartly show which house the space belong to... not in a big way") —
+   shown only when the household actually has more than one house. Sits
+   on its own line under the room name, deliberately quiet. */
+.chip-house-hint {
+  display: block;
+  font-size: 9px;
+  font-weight: var(--fw-regular, 400);
+  color: var(--ink-faint);
+  opacity: 0.8;
+  margin-top: 1px;
+}
+
 /* House label on a Today row, shown only when several houses are active
    at once (2026-08-06, user request) — quiet by design, same weight as
    the effort badge it sits above. */

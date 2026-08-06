@@ -3,10 +3,11 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
-import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, byId } from "./state.js";
+import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, updateNotifySettings, byId } from "./state.js";
 import { onAuthChange, completeRedirectSignIn, signOutUser } from "./auth.js";
 import { getUserRecord, createHouseholdRemote, joinHouseholdRemote, loadHouseholdRemote, startAutoSave } from "./db.js";
-import { openSheet, closeSheet, field, chipGroup, wireChipGroup, readChipGroup, sheetActions, showToast } from "./ui/components.js";
+import * as notify from "./notify.js";
+import { openSheet, closeSheet, field, textInput, chipGroup, wireChipGroup, readChipGroup, sheetActions, showToast } from "./ui/components.js";
 import { mount as mountToday } from "./routes/today.js";
 import { mount as mountHouse } from "./routes/house.js";
 import { mount as mountStock } from "./routes/stock.js";
@@ -48,6 +49,7 @@ const MORE_ITEMS = [
   { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
   { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the currently-viewed house from six questions" },
+  { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device" },
 ];
 
 let activeTab = "today";
@@ -116,8 +118,65 @@ function openMoreSheet() {
   document.querySelectorAll("[data-more-item]").forEach((row) => {
     row.addEventListener("click", () => {
       closeSheet();
-      mountScreen(row.dataset.moreItem);
+      if (row.dataset.moreItem === "notifications") {
+        openNotificationsSheet();
+      } else {
+        mountScreen(row.dataset.moreItem);
+      }
     });
+  });
+}
+
+// Notifications settings — a sheet, not a routed screen (2026-08-06),
+// same weight as the Houses picker. See notify.js for what this actually
+// can and can't do (on-device only, not true background push).
+function openNotificationsSheet() {
+  const state = getState();
+  const settings = state.household.notifySettings || { enabled: false, time: "07:00" };
+  const supported = notify.isSupported();
+  const permission = notify.permissionState();
+  let enabled = settings.enabled;
+
+  openSheet({
+    title: "Notifications",
+    bodyHtml: `
+      <p style="color:var(--ink-muted);margin-bottom:16px;">A once-a-day summary of what's overdue, due today, and low on stock.</p>
+      ${!supported ? `<p style="color:var(--tier-damaging);font-size:var(--fs-meta);margin-bottom:12px;">Notifications aren't supported in this browser.</p>` : ""}
+      ${supported && permission === "denied" ? `<p style="color:var(--tier-damaging);font-size:var(--fs-meta);margin-bottom:12px;">Notifications are blocked for this site in your browser's settings — allow them there first.</p>` : ""}
+      <div class="list-row" style="cursor:default;">
+        <div class="occ-row-body">
+          <div class="occ-row-title">Daily summary</div>
+          <div class="occ-row-meta">Checked while Kasa is open on this device</div>
+        </div>
+        <button type="button" class="chip" id="notif-toggle" aria-pressed="${enabled}" ${supported ? "" : "disabled"}>${enabled ? "On" : "Off"}</button>
+      </div>
+      ${field("Time", textInput({ id: "f-notif-time", type: "time", value: settings.time || "07:00" }))}
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-6px;">This only fires while a Kasa tab is open on this device — it's not a true background push (that needs a server sending it while your phone's screen is off, which isn't built yet).</p>
+      ${sheetActions({ saveLabel: "Save" })}
+    `,
+  });
+
+  const root = document.getElementById("sheet-root");
+  const toggleBtn = document.getElementById("notif-toggle");
+  toggleBtn?.addEventListener("click", async () => {
+    if (!enabled) {
+      const perm = await notify.requestPermission();
+      if (perm !== "granted") {
+        showToast("Notifications need permission — check your browser's site settings.");
+        return;
+      }
+    }
+    enabled = !enabled;
+    toggleBtn.setAttribute("aria-pressed", String(enabled));
+    toggleBtn.textContent = enabled ? "On" : "Off";
+  });
+
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const time = root.querySelector("#f-notif-time").value || "07:00";
+    updateNotifySettings({ enabled, time });
+    closeSheet();
+    showToast("Notification settings saved");
+    notify.checkAndNotify(); // re-evaluate right away in case today's time already passed
   });
 }
 
@@ -282,6 +341,7 @@ function startApp() {
   document.getElementById("app-house-btn").addEventListener("click", openHousePickerSheet);
   renderHouseBtn();
   subscribe(renderHouseBtn);
+  notify.startChecking();
 }
 
 function showLoading() {

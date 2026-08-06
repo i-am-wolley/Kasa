@@ -61,9 +61,13 @@ function round2(n) {
 // hidden house shouldn't strand it with no matching dropdown option.
 function itemSpaceOptions(state, currentSpaceId) {
   const visible = visibleSpaceIds(state);
+  const multiHouse = state.houses.length > 1;
   return state.spaces
     .filter((s) => visible.has(s.id) || s.id === currentSpaceId)
-    .map((s) => ({ value: s.id, label: s.name }));
+    .map((s) => {
+      const houseName = multiHouse ? byId(state.houses, s.houseId)?.name : null;
+      return { value: s.id, label: houseName ? `${s.name}<span class="chip-house-hint">${houseName}</span>` : s.name };
+    });
 }
 
 function isProjectedSoon(item) {

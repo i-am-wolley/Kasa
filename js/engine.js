@@ -81,7 +81,14 @@ function computeNext(routine, ctx) {
     }
 
     case "floating_since_last": {
-      const dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : now;
+      // Never completed yet: due `now` by default (matches every routine
+      // created before this field existed), unless the routine sets an
+      // explicit `startDate` — lets a newly-created routine's first
+      // occurrence land on a chosen date instead of always being
+      // immediately due (2026-08-06, user request). Only affects the
+      // FIRST-ever occurrence; once it's completed once, the interval
+      // floats from that real completion date as normal, same as before.
+      const dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : (t.startDate ? new Date(t.startDate) : now);
       return { dueAt, windowDays: DEFAULT_WINDOW_DAYS };
     }
 
