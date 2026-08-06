@@ -53,35 +53,39 @@ function round2(n) {
   return Math.round(n * 100) / 100;
 }
 
-// Consumption model, reworked for one intuitive control instead of three
-// (a rate number + a day/week/month/usage period chip + a separate
-// "auto-deplete" toggle) — 2026-08-08, user request: "keep it simple...
-// intuitive." One "Consumption" chip picks Off / Per day / Per month /
-// Per routine use; picking Day or Month always live-depletes the actual
-// quantity (the old "rate set but not actually counting down" middle
-// state is gone — if you told it a rate, it counts down). Countable units
-// (piece/pack/roll) and measured units (ml/g/kg/litre) share the exact
-// same three modes, just with a label that reads naturally either way
-// ("how many are used" vs. "how much (ml) is used").
+// Consumption model, reworked twice now for one intuitive control instead
+// of three (a rate number + a day/week/month/usage period chip + a
+// separate "auto-deplete" toggle) — 2026-08-08, user request: "keep it
+// simple... intuitive." "Automate consumption" picks Off / Per day / Per
+// month / Per routine use; picking Day or Month always live-depletes the
+// actual quantity. Countable units (piece/pack/roll) and measured units
+// (ml/g/kg/litre) share the exact same three modes, just with copy that
+// reads naturally either way.
+//
+// Follow-up the same day: rather than asking directly for a rate ("how
+// much is used per day" — a hard number to know off the top of your
+// head), ask the easier real-world question instead — "how many days
+// does 1 [unit] last?" — and derive the rate automatically as 1 divided
+// by that answer. "1 roll lasts about 40 days" is something most people
+// can actually estimate; "I use 0.025 rolls a day" isn't.
 const COUNTABLE_UNITS = ["piece", "pack", "roll"];
 function isCountableUnit(unit) {
   return COUNTABLE_UNITS.includes(unit);
 }
-function consumeAmountLabel(unit, mode) {
-  const what = isCountableUnit(unit) ? "How many are used" : `How much (${unit}) is used`;
-  if (mode === "usage") return `${what} each time a linked routine's "Uses this stock" completes.`;
-  return `${what} per ${mode === "month" ? "month" : "day"} — quantity counts down automatically.`;
+const MODE_PERIOD_PLURAL = { day: "days", month: "months", usage: "uses" };
+function timesPerUnitLabel(unit, mode) {
+  return `How many ${MODE_PERIOD_PLURAL[mode] || "days"} does 1 ${unit} last?`;
 }
 
-// Derives an item's current consumption mode + display amount from its
-// stored fields, for pre-filling the edit sheet. Legacy items that had a
-// rate but autoDeplete off (the old middle state) just show as "Per day"/
-// "Per month" now — opening and re-saving turns live depletion on, which
-// is the whole point of the simplification, not a bug.
+// Derives an item's current consumption mode + "how many X does 1 unit
+// last" from its stored burnRate/perUseQty (the underlying storage is
+// unchanged — this is purely a UI reframing, same as the first rework).
+// timesPerUnit is just the reciprocal of whichever per-time amount is
+// actually stored.
 function consumeModeOf(item) {
-  if (item?.perUseQty) return { mode: "usage", amount: item.perUseQty };
-  if (item?.burnRate) return { mode: "day", amount: round2(item.burnRate) };
-  return { mode: "off", amount: "" };
+  if (item?.perUseQty > 0) return { mode: "usage", timesPerUnit: round2(1 / item.perUseQty) };
+  if (item?.burnRate > 0) return { mode: "day", timesPerUnit: round2(1 / item.burnRate) };
+  return { mode: "off", timesPerUnit: "" };
 }
 
 // Space options scoped to the currently-visible house(s), plus the item's
@@ -200,7 +204,13 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
   const state = getState();
   const isBinary = !!item?.binary;
   const initialUnit = item?.unit ?? "piece";
-  const { mode: initialMode, amount: initialAmount } = consumeModeOf(item);
+  const { mode: initialMode, timesPerUnit: initialTimesPerUnit } = consumeModeOf(item);
+  // Reconstructed from stored fields, not stored itself — "reorder when
+  // this many uses are left" is just `parLevel` expressed as a count
+  // instead of a raw quantity (parLevel = usesLeft / timesPerUnit, so
+  // usesLeft = parLevel * timesPerUnit). Defaults to 3 for a fresh item
+  // or one with nothing to reconstruct from.
+  const initialReorderUses = item && initialTimesPerUnit ? round2(item.parLevel * initialTimesPerUnit) || 3 : 3;
   openSheet({
     title: item ? "Edit item" : "Add item",
     bodyHtml: `
@@ -211,16 +221,22 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
         ${field("Track as", chipGroup({ name: "trackMode", options: [{ value: "qty", label: "Quantity" }, { value: "binary", label: "Yes / No" }], value: isBinary ? "binary" : "qty" }))}
         <div id="qty-fields" style="display:${isBinary ? "none" : "block"};">
           ${field("Unit", chipGroup({ name: "unit", options: UNITS, value: initialUnit }))}
-          ${field("Quantity", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1, min: 0 }))}
-          ${field("Reorder when this many are left", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1, min: 0 }))}
+          ${field("Quantity now", textInput({ id: "f-qty", type: "number", value: item?.qty ?? 1, min: 0 }))}
           ${field(
-            "Consumption",
+            "Automate consumption",
             `${chipGroup({ name: "consumeMode", options: [{ value: "off", label: "Off" }, { value: "day", label: "Per day" }, { value: "month", label: "Per month" }, { value: "usage", label: "Per routine use" }], value: initialMode })}
             <div id="consume-amount-row" style="margin-top:8px;display:${initialMode === "off" ? "none" : "block"};">
-              ${textInput({ id: "f-consume-amount", type: "number", value: initialAmount, placeholder: "e.g. 1", min: 0 })}
-              <p id="consume-amount-label" style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">${consumeAmountLabel(initialUnit, initialMode === "off" ? "day" : initialMode)}</p>
+              ${textInput({ id: "f-times-per-unit", type: "number", value: initialTimesPerUnit, placeholder: "e.g. 40", min: 0 })}
+              <p id="times-per-unit-label" style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:4px;">${timesPerUnitLabel(initialUnit, initialMode === "off" ? "day" : initialMode)}</p>
             </div>`,
           )}
+          <div id="reorder-qty-row" style="display:${initialMode === "off" ? "block" : "none"};">
+            ${field("Reorder when this many are left", textInput({ id: "f-par", type: "number", value: item?.parLevel ?? 1, min: 0 }))}
+          </div>
+          <div id="reorder-uses-row" style="display:${initialMode === "off" ? "none" : "block"};">
+            ${field("Reorder when this many uses are left", textInput({ id: "f-reorder-uses", type: "number", value: initialReorderUses, min: 0 }))}
+            <p id="reorder-uses-caption" style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;"></p>
+          </div>
         </div>
         <div id="binary-field" style="display:${isBinary ? "block" : "none"};">
           ${field("In stock?", chipGroup({ name: "binaryInStock", options: [{ value: "yes", label: "Yes, we have it" }, { value: "no", label: "No" }], value: item ? (item.qty > 0 ? "yes" : "no") : "yes" }))}
@@ -245,27 +261,51 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
     });
   });
 
-  // Consumption mode + unit both feed the amount field's live label
-  // ("How many are used per day" vs. "How much (ml) is used per day") —
-  // whichever changes, re-read both current values and re-render it.
+  // Consumption mode + unit both feed the "how many X does 1 unit last"
+  // label ("How many days does 1 roll last?" vs. "How many uses does 1 ml
+  // last?") — whichever changes, re-read both current values and
+  // re-render it. Mode also flips which Reorder field shows (a raw
+  // quantity when Off, a "uses left" count otherwise) and keeps that
+  // count's quantity-equivalent caption live.
   let currentMode = initialMode;
   let currentUnit = initialUnit;
   const consumeAmountRow = root.querySelector("#consume-amount-row");
-  const consumeAmountLabelEl = root.querySelector("#consume-amount-label");
+  const timesPerUnitLabelEl = root.querySelector("#times-per-unit-label");
+  const reorderQtyRow = root.querySelector("#reorder-qty-row");
+  const reorderUsesRow = root.querySelector("#reorder-uses-row");
+  const reorderUsesCaption = root.querySelector("#reorder-uses-caption");
+
+  function refreshReorderCaption() {
+    const timesPerUnit = Number(root.querySelector("#f-times-per-unit").value) || 0;
+    const usesLeft = Number(root.querySelector("#f-reorder-uses").value) || 0;
+    if (!timesPerUnit || !usesLeft) {
+      reorderUsesCaption.textContent = "";
+      return;
+    }
+    const qtyEquivalent = round2(usesLeft / timesPerUnit);
+    reorderUsesCaption.textContent = `≈ ${qtyEquivalent} ${currentUnit} left`;
+  }
+
   function refreshConsumeLabel() {
-    consumeAmountRow.style.display = currentMode === "off" ? "none" : "block";
-    if (currentMode !== "off") consumeAmountLabelEl.textContent = consumeAmountLabel(currentUnit, currentMode);
+    const off = currentMode === "off";
+    consumeAmountRow.style.display = off ? "none" : "block";
+    reorderQtyRow.style.display = off ? "block" : "none";
+    reorderUsesRow.style.display = off ? "none" : "block";
+    if (!off) {
+      timesPerUnitLabelEl.textContent = timesPerUnitLabel(currentUnit, currentMode);
+      refreshReorderCaption();
+    }
   }
   root.querySelectorAll('[data-field="consumeMode"] [data-value]').forEach((btn) => {
     btn.addEventListener("click", () => {
       const newMode = btn.dataset.value;
       // Re-express the number when switching Day <-> Month specifically, so
-      // it doesn't silently mean something different once saved (e.g. "5"
-      // meant /day a moment ago, now means /month unless converted).
-      if ((newMode === "day" || newMode === "month") && (currentMode === "day" || currentMode === "month")) {
-        const amountInput = root.querySelector("#f-consume-amount");
-        const raw = Number(amountInput.value);
-        if (raw) amountInput.value = round2(fromPerDay(toPerDay(raw, currentMode), newMode));
+      // it doesn't silently mean something different once saved (e.g. "40"
+      // meant 40 days a moment ago, now means 40 months unless converted).
+      if ((newMode === "day" || newMode === "month") && (currentMode === "day" || currentMode === "month") && newMode !== currentMode) {
+        const timesInput = root.querySelector("#f-times-per-unit");
+        const raw = Number(timesInput.value);
+        if (raw) timesInput.value = round2((raw * PERIOD_DAYS[currentMode]) / PERIOD_DAYS[newMode]);
       }
       currentMode = newMode;
       refreshConsumeLabel();
@@ -277,6 +317,8 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       refreshConsumeLabel();
     });
   });
+  root.querySelector("#f-times-per-unit").addEventListener("input", refreshReorderCaption);
+  root.querySelector("#f-reorder-uses").addEventListener("input", refreshReorderCaption);
 
   const nameInput = root.querySelector("#f-item-name");
   if (item?.catalogKey) nameInput.dataset.catalogKey = item.catalogKey;
@@ -292,10 +334,13 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       refreshConsumeLabel();
       if (entry.parLevel != null) root.querySelector("#f-par").value = entry.parLevel;
       if (entry.parLevel != null) root.querySelector("#f-qty").value = entry.parLevel;
-      if (entry.defaultBurnRate != null) {
-        root.querySelector("#f-consume-amount").value = entry.defaultBurnRate;
+      if (entry.defaultBurnRate > 0) {
+        // Catalog defaults are still stored as a per-day rate — converted
+        // to "how many days does 1 unit last" (the reciprocal) for the new
+        // framing.
+        root.querySelector("#f-times-per-unit").value = round2(1 / entry.defaultBurnRate);
         // A catalog default rate means something to consume, so switch the
-        // mode chip to Day too — otherwise the amount would be filled in
+        // mode chip to Day too — otherwise the field would be filled in
         // but hidden behind an untouched "Off" selection.
         currentMode = "day";
         root.querySelectorAll('[data-field="consumeMode"] [data-value]').forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === "day")));
@@ -336,21 +381,39 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       status = qty <= 0 ? "out" : "ok";
     } else {
       qty = Math.max(0, Number(root.querySelector("#f-qty").value) || 0);
-      parLevel = Math.max(0, Number(root.querySelector("#f-par").value) || 1);
       const mode = readChipGroup(root, "consumeMode") || "off";
-      const amountRaw = Math.max(0, Number(root.querySelector("#f-consume-amount").value) || 0);
-      if (mode !== "off" && !amountRaw) {
-        showToast("Enter how much is used, or set Consumption back to Off");
+      const timesPerUnit = Math.max(0, Number(root.querySelector("#f-times-per-unit").value) || 0);
+      if (mode !== "off" && !timesPerUnit) {
+        showToast("Enter how many it lasts, or set Automate consumption back to Off");
         return;
       }
+      // "How many X does 1 unit last" (timesPerUnit) is the number actually
+      // typed (2026-08-08, user request — easier to estimate than a raw
+      // rate); the per-time amount used everywhere else is just its
+      // reciprocal, in the item's own unit.
+      const perTimeAmount = timesPerUnit > 0 ? 1 / timesPerUnit : 0;
       // Per day/Per month both live-deplete the actual quantity now — the
       // old separate "rate set but not counting down" state is gone
       // (2026-08-08, user request: "keep it simple"). Per routine use still
       // only depletes when a linked routine's "Uses this stock" completes,
       // same as before.
-      burnRate = mode === "day" ? amountRaw : mode === "month" ? toPerDay(amountRaw, "month") : 0;
-      perUseQty = mode === "usage" ? amountRaw : 0;
+      burnRate = mode === "day" ? perTimeAmount : mode === "month" ? toPerDay(perTimeAmount, "month") : 0;
+      perUseQty = mode === "usage" ? perTimeAmount : 0;
       autoDeplete = mode === "day" || mode === "month";
+      // Reorder threshold: a plain quantity when consumption isn't
+      // automated (nothing to convert a "uses" count against), or "reorder
+      // when N uses are left" translated into the equivalent quantity
+      // (N * perTimeAmount) when it is — the user types a round, easy
+      // number like "3 uses left"; the actual quantity threshold this
+      // implies is computed here, never typed directly (2026-08-08, user
+      // request: "auto fill this... use the right unit but auto
+      // populated").
+      if (mode === "off") {
+        parLevel = Math.max(0, Number(root.querySelector("#f-par").value) || 1);
+      } else {
+        const reorderUses = Math.max(0, Number(root.querySelector("#f-reorder-uses").value) || 0);
+        parLevel = round2(reorderUses * perTimeAmount) || 0;
+      }
       // Fresh baseline when just turning it on (or on a new item); keep the
       // existing checkpoint if it was already running so an unrelated edit
       // doesn't reset how much time has "counted" toward depletion.
