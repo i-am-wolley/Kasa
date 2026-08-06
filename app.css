@@ -526,16 +526,28 @@ h1, h2, h3, p { margin: 0; }
 }
 
 /* A space chip's small house-name hint (2026-08-06, user request:
-   "smartly show which house the space belong to... not in a big way") —
-   shown only when the household actually has more than one house. Sits
-   on its own line under the room name, deliberately quiet. */
+   "smartly show which house the space belong to... not in a big way,"
+   then refined: "keep it as small text on the top right of the box...
+   without increasing the size of the box") — shown only when the
+   household actually has more than one house. Absolutely positioned in
+   the chip's own corner (matching .tile-badge's same technique) rather
+   than sitting inline in the flow, so it never affects the chip's own
+   height/width — the box stays exactly the size an unhinted chip would be. */
 .chip-house-hint {
-  display: block;
-  font-size: 9px;
+  position: absolute;
+  bottom: 3px;
+  left: 8px;
+  right: 8px;
+  text-align: center;
+  font-size: 8px;
   font-weight: var(--fw-regular, 400);
   color: var(--ink-faint);
-  opacity: 0.8;
-  margin-top: 1px;
+  opacity: 0.75;
+  line-height: 1;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* House label on a Today row, shown only when several houses are active
@@ -564,6 +576,7 @@ h1, h2, h3, p { margin: 0; }
 /* ---- Chip / pill ------------------------------------------------------ */
 
 .chip {
+  position: relative; /* anchors .chip-house-hint's corner badge */
   display: inline-flex;
   align-items: center;
   gap: 6px;
