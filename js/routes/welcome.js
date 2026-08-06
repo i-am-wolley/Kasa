@@ -40,8 +40,8 @@ function signinHtml() {
       <div class="welcome-wordmark">kasa</div>
       <p class="welcome-tagline">A model of your home — what depletes, what recurs, what ages. Kasa warns before anything fails.</p>
       <div class="welcome-actions">
-        <button type="button" class="btn btn-solid welcome-btn" id="google-btn">Continue with Google</button>
-        <button type="button" class="btn btn-ghost welcome-btn" id="apple-btn">Continue with Apple</button>
+        <button type="button" class="btn btn-solid welcome-btn" id="google-btn">Sign in with Google</button>
+        <button type="button" class="btn btn-ghost welcome-btn" id="apple-btn">Sign in with Apple</button>
       </div>
     </div>
   `;
@@ -80,7 +80,7 @@ function wireEvents() {
       await signInWithGoogle();
     } catch (err) {
       googleBtn.disabled = false;
-      googleBtn.textContent = "Continue with Google";
+      googleBtn.textContent = "Sign in with Google";
       // A closed popup isn't really a failure worth a toast.
       if (err?.code !== "auth/popup-closed-by-user" && err?.code !== "auth/cancelled-popup-request") {
         showToast("Google sign-in didn't go through — try again.");
