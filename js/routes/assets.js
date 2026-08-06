@@ -1,7 +1,7 @@
 // Assets screen (memo §8.2) — cards sorted by next service, warranty
 // countdown, detail with vendor call button and running service history.
 
-import { getState, subscribe, addAsset, updateAsset, deleteAsset, markAssetServiced, addRoutine, visibleSpaceIds, byId } from "../state.js";
+import { getState, subscribe, addAsset, updateAsset, deleteAsset, markAssetServiced, addRoutine, updateRoutine, deleteRoutine, nextSaturdayDateStr, visibleSpaceIds, byId } from "../state.js";
 import { findByKey } from "../catalog.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -89,13 +89,18 @@ function assetSpaceOptions(state, currentSpaceId) {
 }
 
 function assetFormFields(asset, state, defaultSpaceId, defaultName) {
+  const hasInterval = asset?.serviceIntervalDays > 0;
   return `
     ${field("Name", catalogField({ id: "f-asset-name", type: "asset", value: asset?.name ?? defaultName ?? "", placeholder: "Start typing — e.g. Geyser" }))}
     ${field("Space", chipGroup({ name: "assetSpaceId", options: assetSpaceOptions(state, asset?.spaceId), value: asset?.spaceId ?? defaultSpaceId ?? [...visibleSpaceIds(state)][0] ?? state.spaces[0]?.id }))}
     ${field("Brand / model", textInput({ id: "f-asset-brand", value: asset?.brand ?? "" }))}
     ${field("Purchase date", textInput({ id: "f-asset-purchased", type: "date", value: asset?.purchaseDate ?? "" }))}
     ${field("Warranty until", textInput({ id: "f-asset-warranty", type: "date", value: asset?.warrantyUntil ?? "" }))}
-    ${field("Service every N days", textInput({ id: "f-asset-interval", type: "number", value: asset?.serviceIntervalDays ?? "" }))}
+    ${field("Service every N days", textInput({ id: "f-asset-interval", type: "number", value: asset?.serviceIntervalDays ?? "", min: 1 }))}
+    <div id="last-serviced-field" style="display:${hasInterval ? "block" : "none"};">
+      ${field("Last service date (optional)", textInput({ id: "f-asset-last-serviced", type: "date", value: asset?.lastServicedAt ?? "" }))}
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-6px;margin-bottom:12px;">Used to work out when the next service is actually due — leave blank and it'll start from the following Saturday instead.</p>
+    </div>
     ${field("Expected life (years)", textInput({ id: "f-asset-life", type: "number", value: asset?.expectedLifeYears ?? "", placeholder: "e.g. 10", min: 1 }))}
     ${field("Vendor name", textInput({ id: "f-asset-vendor", value: asset?.vendorName ?? "" }))}
     ${field("Vendor phone", textInput({ id: "f-asset-phone", type: "tel", value: (asset?.vendorPhone || "").replace("tel:", "") }))}
@@ -151,11 +156,16 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
   const existingRoutineTitles = asset ? new Set(state.routines.filter((r) => r.assetId === asset.id).map((r) => r.title)) : new Set();
   const canOfferMore = asset && catalogEntry?.suggestedRoutines?.some((r) => !existingRoutineTitles.has(r.title));
 
+  // "Mark serviced" only makes sense once there's an actual schedule to
+  // mark against (2026-08-07, user request: "if no service number is
+  // given... remove mark as serviced button") — an asset with no service
+  // interval has nothing here to complete.
+  const hasServiceSchedule = asset?.serviceIntervalDays > 0;
   const extraActions = asset
     ? `
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         ${asset.vendorPhone ? `<a class="btn btn-ghost" href="${asset.vendorPhone}" style="flex:1;text-decoration:none;">${Icon("call", { size: 14 })} Call vendor</a>` : ""}
-        <button type="button" class="btn btn-ghost" id="mark-serviced-btn" style="flex:1;">${Icon("check", { size: 14 })} Mark serviced</button>
+        ${hasServiceSchedule ? `<button type="button" class="btn btn-ghost" id="mark-serviced-btn" style="flex:1;">${Icon("check", { size: 14 })} Mark serviced</button>` : ""}
       </div>
       <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:16px;">${warrantyLabel(asset)} · ${serviceLabel(asset)}</p>
       ${canOfferMore ? `<button type="button" class="btn btn-ghost" id="show-suggested-btn" style="width:100%;margin-bottom:16px;">${Icon("sparkle", { size: 14 })} Add suggested routines</button>` : ""}
@@ -175,6 +185,10 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
   const root = document.getElementById("sheet-root");
   wireChipGroup(root, "assetSpaceId");
   currentSuggested = [];
+
+  root.querySelector("#f-asset-interval").addEventListener("input", (e) => {
+    root.querySelector("#last-serviced-field").style.display = Number(e.target.value) > 0 ? "block" : "none";
+  });
 
   const nameInput = root.querySelector("#f-asset-name");
   if (asset?.catalogKey) nameInput.dataset.catalogKey = asset.catalogKey;
@@ -204,6 +218,8 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
     if (!entry) return;
     const phone = root.querySelector("#f-asset-phone").value.trim();
     const interval = root.querySelector("#f-asset-interval").value;
+    const serviceIntervalDays = interval ? Number(interval) : null;
+    const lastServicedAt = root.querySelector("#f-asset-last-serviced")?.value || null;
     const spaceId = readChipGroup(root, "assetSpaceId");
     const fields = {
       name: entry.name,
@@ -213,13 +229,42 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       brand: root.querySelector("#f-asset-brand").value.trim() || null,
       purchaseDate: root.querySelector("#f-asset-purchased").value || null,
       warrantyUntil: root.querySelector("#f-asset-warranty").value || null,
-      serviceIntervalDays: interval ? Number(interval) : null,
+      serviceIntervalDays,
       expectedLifeYears: root.querySelector("#f-asset-life").value ? Number(root.querySelector("#f-asset-life").value) : null,
       vendorName: root.querySelector("#f-asset-vendor").value.trim() || null,
       vendorPhone: phone ? `tel:${phone}` : null,
     };
+    if (serviceIntervalDays) fields.lastServicedAt = lastServicedAt;
 
     const assetId = asset ? (updateAsset(asset.id, fields), asset.id) : addAsset(fields).id;
+    const savedAsset = byId(getState().assets, assetId);
+
+    // "Service every N days" auto-creates/updates/removes its own linked
+    // routine (2026-08-07, user request) — tracked via
+    // asset.serviceRoutineId so this is a real find-or-create, never a
+    // second duplicate routine on a later edit. Due date comes from the
+    // given last-service date + interval if provided, otherwise the same
+    // "next Saturday, not today" default new suggested routines get.
+    if (serviceIntervalDays > 0) {
+      const startDate = lastServicedAt
+        ? new Date(new Date(lastServicedAt).getTime() + serviceIntervalDays * 86400000).toISOString().slice(0, 10)
+        : nextSaturdayDateStr();
+      const trigger = { type: "floating_since_last", intervalDays: serviceIntervalDays, startDate };
+      if (savedAsset.serviceRoutineId && byId(getState().routines, savedAsset.serviceRoutineId)) {
+        updateRoutine(savedAsset.serviceRoutineId, { trigger });
+      } else {
+        const routine = addRoutine({
+          title: `Service ${savedAsset.name}`, spaceId, assetId, trigger,
+          effort: 3, consequence: "degrading", ownerClass: "vendor",
+        });
+        updateAsset(assetId, { serviceRoutineId: routine.id });
+      }
+    } else if (savedAsset.serviceRoutineId) {
+      // Interval cleared — the auto-created routine no longer has
+      // anything to base itself on, so it goes too.
+      deleteRoutine(savedAsset.serviceRoutineId);
+      updateAsset(assetId, { serviceRoutineId: null });
+    }
 
     const checkedIndices = [...root.querySelectorAll('#suggested-routines-field [data-routine-index][aria-pressed="true"]')]
       .map((b) => Number(b.dataset.routineIndex));
@@ -239,8 +284,13 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       const requiresItemIds = (tmpl.requiresItemKeys || [])
         .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === spaceId)?.id)
         .filter(Boolean);
+      // New asset's suggested routines default to next Saturday, not
+      // today (2026-08-07, user request) — only meaningful for
+      // floating_since_last; usage_meter templates compute their own due
+      // date from real meter readings and have no startDate concept.
+      const trigger = tmpl.trigger.type === "floating_since_last" ? { ...tmpl.trigger, startDate: nextSaturdayDateStr() } : tmpl.trigger;
       addRoutine({
-        title: tmpl.title, spaceId, assetId, trigger: tmpl.trigger,
+        title: tmpl.title, spaceId, assetId, trigger,
         effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass, requiresItemIds,
       });
       addedRoutines += 1;

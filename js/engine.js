@@ -16,9 +16,11 @@ function daysBetween(a, b) {
 }
 
 // ---- fixed_calendar: minimal RRULE subset -----------------------------
-// Supports FREQ=MONTHLY;BYMONTHDAY=N and FREQ=WEEKLY;BYDAY=XX (one day).
-// Enough for pack content (society dues, weekly resets); extend as real
-// packs need richer recurrence.
+// Supports FREQ=MONTHLY;BYMONTHDAY=N and FREQ=WEEKLY;BYDAY=XX[,XX...] (one
+// or more comma-separated days, standard RRULE syntax — 2026-08-07, user
+// request: "multiple weekdays could be selected and the routine can occur
+// accordingly"). Enough for pack content (society dues, weekly resets);
+// extend as real packs need richer recurrence.
 
 const WEEKDAY_INDEX = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
@@ -43,12 +45,17 @@ function nextRRuleOccurrence(rrule, after) {
   }
 
   if (p.FREQ === "WEEKLY" && p.BYDAY) {
-    const targetDow = WEEKDAY_INDEX[p.BYDAY];
+    // One or more days — the nearest upcoming match among whichever were
+    // selected wins (e.g. "MO,TH" due next on whichever of Monday/
+    // Thursday comes first after `start`).
+    const targetDows = p.BYDAY.split(",").map((d) => WEEKDAY_INDEX[d]).filter((d) => d !== undefined);
+    if (!targetDows.length) return null;
     let candidate = new Date(start);
-    do {
+    for (let i = 0; i < 7; i++) {
       candidate = addDays(candidate, 1);
-    } while (candidate.getDay() !== targetDow);
-    return candidate;
+      if (targetDows.includes(candidate.getDay())) return candidate;
+    }
+    return null;
   }
 
   return null;

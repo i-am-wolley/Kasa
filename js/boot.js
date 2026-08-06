@@ -3,7 +3,7 @@
 
 import { Icon } from "./ui/icons.js";
 import { loadPacks } from "./packs.js";
-import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, updateNotifySettings, byId } from "./state.js";
+import { getState, subscribe, setActiveHouseIds, hydrateState, resetForNewHousehold, updateNotifySettings, setSmoothingMode, byId } from "./state.js";
 import { onAuthChange, completeRedirectSignIn, signOutUser } from "./auth.js";
 import { getUserRecord, createHouseholdRemote, joinHouseholdRemote, loadHouseholdRemote, startAutoSave } from "./db.js";
 import * as notify from "./notify.js";
@@ -50,6 +50,7 @@ const MORE_ITEMS = [
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
   { id: "onboard", icon: "sparkle", label: "Re-run onboarding", meta: "Rebuild the currently-viewed house from six questions" },
   { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device" },
+  { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Automatic, or trigger it yourself from Today" },
 ];
 
 let activeTab = "today";
@@ -120,10 +121,35 @@ function openMoreSheet() {
       closeSheet();
       if (row.dataset.moreItem === "notifications") {
         openNotificationsSheet();
+      } else if (row.dataset.moreItem === "smoothing") {
+        openSmoothingSheet();
       } else {
         mountScreen(row.dataset.moreItem);
       }
     });
+  });
+}
+
+// Auto (default, existing behavior) or manual (2026-08-07, user request)
+// — manual mode surfaces a "Smoothen" chip next to Today's own Batches
+// toggle instead of running silently as part of every regenerate().
+function openSmoothingSheet() {
+  const state = getState();
+  const mode = state.household.smoothingMode || "auto";
+  openSheet({
+    title: "Load smoothing",
+    bodyHtml: `
+      <p style="color:var(--ink-muted);margin-bottom:16px;">If a week's total effort goes over the household's ceiling, flexible routines can shift to a lighter week. Automatic does this quietly as things change; Manual only does it when you tap "Smoothen" on Today.</p>
+      ${field("Mode", chipGroup({ name: "smoothingMode", options: [{ value: "auto", label: "Automatic" }, { value: "manual", label: "Manual" }], value: mode }))}
+      ${sheetActions({ saveLabel: "Save" })}
+    `,
+  });
+  const root = document.getElementById("sheet-root");
+  wireChipGroup(root, "smoothingMode");
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    setSmoothingMode(readChipGroup(root, "smoothingMode") || "auto");
+    closeSheet();
+    showToast("Load smoothing settings saved");
   });
 }
 

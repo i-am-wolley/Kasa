@@ -221,30 +221,19 @@ function batches(state, rows) {
 // only ever moves +7 days into the future.
 const DEFAULT_EFFORT_CEILING = 20;
 
-// Never smooths a routine's very first occurrence (2026-08-07, user
-// report: "when a new asset is added the routines linked to it always
-// put it on the following Saturday") — a real bug, not a hardcoded day:
-// a brand-new routine (e.g. an asset's suggested routine, added right
-// now with dueAt=today) could get caught by "this week is already over
-// the effort ceiling" and get shoved a week out before the user ever saw
-// it once, landing wherever the household's own load happens to have
-// headroom — which reads as an arbitrary/fixed day once a household's
-// data settles into a steady weekly shape. An earlier fix tried
-// excluding only occurrences generated in the SAME regenerate() call,
-// but a multi-routine batch (an asset's several suggested routines, each
-// via its own addRoutine() -> regenerate() call) made that too narrow —
-// routine #1's occurrence stops being "this call's fresh output" by the
-// time routine #2's own call runs, so it was still smoothable in
-// practice. The real, session-independent rule: a routine only becomes
-// eligible for smoothing once it's been completed at least once —
-// checked against the ledger, not against "was this just generated."
+// 2026-08-07: the previous round's "never smooth a routine's first-ever
+// occurrence" rule (checked against ledger history) was reverted per
+// direct user feedback ("i dont like at least once completed... revert
+// this back") — what actually fixed the "new asset routines always land
+// on Saturday" complaint was giving those routines a real `startDate` of
+// next Saturday at creation time (see assets.js/house.js), not carving
+// out an exception here. Smoothing is back to evaluating every open,
+// non-overdue occurrence regardless of completion history.
 function applyLoadSmoothing(state, ceiling = DEFAULT_EFFORT_CEILING) {
   const moves = [];
   const now = new Date();
-  const everCompletedRoutineIds = new Set(state.ledger.map((l) => l.routineId));
   const openOccs = state.occurrences.filter((o) => {
     if (o.state === "done" || o.state === "snoozed") return false;
-    if (!everCompletedRoutineIds.has(o.routineId)) return false;
     return stateOf({ dueAt: o.dueAt, windowDays: o.windowDays }, now) !== "overdue";
   });
 

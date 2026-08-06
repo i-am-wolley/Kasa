@@ -9,7 +9,7 @@
 // Overdue/Due Today view, plus a subtle member filter and a quick-add
 // button that opens the shared routine/habit/task sheet directly from here.
 
-import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, visibleSpaceIds, byId } from "../state.js";
+import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, visibleSpaceIds, runSmoothingNow, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
@@ -411,6 +411,7 @@ function render() {
         ${chip("Today", { active: view === "today", dataAttrs: 'data-view="today"' })}
         ${chip("This week", { active: view === "week", dataAttrs: 'data-view="week"' })}
         ${chip("Batches", { active: showBatches, dataAttrs: 'id="batches-toggle"' })}
+        ${state.household.smoothingMode === "manual" ? chip("Smoothen", { active: false, dataAttrs: 'id="smoothen-btn"' }) : ""}
       </div>
       ${memberFilterHtml(state)}
     </div>
@@ -439,6 +440,11 @@ function wireEvents() {
   document.getElementById("batches-toggle")?.addEventListener("click", () => {
     showBatches = !showBatches;
     render();
+  });
+
+  document.getElementById("smoothen-btn")?.addEventListener("click", () => {
+    const moves = runSmoothingNow();
+    showToast(moves.length ? `${moves.length} routine${moves.length === 1 ? "" : "s"} rescheduled to balance the week` : "Nothing needed rescheduling");
   });
 
   mountEl.querySelectorAll("[data-view]").forEach((btn) => {

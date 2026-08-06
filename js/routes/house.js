@@ -1,7 +1,7 @@
 // House screen (memo §8.2) — spaces grid → space detail with its routines,
 // stock, and assets. "Where users browse and prune."
 
-import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, MANDATORY_SPACE_TYPES, byId } from "../state.js";
+import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, MANDATORY_SPACE_TYPES, nextSaturdayDateStr, byId } from "../state.js";
 import { templateFor } from "../roomTemplates.js";
 import { Icon } from "../ui/icons.js";
 import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
@@ -263,8 +263,12 @@ function openRoomTemplateSheet(space, template) {
         const requiresItemIds = (tmpl.requiresItemKeys || [])
           .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === space.id)?.id)
           .filter(Boolean);
+        // New asset's suggested routines default to next Saturday, not
+        // today (2026-08-07, user request) — same treatment as assets.js's
+        // own standalone Add Asset flow.
+        const trigger = tmpl.trigger.type === "floating_since_last" ? { ...tmpl.trigger, startDate: nextSaturdayDateStr() } : tmpl.trigger;
         addRoutine({
-          title: tmpl.title, spaceId: space.id, assetId: createdAsset.id, trigger: tmpl.trigger,
+          title: tmpl.title, spaceId: space.id, assetId: createdAsset.id, trigger,
           effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass, requiresItemIds,
         });
         added += 1;

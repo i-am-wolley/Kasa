@@ -72,8 +72,12 @@ function triggerParamsHtml(routine) {
     </div>
     <div data-trigger-block="fixed_calendar">
       ${field("Cadence", chipGroup({ name: "rruleFreq", options: ["Monthly", "Weekly"], value: rr.FREQ === "WEEKLY" ? "Weekly" : "Monthly" }))}
-      ${field("Day of month", textInput({ id: "f-bymonthday", type: "number", value: rr.BYMONTHDAY ?? 1 }))}
-      ${field("Day of week", chipGroup({ name: "byday", options: WEEKDAYS, value: rr.BYDAY || "SU" }))}
+      <div id="bymonthday-field" style="display:${rr.FREQ === "WEEKLY" ? "none" : "block"};">
+        ${field("Day of month", textInput({ id: "f-bymonthday", type: "number", value: rr.BYMONTHDAY ?? 1 }))}
+      </div>
+      <div id="byday-field" style="display:${rr.FREQ === "WEEKLY" ? "block" : "none"};">
+        ${field("Day(s) of week", chipGroup({ name: "byday", options: WEEKDAYS, value: (rr.BYDAY || "SU").split(","), multi: true }))}
+      </div>
     </div>
     <div data-trigger-block="usage_meter">
       ${field("Due after this many meter units", textInput({ id: "f-meterDelta", type: "number", value: t.meterDelta ?? 1000 }))}
@@ -233,8 +237,9 @@ function buildTrigger(root) {
     }
     case "fixed_calendar": {
       const freq = readChipGroup(root, "rruleFreq");
+      const days = readChipGroup(root, "byday"); // array (multi-select) — one or more weekdays
       const rrule = freq === "Weekly"
-        ? `FREQ=WEEKLY;BYDAY=${readChipGroup(root, "byday") || "SU"}`
+        ? `FREQ=WEEKLY;BYDAY=${days?.length ? days.join(",") : "SU"}`
         : `FREQ=MONTHLY;BYMONTHDAY=${Number(root.querySelector("#f-bymonthday").value) || 1}`;
       return { type, rrule };
     }
@@ -306,6 +311,17 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
   root.querySelector('[data-field="triggerType"]').addEventListener("click", (e) => {
     const btn = e.target.closest("[data-value]");
     if (btn) showTriggerBlock(root, btn.dataset.value);
+  });
+
+  // Day of month only makes sense for Monthly, day(s) of week only for
+  // Weekly — showing both regardless of Cadence was confusing (2026-08-07,
+  // user request: "day of the month should be uneditable or hidden").
+  root.querySelector('[data-field="rruleFreq"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn) return;
+    const weekly = btn.dataset.value === "Weekly";
+    root.querySelector("#bymonthday-field").style.display = weekly ? "none" : "block";
+    root.querySelector("#byday-field").style.display = weekly ? "block" : "none";
   });
 
   // Switching rooms resets the stock selection rather than carrying over

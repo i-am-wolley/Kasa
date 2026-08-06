@@ -22,7 +22,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 3;
+const CURRENT_SCHEMA_VERSION = 4;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -50,6 +50,16 @@ const migrations = {
   3: (state) => {
     if (state.household.notifySettings) return;
     state.household.notifySettings = { enabled: false, time: "07:00" };
+  },
+
+  // v3 -> v4 (2026-08-07): auto/manual load-smoothing preference — "auto"
+  // preserves the exact behavior every household already had (smoothing
+  // ran automatically as part of every regenerate()), so this is a pure
+  // backfill, not a behavior change for anyone who doesn't touch the
+  // new setting.
+  4: (state) => {
+    if (state.household.smoothingMode) return;
+    state.household.smoothingMode = "auto";
   },
 };
 

@@ -119,14 +119,24 @@ function regenerate() {
   // the same engine pass regenerate() already does, not a separate manual
   // action; each occurrence is only ever smoothed once (applyLoadSmoothing
   // marks `occ.smoothed`), so repeat regenerate() calls don't re-shuffle
-  // things that already moved. A routine's very first-ever occurrence is
-  // never eligible (2026-08-07 bug fix, see intel.js) — otherwise a
-  // brand-new asset's suggested routine could get shoved a week out
-  // before ever showing up on Today once.
-  state.lastSmoothingMoves = applyLoadSmoothing(state);
+  // things that already moved. Skipped entirely in "manual" smoothing mode
+  // (2026-08-07, user request) — see runSmoothingNow() for the on-demand
+  // equivalent, triggered from Today's "Smoothen" chip in that mode.
+  state.lastSmoothingMoves = state.household.smoothingMode === "manual" ? state.lastSmoothingMoves : applyLoadSmoothing(state);
 }
 
 regenerate();
+
+// On-demand equivalent of regenerate()'s own smoothing pass, for
+// "manual" smoothing mode (2026-08-07, user request) — Today's own
+// "Smoothen" chip calls this directly rather than waiting for it to run
+// automatically. Returns the moves so the caller can show a toast.
+function runSmoothingNow() {
+  const moves = applyLoadSmoothing(state);
+  state.lastSmoothingMoves = moves;
+  notify();
+  return moves;
+}
 
 function notify() {
   for (const fn of listeners) fn(state);
@@ -367,6 +377,20 @@ function resetForNewHousehold({ name, email }) {
   notify();
 }
 
+// The following Saturday (never today, even if today IS Saturday) as a
+// YYYY-MM-DD string — used as the default `trigger.startDate` for a new
+// asset's suggested/service routines (2026-08-07, user request: "always
+// set the starting date of those new routines for new asset on the
+// following Saturday and not today"), so a freshly added asset doesn't
+// dump a chore on today the moment it's created.
+function nextSaturdayDateStr() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  const daysUntilSat = ((6 - d.getDay() + 7) % 7) || 7;
+  d.setDate(d.getDate() + daysUntilSat);
+  return d.toISOString().slice(0, 10);
+}
+
 function updateHouseholdName(name) {
   const trimmed = (name || "").trim();
   if (!trimmed) return;
@@ -378,6 +402,15 @@ function updateHouseholdName(name) {
 // for what actually reads this.
 function updateNotifySettings(patch) {
   state.household.notifySettings = { ...state.household.notifySettings, ...patch };
+  notify();
+}
+
+// "auto" (default, existing behavior) or "manual" (2026-08-07, user
+// request) — see regenerate()'s own smoothingMode check and
+// runSmoothingNow() above.
+function setSmoothingMode(mode) {
+  state.household.smoothingMode = mode === "manual" ? "manual" : "auto";
+  regenerate();
   notify();
 }
 
@@ -606,7 +639,12 @@ function addAsset(fields) {
     meter: null, serviceIntervalDays: null, serviceIntervalMeter: null,
     lastServicedAt: null, nextServiceDue: null, consumableItemIds: [],
     vendorName: null, vendorPhone: null, docs: [], expectedLifeYears: null,
-    replacementDueAt: null, serviceHistory: [], ...fields,
+    replacementDueAt: null, serviceHistory: [],
+    // The routine auto-created from "Service every N days" (2026-08-07,
+    // user request), if any — lets assets.js find/update/delete exactly
+    // that one routine on later edits instead of title-matching.
+    serviceRoutineId: null,
+    ...fields,
   };
   asset.nextServiceDue = computeNextServiceDue(asset);
   asset.replacementDueAt = computeReplacementDueAt(asset);
@@ -642,6 +680,14 @@ function markAssetServiced(id) {
   asset.nextServiceDue = computeNextServiceDue(asset);
   asset.serviceHistory = [...(asset.serviceHistory || []), today];
   if (asset.meter) asset.lastServiceMeterValue = asset.meter.value;
+  // Also completes the auto-created "Service every N days" routine's own
+  // open occurrence, if this asset has one (2026-08-07) — lets the
+  // routine's own floating-since-last engine logic take over from a real
+  // completion date from here, same as swiping it done on Today would.
+  if (asset.serviceRoutineId) {
+    const openOcc = state.occurrences.find((o) => o.routineId === asset.serviceRoutineId && o.state !== "done" && o.state !== "snoozed");
+    if (openOcc) completeOccurrence(openOcc.id, null);
+  }
   notify();
 }
 
@@ -677,14 +723,16 @@ function addLeave(personId, { from, to, reason = "" }) {
 // ---- routine CRUD (memo §4.2) --------------------------------------------
 
 function addRoutine(fields) {
-  state.routines.push({
+  const routine = {
     id: genId("rt"), assetId: null, effort: 1, consequence: "cosmetic",
     ownerClass: "either", defaultAssigneeId: null, requiresItemIds: [],
     modeFilters: { pauseIn: [], boostIn: [] }, steps: [], notes: "",
     active: true, source: "manual", packId: null, userEdited: true, ...fields,
-  });
+  };
+  state.routines.push(routine);
   regenerate();
   notify();
+  return routine;
 }
 
 function updateRoutine(id, patch) {
@@ -960,6 +1008,9 @@ export {
   resetForNewHousehold,
   updateHouseholdName,
   updateNotifySettings,
+  setSmoothingMode,
+  runSmoothingNow,
+  nextSaturdayDateStr,
   addHouse,
   updateHouse,
   deleteHouse,
