@@ -293,18 +293,18 @@ function openPersonSheet(person) {
     root.querySelector('[data-kind-block="member"]').style.display = nowHelp ? "none" : "";
   });
 
-  root.querySelector("#add-leave-btn")?.addEventListener("click", () => {
-    const from = root.querySelector("#f-leave-from").value;
-    const to = root.querySelector("#f-leave-to").value;
-    if (!from || !to) return;
-    addLeave(person.id, { from, to });
-    closeSheet();
-    showToast("Leave added");
-  });
-
-  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+  // Reads + validates the form's current field values — shared by "Save
+  // changes" AND "Add leave" below. Bug found and fixed (2026-08-09,
+  // caught during a live simulation pass): "Add leave" used to only call
+  // addLeave() and close the sheet, silently discarding any Role/Works-on/
+  // Usual-time edits still sitting unsaved in the same form — a completely
+  // natural sequence (fill in the whole form top to bottom, click the last
+  // button, which happens to be "Add leave" rather than "Save changes")
+  // quietly lost real data. Returns null (having already shown a toast) if
+  // the form doesn't validate.
+  function readPersonFields() {
     const name = root.querySelector("#f-person-name").value.trim();
-    if (!name) return;
+    if (!name) return null;
     const kind = readChipGroup(root, "kind") || "member";
     const fields = { name, kind };
     if (kind === "help") {
@@ -318,10 +318,28 @@ function openPersonSheet(person) {
       const email = root.querySelector("#f-person-email").value.trim();
       if (!email) {
         showToast("Members need an email on file. Add as Help instead if that's not needed.");
-        return;
+        return null;
       }
       fields.email = email;
     }
+    return fields;
+  }
+
+  root.querySelector("#add-leave-btn")?.addEventListener("click", () => {
+    const from = root.querySelector("#f-leave-from").value;
+    const to = root.querySelector("#f-leave-to").value;
+    if (!from || !to) return;
+    const fields = readPersonFields();
+    if (!fields) return;
+    if (person) updatePerson(person.id, fields);
+    addLeave(person.id, { from, to });
+    closeSheet();
+    showToast("Leave added");
+  });
+
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const fields = readPersonFields();
+    if (!fields) return;
     if (person) updatePerson(person.id, fields);
     else addPerson(fields);
     closeSheet();
