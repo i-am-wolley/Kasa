@@ -285,10 +285,12 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
         .map((k) => getState().items.find((it) => it.catalogKey === k && it.spaceId === spaceId)?.id)
         .filter(Boolean);
       // New asset's suggested routines default to next Saturday, not
-      // today (2026-08-07, user request) — only meaningful for
-      // floating_since_last; usage_meter templates compute their own due
-      // date from real meter readings and have no startDate concept.
-      const trigger = tmpl.trigger.type === "floating_since_last" ? { ...tmpl.trigger, startDate: nextSaturdayDateStr() } : tmpl.trigger;
+      // today (2026-08-07, user request). Applied to every trigger type
+      // now that a start date is mandatory for all of them (2026-08-08) —
+      // engine.js's computeNext already knows how to use it per type (a
+      // future date wins outright for every type; only floating_since_last
+      // needs it to anchor its own interval math).
+      const trigger = { ...tmpl.trigger, startDate: tmpl.trigger.startDate ?? nextSaturdayDateStr() };
       addRoutine({
         title: tmpl.title, spaceId, assetId, trigger,
         effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass, requiresItemIds,

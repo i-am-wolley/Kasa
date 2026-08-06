@@ -744,16 +744,24 @@ function updateRoutine(id, patch) {
   // its start date should actually move that occurrence, not leave it
   // stale until the routine happens to regenerate on its own (which,
   // per engine.js's own "no open occurrence exists" rule, it won't,
-  // since one already exists). Only ever the FIRST occurrence's date;
-  // once completed once, engine.js's own floating-since-last logic takes
-  // back over (2026-08-07, user request: "when a routine's start date is
+  // since one already exists). Only ever the FIRST occurrence; once
+  // completed once, engine.js's own per-trigger-type logic takes back
+  // over (2026-08-07, user request: "when a routine's start date is
   // changed to a future date, adjust the existing routine[s occurrence]
-  // to start on the future date").
-  if (routine.trigger?.type === "floating_since_last" && routine.trigger.startDate) {
+  // to start on the future date"). Generalized from floating_since_last
+  // only to every trigger type (2026-08-08, "start date mandatory for all
+  // routines and repeat types") — rather than stamping the occurrence's
+  // dueAt to the raw startDate directly (which would strand a PAST edited
+  // date as instantly overdue, ignoring computeNext's own past-vs-future
+  // handling), the stale occurrence is dropped and regenerate() below
+  // rebuilds it fresh via the engine, so past/future/repeat-type handling
+  // is always computed the one real way, not duplicated here.
+  if (routine.trigger?.startDate) {
     const everCompleted = state.ledger.some((l) => l.routineId === id);
     if (!everCompleted) {
-      const openOcc = state.occurrences.find((o) => o.routineId === id && o.state !== "done" && o.state !== "snoozed");
-      if (openOcc) openOcc.dueAt = new Date(routine.trigger.startDate).toISOString();
+      state.occurrences = state.occurrences.filter(
+        (o) => !(o.routineId === id && o.state !== "done" && o.state !== "snoozed"),
+      );
     }
   }
   regenerate();

@@ -74,11 +74,43 @@ function nextSeasonalWindow(months, now) {
     : new Date(year + 1, startMonth - 1, 1);
 }
 
+// ---- start date (2026-08-08, user request: "make the start date
+// mandatory for all routines and repeat types... if in the past, the next
+// occurrence should be based on the repeat selected. If in the future, the
+// first occurrence should be then.") ---------------------------------------
+//
+// A start date in the future always wins outright, for every trigger type:
+// the first occurrence is exactly that date. A start date in the past (or
+// today) is handled per trigger type below — every type except
+// floating_since_last already computes "the next occurrence from today" on
+// its own when there's no completion history, which already IS "based on
+// the repeat selected" for a calendar/velocity/season-anchored trigger, so
+// no extra branching is needed for those. floating_since_last is the one
+// exception: its interval is anchored to a point in time (normally the last
+// completion), so a past start date has to walk the interval forward from
+// that anchor to land on the correct point in the cycle — see
+// firstFloatingOccurrence. Missing `startDate` (legacy routines created
+// before this field existed) falls through to each type's original
+// behavior, unchanged.
+function firstFloatingOccurrence(startDateStr, intervalDays, now) {
+  if (!startDateStr) return now;
+  const start = new Date(startDateStr);
+  if (start > now) return start;
+  let candidate = start;
+  while (candidate < now) candidate = addDays(candidate, intervalDays);
+  return candidate;
+}
+
 // ---- per-trigger-type computeNext --------------------------------------
 
 function computeNext(routine, ctx) {
   const { now, lastDoneAt, assetsById, itemsById, activeModeKeys } = ctx;
   const t = routine.trigger;
+
+  if (!lastDoneAt && t.startDate && t.type !== "floating_since_last") {
+    const start = new Date(t.startDate);
+    if (start > now) return { dueAt: start, windowDays: DEFAULT_WINDOW_DAYS };
+  }
 
   switch (t.type) {
     case "fixed_calendar": {
@@ -88,14 +120,7 @@ function computeNext(routine, ctx) {
     }
 
     case "floating_since_last": {
-      // Never completed yet: due `now` by default (matches every routine
-      // created before this field existed), unless the routine sets an
-      // explicit `startDate` — lets a newly-created routine's first
-      // occurrence land on a chosen date instead of always being
-      // immediately due (2026-08-06, user request). Only affects the
-      // FIRST-ever occurrence; once it's completed once, the interval
-      // floats from that real completion date as normal, same as before.
-      const dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : (t.startDate ? new Date(t.startDate) : now);
+      const dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : firstFloatingOccurrence(t.startDate, t.intervalDays, now);
       return { dueAt, windowDays: DEFAULT_WINDOW_DAYS };
     }
 

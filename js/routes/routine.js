@@ -67,8 +67,6 @@ function triggerParamsHtml(routine) {
   return `
     <div data-trigger-block="floating_since_last">
       ${field("Repeat every (days)", textInput({ id: "f-intervalDays", type: "number", value: t.intervalDays ?? 30 }))}
-      ${field("Start date (optional)", textInput({ id: "f-startDate", type: "date", value: t.startDate ?? "" }))}
-      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;">Only affects when this first becomes due — leave blank to have it due right away. Once it's done once, it goes back to floating from the actual completion date.</p>
     </div>
     <div data-trigger-block="fixed_calendar">
       ${field("Cadence", chipGroup({ name: "rruleFreq", options: ["Monthly", "Weekly"], value: rr.FREQ === "WEEKLY" ? "Weekly" : "Monthly" }))}
@@ -165,6 +163,8 @@ function routineFieldsHtml(routine, spaceId, state) {
   return `
     ${field("Space", chipGroup({ name: "spaceId", options: spaceOptions(state, initialSpaceId), value: initialSpaceId }))}
     ${field("Repeats", chipGroup({ name: "triggerType", options: TRIGGER_TYPES, value: routine?.trigger?.type ?? "floating_since_last" }))}
+    ${field("Start date", textInput({ id: "f-startDate", type: "date", value: routine?.trigger?.startDate ?? new Date().toISOString().slice(0, 10) }))}
+    <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:-8px;margin-bottom:12px;">In the future — that's the first occurrence. Today or in the past — the next occurrence is worked out from there using the repeat above.</p>
     ${triggerParamsHtml(routine)}
     <div id="requires-items-field">${requiresItemsFieldHtml(initialSpaceId, routine?.requiresItemIds ?? [])}</div>
     <div id="asset-field">${assetFieldHtml(initialSpaceId, routine?.assetId ?? null)}</div>
@@ -230,23 +230,27 @@ function showTriggerBlock(root, type) {
 
 function buildTrigger(root) {
   const type = readChipGroup(root, "triggerType");
+  // Shared across every trigger type (2026-08-08, user request: "make the
+  // start date mandatory for all routines and repeat types") — one field,
+  // one meaning ("when this first becomes due"), regardless of which repeat
+  // shape is picked. See engine.js's computeNext for how past vs. future
+  // dates are actually handled.
+  const startDate = root.querySelector("#f-startDate").value || null;
   switch (type) {
-    case "floating_since_last": {
-      const startDate = root.querySelector("#f-startDate").value || null;
+    case "floating_since_last":
       return { type, intervalDays: Number(root.querySelector("#f-intervalDays").value) || 30, startDate };
-    }
     case "fixed_calendar": {
       const freq = readChipGroup(root, "rruleFreq");
       const days = readChipGroup(root, "byday"); // array (multi-select) — one or more weekdays
       const rrule = freq === "Weekly"
         ? `FREQ=WEEKLY;BYDAY=${days?.length ? days.join(",") : "SU"}`
         : `FREQ=MONTHLY;BYMONTHDAY=${Number(root.querySelector("#f-bymonthday").value) || 1}`;
-      return { type, rrule };
+      return { type, rrule, startDate };
     }
     case "usage_meter":
-      return { type, meterDelta: Number(root.querySelector("#f-meterDelta").value) || 1000 };
+      return { type, meterDelta: Number(root.querySelector("#f-meterDelta").value) || 1000, startDate };
     case "condition":
-      return { type, condition: { source: "item", itemId: readChipGroup(root, "conditionItemId"), op: "eq", value: "out" } };
+      return { type, condition: { source: "item", itemId: readChipGroup(root, "conditionItemId"), op: "eq", value: "out" }, startDate };
     case "seasonal":
       return {
         type,
@@ -254,11 +258,12 @@ function buildTrigger(root) {
           Number(root.querySelector("#f-monthStart").value) || 1,
           Number(root.querySelector("#f-monthEnd").value) || 1,
         ],
+        startDate,
       };
     case "on_mode":
-      return { type, mode: readChipGroup(root, "onModeKey") };
+      return { type, mode: readChipGroup(root, "onModeKey"), startDate };
     default:
-      return { type: "floating_since_last", intervalDays: 30 };
+      return { type: "floating_since_last", intervalDays: 30, startDate };
   }
 }
 
@@ -394,6 +399,11 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       closeSheet();
       showToast(task ? "Task updated" : "Task added");
       onSaved?.();
+      return;
+    }
+
+    if (!root.querySelector("#f-startDate").value) {
+      showToast("Pick a start date");
       return;
     }
 

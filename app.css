@@ -843,6 +843,20 @@ h1, h2, h3, p { margin: 0; }
   margin: 0;
 }
 
+/* 2026-08-08, user report: date fields still looked "big and bulky" next
+   to a plain text field on mobile even after the height/picker-icon fixes
+   above — mobile Chrome/Safari apply their own native appearance (chrome,
+   internal padding) to type="date"/type="time" that isn't fully overridden
+   by height/padding alone. appearance:none hands the box back to this
+   class's own border/height/padding entirely, so it renders pixel-identical
+   to every other .text-input (e.g. the Title field) rather than a native
+   widget that merely happens to be the same height. */
+.text-input[type="date"],
+.text-input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 .chip-group {
   display: flex;
   flex-wrap: wrap;

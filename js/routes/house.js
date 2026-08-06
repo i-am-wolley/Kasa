@@ -265,8 +265,9 @@ function openRoomTemplateSheet(space, template) {
           .filter(Boolean);
         // New asset's suggested routines default to next Saturday, not
         // today (2026-08-07, user request) — same treatment as assets.js's
-        // own standalone Add Asset flow.
-        const trigger = tmpl.trigger.type === "floating_since_last" ? { ...tmpl.trigger, startDate: nextSaturdayDateStr() } : tmpl.trigger;
+        // own standalone Add Asset flow, extended to every trigger type
+        // now that a start date is mandatory for all of them (2026-08-08).
+        const trigger = { ...tmpl.trigger, startDate: tmpl.trigger.startDate ?? nextSaturdayDateStr() };
         addRoutine({
           title: tmpl.title, spaceId: space.id, assetId: createdAsset.id, trigger,
           effort: tmpl.effort, consequence: tmpl.consequence, ownerClass: tmpl.ownerClass, requiresItemIds,
