@@ -200,9 +200,18 @@ function batches(state, rows) {
 
 // ---- §5.7 Load smoothing ---------------------------------------------------
 // If a week's total effort exceeds a ceiling, shift flexible occurrences
-// (cosmetic|unhygienic consequence, floating_since_last trigger only) +7
-// days into the following week. Never touches damaging/unsafe or
-// fixed-calendar/seasonal/etc. Mutates the occurrence objects it's given
+// (cosmetic consequence only, floating_since_last trigger only) +7 days
+// into the following week. Never touches unhygienic/damaging/unsafe or
+// fixed-calendar/seasonal/etc — narrowed from "cosmetic|unhygienic" to
+// cosmetic-only (2026-08-10, user report: a weekly unhygienic routine
+// they'd missed got silently deferred a further week instead of showing
+// overdue). "Unhygienic" carried smoothing-eligibility forward from the
+// old, vaguer "degrading" tier (pre Round 26 rename) — but now that it
+// specifically means cleanliness/water/air/pests, deferring it purely to
+// balance the household's workload doesn't fit; only genuinely
+// consequence-free cosmetic routines (dust a shelf, wipe a table) should
+// ever be nudged a week out just for load balancing. Mutates the occurrence
+// objects it's given
 // directly (same "pass the real state, mutate in place" pattern
 // engine.js's caller in state.js already uses) and returns the list of
 // moves so the caller can show what happened.
@@ -258,7 +267,7 @@ function applyLoadSmoothing(state, ceiling = DEFAULT_EFFORT_CEILING) {
         ({ occ, routine }) =>
           !occ.smoothed &&
           routine.trigger?.type === "floating_since_last" &&
-          (routine.consequence === "cosmetic" || routine.consequence === "unhygienic"),
+          routine.consequence === "cosmetic",
       )
       .sort((a, b) => b.pts - a.pts); // move the biggest contributors first — fewer moves needed to clear the ceiling
 
