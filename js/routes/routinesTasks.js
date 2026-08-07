@@ -77,7 +77,7 @@ function taskRowHtml(task, state) {
 
 function routinesFilterRowHtml() {
   return `
-    <div class="member-filter-row">
+    <div class="member-filter-row routines-filter-row">
       ${chip("Active", { active: statusFilter === "active", dataAttrs: 'data-status-filter="active"' })}
       ${chip("Paused", { active: statusFilter === "paused", dataAttrs: 'data-status-filter="paused"' })}
       ${chip("All", { active: statusFilter === "all", dataAttrs: 'data-status-filter="all"' })}

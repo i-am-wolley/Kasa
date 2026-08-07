@@ -46,14 +46,21 @@ const TABS = [
 
 // Screens reachable from the header's More button — not primary tabs
 // (memo §8.1: 5-tab limit; People/Assets/onboarding live one level down).
+// Grouped and ordered deliberately (2026-08-10, user request: "sort the
+// items in a logical way for user, now its just there" — items had only
+// ever been appended in whatever order they were built): top-down through
+// the household's own structure first (Houses contain Spaces contain
+// People; Assets and Routines & Tasks are what lives inside those spaces),
+// then behavior settings, then the activity log last as a look-back
+// utility rather than something reached for day to day.
 const MORE_ITEMS = [
-  { id: "routinesTasks", icon: "routine", label: "Routines & Tasks", meta: "Every routine and task, grouped by space or category" },
-  { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
-  { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
-  { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
-  { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device" },
-  { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Off, automatic, or trigger it yourself from Today" },
-  { id: "activity", icon: "activityLog", label: "Activity log", meta: "Everything you and Kasa have changed, clustered by day" },
+  { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household", section: "Manage" },
+  { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code", section: "Manage" },
+  { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors", section: "Manage" },
+  { id: "routinesTasks", icon: "routine", label: "Routines & Tasks", meta: "Every routine and task, grouped by space or category", section: "Manage" },
+  { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Off, automatic, or trigger it yourself from Today", section: "Settings" },
+  { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device", section: "Settings" },
+  { id: "activity", icon: "activityLog", label: "Activity log", meta: "Everything you and Kasa have changed, clustered by day", section: "History" },
 ];
 
 let activeTab = "today";
@@ -80,6 +87,27 @@ function renderPlaceholder(el, title, note) {
   `;
 }
 
+function moreSectionsHtml() {
+  let lastSection = null;
+  return MORE_ITEMS.map((item) => {
+    const header = item.section !== lastSection
+      ? `<div class="eyebrow" style="margin:${lastSection ? "16px" : "0"} 0 6px;">${item.section}</div>`
+      : "";
+    lastSection = item.section;
+    return `
+      ${header}
+      <div class="list-row" data-more-item="${item.id}" style="margin-bottom:8px;">
+        <div class="occ-row-icon">${Icon(item.icon, { size: 18 })}</div>
+        <div class="occ-row-body">
+          <div class="occ-row-title">${item.label}</div>
+          <div class="occ-row-meta">${item.meta}</div>
+        </div>
+        ${Icon("chevronRight", { size: 16 })}
+      </div>
+    `;
+  }).join("");
+}
+
 function openMoreSheet() {
   // Household code surfaced here (2026-08-05) rather than only in the
   // one-time creation toast — somewhere to actually find it again later.
@@ -89,18 +117,7 @@ function openMoreSheet() {
     bodyHtml: `
       ${code ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:12px;">Household code: <span class="font-num" style="color:var(--ink-muted);letter-spacing:0.1em;">${code}</span></p>` : ""}
       <div>
-        ${MORE_ITEMS.map(
-          (item) => `
-          <div class="list-row" data-more-item="${item.id}" style="margin-bottom:8px;">
-            <div class="occ-row-icon">${Icon(item.icon, { size: 18 })}</div>
-            <div class="occ-row-body">
-              <div class="occ-row-title">${item.label}</div>
-              <div class="occ-row-meta">${item.meta}</div>
-            </div>
-            ${Icon("chevronRight", { size: 16 })}
-          </div>
-        `,
-        ).join("")}
+        ${moreSectionsHtml()}
       </div>
       ${currentUser ? `
         <div class="list-row" id="sign-out-row" style="margin-bottom:8px;">

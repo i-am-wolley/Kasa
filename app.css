@@ -394,10 +394,24 @@ h1, h2, h3, p { margin: 0; }
 
 .member-filter-row {
   display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
   gap: 6px;
   overflow-x: auto;
   padding: 2px 0 4px;
   margin-top: 8px;
+}
+
+/* Routines & Tasks' status + group-by chips (2026-08-10, user request:
+   "can it be aligned on the same line on the left") — six chips plus a
+   divider is more than .member-filter-row's usual 2-3 member chips, so the
+   generic .chip sizing didn't reliably fit on one line on a narrow phone.
+   Same tightened-chip technique already used for Today's own chip row. */
+.routines-filter-row .chip {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  min-height: 30px;
+  font-size: var(--fs-micro);
 }
 
 .member-chip {
