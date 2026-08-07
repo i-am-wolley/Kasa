@@ -210,29 +210,32 @@ function sheetActions({ saveLabel = "Save", showDelete = false }) {
   `;
 }
 
-// Shared "duplicate this into another room" room-picker (2026-08-10, user
+// Shared "duplicate this into other rooms" room-picker (2026-08-10, user
 // request: routines/items/assets are each unique per room — a full copy
 // with its own id, not a shared record — so duplicating always needs to
-// ask which OTHER room to copy into first). One small helper rather than
-// three near-identical ones in routine.js/stock.js/assets.js — each caller
-// just supplies the room options (already excluding the source room) and
-// what to do once one's picked. Replaces whatever's currently in
-// sheet-root (the edit sheet this was opened from), matching how every
+// ask which OTHER room(s) to copy into first). One small helper rather
+// than three near-identical ones in routine.js/stock.js/assets.js — each
+// caller just supplies the room options (already excluding the source
+// room) and what to do once one or more are picked. Multi-select (2026-08-
+// 10 follow-up, user request: "multiple spaces can be selected for the
+// duplicates") — `onPick` always receives an array, even for a single
+// pick, so every caller handles one shape. Replaces whatever's currently
+// in sheet-root (the edit sheet this was opened from), matching how every
 // other confirm-and-close flow in this app already behaves.
 function openDuplicateToRoomSheet({ title, spaceOptions, onPick }) {
   openSheet({
     title,
     bodyHtml: `
-      ${field("Room", chipGroup({ name: "dupTargetSpace", options: spaceOptions, value: null }))}
+      ${field("Rooms", chipGroup({ name: "dupTargetSpace", options: spaceOptions, value: [], multi: true }))}
       ${sheetActions({ saveLabel: "Duplicate" })}
     `,
   });
   const root = document.getElementById("sheet-root");
   wireChipGroup(root, "dupTargetSpace");
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
-    const targetId = readChipGroup(root, "dupTargetSpace");
-    if (!targetId) { showToast("Pick a room first"); return; }
-    onPick(targetId);
+    const targetIds = readChipGroup(root, "dupTargetSpace") || [];
+    if (!targetIds.length) { showToast("Pick at least one room"); return; }
+    onPick(targetIds);
   });
 }
 

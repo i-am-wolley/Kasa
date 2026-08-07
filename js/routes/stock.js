@@ -480,12 +480,24 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       openDuplicateToRoomSheet({
         title: `Duplicate "${item.name}"`,
         spaceOptions: options,
-        onPick: (targetSpaceId) => {
-          const result = duplicateItem(item.id, targetSpaceId);
+        onPick: (targetSpaceIds) => {
+          let successCount = 0, lastItem = null;
+          const blockedNames = [];
+          for (const targetSpaceId of targetSpaceIds) {
+            const result = duplicateItem(item.id, targetSpaceId);
+            if (result.blocked) {
+              blockedNames.push(byId(state.spaces, targetSpaceId)?.name || "that room");
+            } else if (result.item) {
+              successCount++;
+              lastItem = result.item;
+            }
+          }
           closeSheet();
-          if (result.blocked) showToast(`${item.name} is already tracked in that room — adjust it there instead`);
-          else showToast("Item duplicated");
-          onSaved?.(result.item);
+          const bits = [];
+          if (successCount) bits.push(`Duplicated to ${successCount} room${successCount === 1 ? "" : "s"}`);
+          if (blockedNames.length) bits.push(`already tracked in ${blockedNames.join(", ")}`);
+          showToast(bits.length ? bits.join(" — ") : "Couldn't duplicate");
+          onSaved?.(lastItem);
         },
       });
     });

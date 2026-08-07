@@ -484,16 +484,24 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
     openDuplicateToRoomSheet({
       title: `Duplicate "${routine.title}"`,
       spaceOptions: options,
-      onPick: (targetSpaceId) => {
-        const result = duplicateRoutine(routine.id, targetSpaceId);
+      onPick: (targetSpaceIds) => {
+        let successCount = 0, itemsCreated = 0, itemsReused = 0;
+        for (const targetSpaceId of targetSpaceIds) {
+          const result = duplicateRoutine(routine.id, targetSpaceId);
+          if (result) {
+            successCount++;
+            itemsCreated += result.itemsCreated;
+            itemsReused += result.itemsReused;
+          }
+        }
         closeSheet();
-        if (!result) {
+        if (!successCount) {
           showToast("Couldn't duplicate");
         } else {
           const bits = [];
-          if (result.itemsCreated) bits.push(`${result.itemsCreated} item${result.itemsCreated === 1 ? "" : "s"} created`);
-          if (result.itemsReused) bits.push(`${result.itemsReused} reused`);
-          showToast(`Routine duplicated${bits.length ? ` (${bits.join(", ")})` : ""}`);
+          if (itemsCreated) bits.push(`${itemsCreated} item${itemsCreated === 1 ? "" : "s"} created`);
+          if (itemsReused) bits.push(`${itemsReused} reused`);
+          showToast(`Duplicated to ${successCount} room${successCount === 1 ? "" : "s"}${bits.length ? ` (${bits.join(", ")})` : ""}`);
         }
         onSaved?.();
       },

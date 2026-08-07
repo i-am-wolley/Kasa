@@ -355,19 +355,29 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       openDuplicateToRoomSheet({
         title: `Duplicate "${asset.name}"`,
         spaceOptions: options,
-        onPick: (targetSpaceId) => {
-          const result = duplicateAsset(asset.id, targetSpaceId);
+        onPick: (targetSpaceIds) => {
+          let successCount = 0, routineCount = 0, itemsCreated = 0, itemsReused = 0, lastAsset = null;
+          for (const targetSpaceId of targetSpaceIds) {
+            const result = duplicateAsset(asset.id, targetSpaceId);
+            if (result) {
+              successCount++;
+              routineCount += result.routines.length;
+              itemsCreated += result.itemsCreated;
+              itemsReused += result.itemsReused;
+              lastAsset = result.asset;
+            }
+          }
           closeSheet();
-          if (!result) {
+          if (!successCount) {
             showToast("Couldn't duplicate");
           } else {
             const bits = [];
-            if (result.routines.length) bits.push(`${result.routines.length} routine${result.routines.length === 1 ? "" : "s"}`);
-            if (result.itemsCreated) bits.push(`${result.itemsCreated} item${result.itemsCreated === 1 ? "" : "s"} created`);
-            if (result.itemsReused) bits.push(`${result.itemsReused} reused`);
-            showToast(`Asset duplicated${bits.length ? ` (+ ${bits.join(", ")})` : ""}`);
+            if (routineCount) bits.push(`${routineCount} routine${routineCount === 1 ? "" : "s"}`);
+            if (itemsCreated) bits.push(`${itemsCreated} item${itemsCreated === 1 ? "" : "s"} created`);
+            if (itemsReused) bits.push(`${itemsReused} reused`);
+            showToast(`Duplicated to ${successCount} room${successCount === 1 ? "" : "s"}${bits.length ? ` (+ ${bits.join(", ")})` : ""}`);
           }
-          onSaved?.(result?.asset);
+          onSaved?.(lastAsset);
         },
       });
     });
