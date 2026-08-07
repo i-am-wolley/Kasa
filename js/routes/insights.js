@@ -382,6 +382,27 @@ function forecastRowHtml(icon, title, detail) {
   `;
 }
 
+// Combines same-name aging-asset predictions within a category into one
+// strip instead of one per asset (2026-08-10, user request: "instead of
+// multiple strips, combine similar strips for similar assets") — three
+// exhaust fans read as three near-identical rows before this; now one row,
+// "3× Exhaust fan", with an age range and a rising-frequency count instead
+// of the same sentence repeated three times. A lone asset (the common
+// case) renders exactly as before — nothing to combine.
+function combineFailureGroup(name, group) {
+  if (group.length === 1) return { icon: group[0].icon, title: name, detail: group[0].detail };
+  const ages = group.map((f) => f.ageYears);
+  const minAge = Math.min(...ages), maxAge = Math.max(...ages);
+  const ageRange = minAge === maxAge ? `${minAge} years old` : `${minAge}–${maxAge} years old`;
+  const risingCount = group.filter((f) => f.risingFrequency).length;
+  const risingNote = risingCount > 0 ? ` ${risingCount} of ${group.length} needing service more often lately.` : "";
+  return {
+    icon: group[0].icon,
+    title: `${group.length}× ${name}`,
+    detail: `${ageRange} (expected life ${group[0].expectedLifeYears}).${risingNote} Worth budgeting for replacement.`,
+  };
+}
+
 // §5.9 correlation and forecasting — failure prediction, consumable
 // coupling, neglect clustering. Redesigned 2026-08-10 on direct user
 // feedback ("can it be clustered somehow, like similar assets together") —
@@ -408,9 +429,6 @@ function forecastHtml(state) {
     byCategory[f.category].push(f);
   }
   catOrder.sort((a, b) => byCategory[b].length - byCategory[a].length);
-  for (const cat of catOrder) {
-    byCategory[cat].sort((a, b) => (b.risingFrequency - a.risingFrequency) || (b.ageYears - a.ageYears));
-  }
   const showCategoryLabels = catOrder.length > 1;
 
   const sectionLabel = (label) => `<div style="color:var(--ink-faint);font-size:var(--fs-micro);font-weight:var(--fw-semibold);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">${label}</div>`;
@@ -419,12 +437,26 @@ function forecastHtml(state) {
     ? `
       ${sectionLabel("Aging assets")}
       ${catOrder
-        .map(
-          (cat) => `
+        .map((cat) => {
+          const byName = {};
+          const nameOrder = [];
+          for (const f of byCategory[cat]) {
+            if (!byName[f.name]) { byName[f.name] = []; nameOrder.push(f.name); }
+            byName[f.name].push(f);
+          }
+          // Most urgent group first: any rising-frequency asset beats a
+          // group with none, then by the oldest asset in the group.
+          nameOrder.sort((a, b) => {
+            const risingA = byName[a].some((f) => f.risingFrequency);
+            const risingB = byName[b].some((f) => f.risingFrequency);
+            if (risingA !== risingB) return risingA ? -1 : 1;
+            return Math.max(...byName[b].map((f) => f.ageYears)) - Math.max(...byName[a].map((f) => f.ageYears));
+          });
+          return `
         ${showCategoryLabels ? `<div style="color:var(--ink-muted);font-size:var(--fs-micro);margin:6px 0 2px;">${forecastCategoryLabel(cat)}</div>` : ""}
-        ${byCategory[cat].map((f) => forecastRowHtml(f.icon, f.name, f.detail)).join("")}
-      `,
-        )
+        ${nameOrder.map((name) => { const c = combineFailureGroup(name, byName[name]); return forecastRowHtml(c.icon, c.title, c.detail); }).join("")}
+      `;
+        })
         .join("")}
     `
     : "";

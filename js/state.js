@@ -752,12 +752,50 @@ function findMatchingAssetInSpace(catalogKey, spaceId) {
 // callers can tell the user what actually happened, since a routine
 // duplicate quietly creating extra stock items would otherwise be
 // confusing.
+//
+// A required item sitting in Utility or Whole home is a different case
+// entirely (2026-08-10, user follow-up: "if it consumes an item from
+// utility/whole home then dont create a new item in that room.. as items
+// in utility and whole home are considered for all spaces") — routine.js's
+// own "Uses this stock" field already treats Utility as reachable from
+// every room in the same house (Round 15), so duplicating the routine into
+// another room in the SAME house needs no new item at all, just keep
+// pointing at the exact same shared one. Only a genuinely cross-house
+// duplicate needs an equivalent — resolved against the TARGET HOUSE's own
+// Utility/Whole home space (reuse-or-create there), never the target room
+// itself, since a shared item was never room-scoped to begin with.
 function resolveRequiredItemsForSpace(itemIds, targetSpaceId) {
   const ids = [];
   let created = 0, reused = 0;
+  const targetHouseId = byId(state.spaces, targetSpaceId)?.houseId;
   for (const itemId of itemIds || []) {
     const source = byId(state.items, itemId);
     if (!source) continue;
+    const sourceSpace = byId(state.spaces, source.spaceId);
+    if (sourceSpace && MANDATORY_SPACE_TYPES.includes(sourceSpace.type)) {
+      if (sourceSpace.houseId === targetHouseId) {
+        ids.push(source.id); // same house — already shared with the target room, nothing to do
+        reused++;
+        continue;
+      }
+      const targetSharedSpace = state.spaces.find((s) => s.houseId === targetHouseId && s.type === sourceSpace.type);
+      if (targetSharedSpace) {
+        const existingShared = findMatchingItemInSpace(source.catalogKey, targetSharedSpace.id);
+        if (existingShared) {
+          ids.push(existingShared.id);
+          reused++;
+        } else {
+          const sharedCopy = { ...source, id: genId("itm"), spaceId: targetSharedSpace.id };
+          state.items.push(sharedCopy);
+          ids.push(sharedCopy.id);
+          created++;
+        }
+        continue;
+      }
+      // No matching shared space type in the target house (shouldn't
+      // happen — every house gets one) — fall through to room-scoped
+      // handling below rather than silently dropping the requirement.
+    }
     const existing = findMatchingItemInSpace(source.catalogKey, targetSpaceId);
     if (existing) {
       ids.push(existing.id);
