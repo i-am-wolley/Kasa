@@ -152,6 +152,12 @@ const PATHS = {
   gasStove: `<rect x="3" y="9" width="18" height="10" rx="1.5"/><circle cx="8" cy="14" r="2.3"/><circle cx="16" cy="14" r="2.3"/>`,
   waterDispenser: `<rect x="7" y="3" width="10" height="8" rx="1.5"/><path d="M7 11h10v9a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z"/><circle cx="10" cy="14" r="0.7" fill="currentColor" stroke="none"/><circle cx="14" cy="14" r="0.7" fill="currentColor" stroke="none"/>`,
   coffeeMaker: `<path d="M6 3h9v6a4.5 4.5 0 0 1-4.5 4.5h0A4.5 4.5 0 0 1 6 9z"/><path d="M9 13.5V17"/><path d="M11 13.5V17"/><rect x="6" y="17" width="9" height="4" rx="1"/>`,
+  // Boxy machine body (distinct from coffeeMaker's rounded carafe) with a
+  // dial and two group-head drip streams into a cup below.
+  espressoMachine: `<rect x="5" y="3" width="14" height="9" rx="1.5"/><circle cx="9" cy="7.5" r="1"/><path d="M11 12v3M13 12v3"/><rect x="8" y="16" width="8" height="4" rx="1"/>`,
+  // Tapered hopper narrowing into a grind chamber, on a small base — reads
+  // as a dedicated grinder rather than mixerGrinder's wider jar-on-base.
+  coffeeGrinder: `<path d="M8 3h8l-1.5 7h-5z"/><rect x="7.5" y="10" width="9" height="8" rx="1.5"/><rect x="9.5" y="18" width="5" height="3" rx="0.5"/>`,
   kettle: `<path d="M5 20h11a2 2 0 0 0 2-2v-4a5 5 0 0 0-5-5H8a3 3 0 0 0-3 3z"/><path d="M18 11l4-2"/><line x1="9" y1="4" x2="9" y2="7"/>`,
   toaster: `<rect x="4" y="8" width="16" height="10" rx="2"/><line x1="8" y1="4" x2="8" y2="8"/><line x1="12" y1="4" x2="12" y2="8"/><line x1="16" y1="4" x2="16" y2="8"/><path d="M9 8v4M15 8v4"/>`,
   mixerGrinder: `<path d="M8 3h8l-1 8H9z"/><rect x="6" y="11" width="12" height="9" rx="2"/><line x1="10" y1="15" x2="14" y2="15"/>`,

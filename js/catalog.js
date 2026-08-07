@@ -203,6 +203,15 @@ const ASSETS = [
     suggestedRoutines: [{ title: "Sanitize water dispenser", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-COFFEE-MAKER", name: "Coffee maker", icon: "coffeeMaker", category: "appliance", expectedLifeYears: 5,
     suggestedRoutines: [{ title: "Descale coffee maker", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
+  // Built more robustly than a basic drip maker but still water/mineral-
+  // contact, so descaling matters more, not less (2026-08-10, user request).
+  { key: "AST-ESPRESSO-MACHINE", name: "Espresso machine", icon: "espressoMachine", category: "appliance", expectedLifeYears: 8,
+    suggestedRoutines: [
+      { title: "Descale espresso machine", trigger: { type: "floating_since_last", intervalDays: 90 }, effort: 1, consequence: "unhygienic", ownerClass: "either" },
+      { title: "Clean group head and portafilter", trigger: { type: "floating_since_last", intervalDays: 14 }, effort: 1, consequence: "unhygienic", ownerClass: "either" },
+    ] },
+  { key: "AST-COFFEE-GRINDER", name: "Coffee grinder", icon: "coffeeGrinder", category: "appliance", expectedLifeYears: 7,
+    suggestedRoutines: [{ title: "Clean coffee grinder burrs", trigger: { type: "floating_since_last", intervalDays: 30 }, effort: 1, consequence: "unhygienic", ownerClass: "either" }] },
   { key: "AST-KETTLE", name: "Electric kettle", icon: "kettle", category: "appliance", expectedLifeYears: 4,
     suggestedRoutines: [{ title: "Descale kettle", trigger: { type: "floating_since_last", intervalDays: 60 }, effort: 1, consequence: "cosmetic", ownerClass: "either" }] },
   { key: "AST-TOASTER", name: "Toaster", icon: "toaster", category: "appliance", expectedLifeYears: 5 },
