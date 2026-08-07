@@ -344,7 +344,10 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
     // (2026-08-10, user request) — a full copy in a different room, its own
     // warranty/service history from that moment on, not a shared record.
     // Unlike Stock's duplicate, never blocked — Round 7's own call stands
-    // ("no warning, add freely — two ACs in one room is legitimate").
+    // ("no warning, add freely — two ACs in one room is legitimate"). Also
+    // cascades to every routine linked to this asset (see state.js's
+    // duplicateAsset) — duplicating an AC without its own "Service AC"
+    // reminder would leave the new room with nothing watching it.
     root.querySelector("#duplicate-btn")?.addEventListener("click", () => {
       const state = getState();
       const options = assetSpaceOptions(state, asset.spaceId).filter((o) => o.value !== asset.spaceId);
@@ -353,10 +356,18 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
         title: `Duplicate "${asset.name}"`,
         spaceOptions: options,
         onPick: (targetSpaceId) => {
-          const copy = duplicateAsset(asset.id, targetSpaceId);
+          const result = duplicateAsset(asset.id, targetSpaceId);
           closeSheet();
-          showToast(copy ? "Asset duplicated" : "Couldn't duplicate");
-          onSaved?.(copy);
+          if (!result) {
+            showToast("Couldn't duplicate");
+          } else {
+            const bits = [];
+            if (result.routines.length) bits.push(`${result.routines.length} routine${result.routines.length === 1 ? "" : "s"}`);
+            if (result.itemsCreated) bits.push(`${result.itemsCreated} item${result.itemsCreated === 1 ? "" : "s"} created`);
+            if (result.itemsReused) bits.push(`${result.itemsReused} reused`);
+            showToast(`Asset duplicated${bits.length ? ` (+ ${bits.join(", ")})` : ""}`);
+          }
+          onSaved?.(result?.asset);
         },
       });
     });

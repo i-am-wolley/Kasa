@@ -473,8 +473,10 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
 
   // "These are unique routines for those rooms so need to have unique ids"
   // (2026-08-10, user request) — a full copy in a different room, not a
-  // shared record; see state.js's duplicateRoutine for what gets cleared
-  // (assetId/requiresItemIds, which point at THIS room's own asset/stock).
+  // shared record; see state.js's duplicateRoutine/buildRoutineCopy for how
+  // its required items get resolved in the target room (reuse a matching
+  // one there if it exists, else duplicate) and how its linked asset (if
+  // any) only ever passively reuses an existing match, never force-creates.
   root.querySelector("#duplicate-btn")?.addEventListener("click", () => {
     const state = getState();
     const options = spaceOptions(state, routine.spaceId).filter((o) => o.value !== routine.spaceId);
@@ -483,9 +485,16 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       title: `Duplicate "${routine.title}"`,
       spaceOptions: options,
       onPick: (targetSpaceId) => {
-        const copy = duplicateRoutine(routine.id, targetSpaceId);
+        const result = duplicateRoutine(routine.id, targetSpaceId);
         closeSheet();
-        showToast(copy ? "Routine duplicated" : "Couldn't duplicate");
+        if (!result) {
+          showToast("Couldn't duplicate");
+        } else {
+          const bits = [];
+          if (result.itemsCreated) bits.push(`${result.itemsCreated} item${result.itemsCreated === 1 ? "" : "s"} created`);
+          if (result.itemsReused) bits.push(`${result.itemsReused} reused`);
+          showToast(`Routine duplicated${bits.length ? ` (${bits.join(", ")})` : ""}`);
+        }
         onSaved?.();
       },
     });

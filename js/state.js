@@ -730,6 +730,76 @@ function duplicateItem(id, targetSpaceId) {
   return { blocked: false, item: copy };
 }
 
+// "Same real-world thing" for duplication purposes — catalog key, not name
+// string, matching the exact rule every other duplicate-guard in this app
+// already uses (Round 7's own add-time guard, the block above). Custom
+// (non-catalog) entries can get different session-generated keys across
+// separate sessions even with an identical typed name — a known limitation
+// already documented elsewhere in this file, not new here.
+function findMatchingItemInSpace(catalogKey, spaceId) {
+  return state.items.find((i) => i.spaceId === spaceId && i.catalogKey === catalogKey) || null;
+}
+function findMatchingAssetInSpace(catalogKey, spaceId) {
+  return state.assets.find((a) => a.spaceId === spaceId && a.catalogKey === catalogKey) || null;
+}
+
+// Resolves a routine's requiresItemIds into the TARGET room (2026-08-10,
+// user request: "if new items linked to routine are created in new space,
+// if existing items are there already with same name that to be used
+// instead"): reuse an item already tracked there if one matches, otherwise
+// create a real duplicate — never silently skip a required item just
+// because duplicating it wasn't asked for directly. Returns counts so
+// callers can tell the user what actually happened, since a routine
+// duplicate quietly creating extra stock items would otherwise be
+// confusing.
+function resolveRequiredItemsForSpace(itemIds, targetSpaceId) {
+  const ids = [];
+  let created = 0, reused = 0;
+  for (const itemId of itemIds || []) {
+    const source = byId(state.items, itemId);
+    if (!source) continue;
+    const existing = findMatchingItemInSpace(source.catalogKey, targetSpaceId);
+    if (existing) {
+      ids.push(existing.id);
+      reused++;
+    } else {
+      const copy = { ...source, id: genId("itm"), spaceId: targetSpaceId };
+      state.items.push(copy);
+      ids.push(copy.id);
+      created++;
+    }
+  }
+  return { ids, created, reused };
+}
+
+// The shared core behind both duplicateRoutine (below) and duplicateAsset's
+// own cascade to its linked routines — builds one routine copy in the
+// target room, resolving its required items per resolveRequiredItemsForSpace
+// above. `forcedAssetId` (used only by the asset cascade) links the copy to
+// the asset that cascade just created; a standalone routine duplicate
+// instead only PASSIVELY reuses an already-existing matching asset in the
+// target room, never creates one — that one-way rule (asset duplication
+// cascades to routines, routine duplication never cascades back up to
+// assets) is what keeps this from turning into an unbounded two-way chain
+// (2026-08-10, user question: "if we duplicate the routine and create the
+// new asset... do the other routines for that asset get duplicated" — no,
+// never; only an explicit asset duplicate ever pulls in sibling routines).
+// Pure state mutation — no notify()/logActivity — so a multi-routine
+// cascade can fire those once at the end instead of once per routine.
+function buildRoutineCopy(routine, targetSpaceId, { forcedAssetId } = {}) {
+  const { ids: requiresItemIds, created: itemsCreated, reused: itemsReused } = resolveRequiredItemsForSpace(routine.requiresItemIds, targetSpaceId);
+  let assetId = null;
+  if (forcedAssetId !== undefined) {
+    assetId = forcedAssetId;
+  } else if (routine.assetId) {
+    const sourceAsset = byId(state.assets, routine.assetId);
+    assetId = sourceAsset ? findMatchingAssetInSpace(sourceAsset.catalogKey, targetSpaceId)?.id ?? null : null;
+  }
+  const copy = { ...routine, id: genId("rt"), spaceId: targetSpaceId, assetId, requiresItemIds };
+  state.routines.push(copy);
+  return { routine: copy, itemsCreated, itemsReused };
+}
+
 function adjustItemQty(id, delta) {
   const item = byId(state.items, id);
   if (!item) return;
@@ -815,15 +885,47 @@ function deleteAsset(id) {
 // copied — that field points at a routine tied to the ORIGINAL asset's own
 // id; the duplicate starts clean, same as a brand-new asset would, and
 // gets its own linked routine the next time its service interval is set.
+// "Do you also duplicate the connected routines automatically with new ids
+// for the new space" (2026-08-10, user request) — yes: every routine
+// linked to the SOURCE asset (there can be more than one, e.g. a geyser's
+// "Service geyser" + "Check pressure relief valve") gets its own duplicate
+// in the target room too, pointing at the NEW asset via buildRoutineCopy's
+// `forcedAssetId` — an asset's service routines are conceptually part of
+// it, so duplicating "Split AC" without "Service Split AC" would leave the
+// new room's AC with no reminder at all. Each of those routines' own
+// required items are resolved the same reuse-or-create way a standalone
+// routine duplicate does. This is the only direction the cascade runs —
+// see buildRoutineCopy's comment for why a routine duplicate never cascades
+// back up into re-triggering this.
 function duplicateAsset(id, targetSpaceId) {
   const asset = byId(state.assets, id);
   if (!asset) return null;
   const targetSpace = byId(state.spaces, targetSpaceId);
-  const copy = { ...asset, id: genId("ast"), spaceId: targetSpaceId, serviceRoutineId: null };
-  state.assets.push(copy);
-  logActivity({ type: "asset_duplicated", category: "asset", entityId: copy.id, entityType: "asset", summary: `Duplicated "${asset.name}" to ${targetSpace?.name || "another room"}` });
+  const assetCopy = { ...asset, id: genId("ast"), spaceId: targetSpaceId, serviceRoutineId: null };
+  state.assets.push(assetCopy);
+
+  const linkedRoutines = state.routines.filter((r) => r.assetId === asset.id);
+  const newRoutines = [];
+  let itemsCreated = 0, itemsReused = 0;
+  for (const routine of linkedRoutines) {
+    const result = buildRoutineCopy(routine, targetSpaceId, { forcedAssetId: assetCopy.id });
+    newRoutines.push(result.routine);
+    itemsCreated += result.itemsCreated;
+    itemsReused += result.itemsReused;
+    if (routine.id === asset.serviceRoutineId) assetCopy.serviceRoutineId = result.routine.id;
+  }
+
+  const bits = [];
+  if (newRoutines.length) bits.push(`${newRoutines.length} routine${newRoutines.length === 1 ? "" : "s"}`);
+  if (itemsCreated) bits.push(`${itemsCreated} item${itemsCreated === 1 ? "" : "s"} created`);
+  if (itemsReused) bits.push(`${itemsReused} reused`);
+  logActivity({
+    type: "asset_duplicated", category: "asset", entityId: assetCopy.id, entityType: "asset",
+    summary: `Duplicated "${asset.name}" to ${targetSpace?.name || "another room"}${bits.length ? ` (+ ${bits.join(", ")})` : ""}`,
+  });
+  if (newRoutines.length) regenerate();
   notify();
-  return copy;
+  return { asset: assetCopy, routines: newRoutines, itemsCreated, itemsReused };
 }
 
 // Marks an asset serviced today, re-baselines its meter so the next
@@ -1014,16 +1116,29 @@ function deleteRoutine(id) {
 // routine would, and can be re-linked by hand if the target room has its
 // own matching asset/items. Gets a fresh occurrence via regenerate() below,
 // same as any newly added routine.
+// "Do you also create the relevant assets and items... with new id" /
+// "with same name that to be used instead" (2026-08-10, user request) —
+// required items are now resolved via buildRoutineCopy/
+// resolveRequiredItemsForSpace above (reuse-if-present, else duplicate).
+// The linked asset (if any) is only ever PASSIVELY reused if a matching
+// one already exists in the target room — never force-created here (see
+// buildRoutineCopy's own comment for why: that's what keeps this from
+// cascading back up into duplicating that asset's other sibling routines).
 function duplicateRoutine(id, targetSpaceId) {
   const routine = byId(state.routines, id);
   if (!routine) return null;
   const targetSpace = byId(state.spaces, targetSpaceId);
-  const copy = { ...routine, id: genId("rt"), spaceId: targetSpaceId, assetId: null, requiresItemIds: [] };
-  state.routines.push(copy);
-  logActivity({ type: "routine_duplicated", category: "routine", entityId: copy.id, entityType: "routine", summary: `Duplicated "${routine.title}" to ${targetSpace?.name || "another room"}` });
+  const { routine: copy, itemsCreated, itemsReused } = buildRoutineCopy(routine, targetSpaceId);
+  const bits = [];
+  if (itemsCreated) bits.push(`${itemsCreated} item${itemsCreated === 1 ? "" : "s"} created`);
+  if (itemsReused) bits.push(`${itemsReused} reused`);
+  logActivity({
+    type: "routine_duplicated", category: "routine", entityId: copy.id, entityType: "routine",
+    summary: `Duplicated "${routine.title}" to ${targetSpace?.name || "another room"}${bits.length ? ` (${bits.join(", ")})` : ""}`,
+  });
   regenerate();
   notify();
-  return copy;
+  return { routine: copy, itemsCreated, itemsReused };
 }
 
 function toggleRoutineActive(id) {
