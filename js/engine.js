@@ -15,6 +15,24 @@ function daysBetween(a, b) {
   return (b.getTime() - a.getTime()) / DAY_MS;
 }
 
+// "Always on Saturday" toggle (2026-08-10, user request: "even though i
+// give the repeat every days, when this toggle is on it automatically
+// chooses the following saturday") — snaps a computed floating_since_last
+// due date forward to the nearest Saturday on/after it. Never moves an
+// already-Saturday date, and never goes backward — whatever the interval
+// computes lands on the Saturday of that same window, not a full week
+// later. Distinct from nextSaturdayDateStr() (used for a brand-new
+// routine's default start date, which deliberately always jumps a full
+// week even if today IS Saturday) — this snaps an already-computed date
+// forward by at most 6 days, since the interval itself is what's driving
+// roughly when it's next due.
+function snapToSaturday(date) {
+  const d = new Date(date);
+  const daysUntilSat = (6 - d.getDay() + 7) % 7;
+  if (daysUntilSat > 0) d.setDate(d.getDate() + daysUntilSat);
+  return d;
+}
+
 // ---- fixed_calendar: minimal RRULE subset -----------------------------
 // Supports FREQ=MONTHLY;BYMONTHDAY=N and FREQ=WEEKLY;BYDAY=XX[,XX...] (one
 // or more comma-separated days, standard RRULE syntax — 2026-08-07, user
@@ -120,7 +138,8 @@ function computeNext(routine, ctx) {
     }
 
     case "floating_since_last": {
-      const dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : firstFloatingOccurrence(t.startDate, t.intervalDays, now);
+      let dueAt = lastDoneAt ? addDays(lastDoneAt, t.intervalDays) : firstFloatingOccurrence(t.startDate, t.intervalDays, now);
+      if (t.snapToSaturday) dueAt = snapToSaturday(dueAt);
       return { dueAt, windowDays: DEFAULT_WINDOW_DAYS };
     }
 

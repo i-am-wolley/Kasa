@@ -72,6 +72,12 @@ function triggerParamsHtml(routine) {
   return `
     <div data-trigger-block="floating_since_last">
       ${field("Repeat every (days)", textInput({ id: "f-intervalDays", type: "number", value: t.intervalDays ?? 30 }))}
+      ${/* 2026-08-10, user request: "even though i give the repeat every
+         days, when this toggle is on it automatically chooses the
+         following saturday" — snaps the interval's own computed due date
+         forward to the nearest Saturday (engine.js's snapToSaturday), it
+         doesn't replace the interval itself. */ ""}
+      ${field("Always on Saturday", chipGroup({ name: "snapToSaturday", options: [{ value: "on", label: "On" }, { value: "off", label: "Off" }], value: t.snapToSaturday ? "on" : "off" }))}
     </div>
     <div data-trigger-block="fixed_calendar">
       ${field("Cadence", chipGroup({ name: "rruleFreq", options: ["Monthly", "Weekly"], value: rr.FREQ === "WEEKLY" ? "Weekly" : "Monthly" }))}
@@ -265,7 +271,10 @@ function buildTrigger(root) {
   const startDate = root.querySelector("#f-startDate").value || null;
   switch (type) {
     case "floating_since_last":
-      return { type, intervalDays: Number(root.querySelector("#f-intervalDays").value) || 30, startDate };
+      return {
+        type, intervalDays: Number(root.querySelector("#f-intervalDays").value) || 30, startDate,
+        snapToSaturday: readChipGroup(root, "snapToSaturday") === "on",
+      };
     case "fixed_calendar": {
       const freq = readChipGroup(root, "rruleFreq");
       const days = readChipGroup(root, "byday"); // array (multi-select) — one or more weekdays
@@ -312,7 +321,7 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
   });
   const root = document.getElementById("sheet-root");
 
-  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays", "taskSpaceId", "taskAssetId", "taskAssigneeId"]
+  ["kind", "spaceId", "triggerType", "rruleFreq", "byday", "assetId", "conditionItemId", "onModeKey", "requiresItemIds", "effort", "consequence", "ownerClass", "defaultAssigneeId", "pauseIn", "habitPersonId", "habitFreqType", "habitCustomDays", "taskSpaceId", "taskAssetId", "taskAssigneeId", "snapToSaturday"]
     .forEach((name) => wireChipGroup(root, name));
 
   // Kind toggle swaps which of the three field blocks shows — same sheet
