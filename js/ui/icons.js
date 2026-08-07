@@ -206,6 +206,10 @@ const PATHS = {
   customAsset: `<rect x="4" y="4" width="16" height="16" rx="3" stroke-dasharray="3 2.5"/><circle cx="12" cy="12" r="0.9" fill="currentColor" stroke="none"/>`,
   customItem: `<path d="M13 4h4a2 2 0 0 1 2 2v4a2 2 0 0 1-.6 1.4l-8 8a2 2 0 0 1-2.8 0l-4-4a2 2 0 0 1 0-2.8l8-8A2 2 0 0 1 13 4z" stroke-dasharray="3 2.5"/><circle cx="16.5" cy="7.5" r="0.9" fill="currentColor" stroke="none"/>`,
 
+  // Activity log (2026-08-10) — a clock face, reads as "history"/"what
+  // happened when" rather than a generic list.
+  activityLog: `<circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15.5,14"/>`,
+
   // ---- reusable generic glyphs, ported verbatim from Miso ------------------
   sparkle: `<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.5 5.5l2.5 2.5M16 16l2.5 2.5M18.5 5.5L16 8M8 16l-2.5 2.5"/>`,
   refresh: `<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/>`,

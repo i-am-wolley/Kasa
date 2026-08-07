@@ -65,7 +65,34 @@ const state = {
   tasks: tasks.map((t) => ({ ...t })),
   snoozeLog: snoozeLog.map((s) => ({ ...s })),
   lastSmoothingMoves: [],
+  activityLog: [],
 };
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// ---- Activity log (2026-08-10, user request: "a log where all actions
+// are tracked... any changes in the app to be captured and put there") ---
+// One entry per meaningful state change, called from inside the mutator
+// that made it — never inferred after the fact, since that's how a
+// "silently wrong" log happens. `actorKind` distinguishes something the
+// signed-in person actually did ("user") from something Kasa itself
+// decided ("kasa" — auto-depletion, load smoothing, a schema migration).
+// Capped rather than unbounded (`MAX_LOG_ENTRIES`) because this household's
+// entire state lives in one Firestore document (see CLAUDE.md's locked
+// decisions on that) — an ever-growing log would eventually threaten the
+// 1MiB ceiling that decision explicitly accepted as safe for a household's
+// normal data. Oldest entries drop first, silently — this is a recent-
+// activity feed, not a permanent audit trail.
+const MAX_LOG_ENTRIES = 500;
+function logActivity({ type, category, summary, actorKind = "user", entityId = null, entityType = null, meta = null }) {
+  state.activityLog.unshift({
+    id: genId("log"), ts: new Date().toISOString(),
+    type, category, summary, actorKind, entityId, entityType, meta,
+  });
+  if (state.activityLog.length > MAX_LOG_ENTRIES) state.activityLog.length = MAX_LOG_ENTRIES;
+}
 
 // Walks the (possibly unversioned, mock-seeded) state above forward to the
 // current schema — see migrations.js. Right now this is what actually
@@ -122,7 +149,21 @@ function regenerate() {
   // things that already moved. Skipped entirely in "manual" smoothing mode
   // (2026-08-07, user request) — see runSmoothingNow() for the on-demand
   // equivalent, triggered from Today's "Smoothen" chip in that mode.
-  state.lastSmoothingMoves = state.household.smoothingMode === "manual" ? state.lastSmoothingMoves : applyLoadSmoothing(state);
+  // "auto" is the only mode that runs smoothing as part of every
+  // regenerate() — "manual" (Today's own "Smoothen" chip triggers it
+  // on-demand, see runSmoothingNow()) and "off" (never runs at all) both
+  // skip it here (2026-08-10, user request: a real Off state, not just
+  // auto/manual).
+  if (state.household.smoothingMode === "auto") {
+    const moves = applyLoadSmoothing(state);
+    if (moves.length) {
+      logActivity({
+        type: "smoothing_run", category: "household", actorKind: "kasa",
+        summary: `Smoothed ${moves.length} routine${moves.length === 1 ? "" : "s"} to balance the week`,
+      });
+    }
+    state.lastSmoothingMoves = moves;
+  }
 }
 
 regenerate();
@@ -134,6 +175,12 @@ regenerate();
 function runSmoothingNow() {
   const moves = applyLoadSmoothing(state);
   state.lastSmoothingMoves = moves;
+  if (moves.length) {
+    logActivity({
+      type: "smoothing_run", category: "household", actorKind: "kasa",
+      summary: `Smoothed ${moves.length} routine${moves.length === 1 ? "" : "s"} to balance the week`,
+    });
+  }
   notify();
   return moves;
 }
@@ -151,27 +198,31 @@ function subscribe(fn) {
 // deplete on this schedule" toggle in Stock's edit sheet (2026-08-03, user
 // request: a day/week/month rate should be able to actually count qty down,
 // not just feed the "~N days left" estimate). Runs lazily on every
-// getState() read rather than a timer/interval — cheap no-op once caught up
-// (elapsedDays <= 0 short-circuits), and correct regardless of how long the
-// tab was closed, since it's driven by real elapsed wall-clock time against
-// each item's own lastDepletedAt checkpoint rather than a running clock.
-// A real bug, found 2026-08-09 while chasing a "Batches/Smoothen chip needs
-// several clicks" report: getState() runs this on every call, including the
-// ones render()/wireEvents() make on themselves right after a notify() this
-// function just fired. Each pass stamped lastDepletedAt to "now", so the
-// very next (synchronous, re-entrant) pass always saw a technically-nonzero
-// but microscopic elapsed time — the reentrancy guard only blocks a call
-// that's DIRECTLY nested inside its own notify(), not one that comes back
-// around after that notify() call returns — so a chain of render -> getState
-// -> tiny depletion -> notify -> render (recursive) -> ... -> back to the
-// outer render's own wireEvents -> getState -> still-nonzero elapsed time ->
-// notify again could cascade 5-10+ synchronous re-renders off a SINGLE
-// click, replacing the chip row's DOM (and rebinding its listeners) out from
-// under the user's actual next click. A minimum meaningful elapsed time
-// fixes this at the root — real depletion only ever needs day-scale
-// granularity, so 60 real seconds is a floor no legitimate catch-up would
-// ever hit, while every re-entrant call above is microseconds.
-const MIN_DEPLETION_ELAPSED_MS = 60000;
+// getState() read rather than a timer/interval, and correct regardless of
+// how long the tab was closed, since it's driven by real elapsed wall-clock
+// time against each item's own lastDepletedAt checkpoint rather than a
+// running clock.
+//
+// Steps by whole days only, not a continuous fraction (2026-08-10, user
+// request: "will i see the fractional depletions of 30min, 2hr... we don't
+// need that, just reduce and show per day"). Only a FULL elapsed day (or
+// more) ever triggers a change — `lastDepletedAt` advances by exactly that
+// many whole days, not to "now", so a partial remainder correctly carries
+// over and isn't lost or double-counted next time. Checking the quantity
+// twice in the same day now always shows the identical number; it only
+// ever steps down once a full 24 hours has actually passed.
+//
+// This also happens to be what fixed a real bug found 2026-08-09 while
+// chasing a "Batches/Smoothen chip needs several clicks" report:
+// getState() runs this on every call, including the ones render()/
+// wireEvents() make on themselves right after a notify() this function
+// just fired — the old continuous-fraction version always saw a
+// technically-nonzero but microscopic elapsed time on that immediate
+// re-entrant call (the reentrancy guard only blocks a call directly nested
+// inside its own notify(), not one that comes back around after that
+// notify() returns), cascading into 5-10+ synchronous re-renders off a
+// single click. Flooring to whole days makes that structurally impossible
+// — a re-entrant call microseconds later can never see a full day elapsed.
 let applyingDepletion = false;
 function applyAutoDepletion() {
   if (applyingDepletion) return; // reentrancy guard — notify() below can loop back into getState()
@@ -179,16 +230,21 @@ function applyAutoDepletion() {
   let changed = false;
   for (const item of state.items) {
     if (!item.autoDeplete || !item.burnRate || !item.lastDepletedAt) continue;
-    const elapsedMs = now - new Date(item.lastDepletedAt).getTime();
-    if (elapsedMs < MIN_DEPLETION_ELAPSED_MS) continue;
-    const elapsedDays = elapsedMs / 86400000;
-    const newQty = Math.max(0, item.qty - item.burnRate * elapsedDays);
+    const lastMs = new Date(item.lastDepletedAt).getTime();
+    const elapsedDaysFloor = Math.floor((now - lastMs) / 86400000);
+    if (elapsedDaysFloor < 1) continue;
+    const newQty = Math.max(0, item.qty - item.burnRate * elapsedDaysFloor);
     if (newQty !== item.qty) {
+      logActivity({
+        type: "item_depleted", category: "stock", actorKind: "kasa",
+        summary: `${item.name} auto-depleted by ${round2(item.qty - newQty)} ${item.unit} (${elapsedDaysFloor} day${elapsedDaysFloor === 1 ? "" : "s"})`,
+        entityId: item.id, entityType: "item",
+      });
       item.qty = newQty;
       item.status = item.qty <= 0 ? "out" : item.qty <= item.parLevel ? "low" : "ok";
       changed = true;
     }
-    item.lastDepletedAt = new Date(now).toISOString();
+    item.lastDepletedAt = new Date(lastMs + elapsedDaysFloor * 86400000).toISOString();
   }
   if (changed) {
     applyingDepletion = true;
@@ -289,6 +345,10 @@ function completeOccurrence(occId, doneBy = null) {
     adjustItemQty(itemId, -amount);
   }
 
+  logActivity({
+    type: "routine_completed", category: "routine", entityId: routine?.id, entityType: "routine",
+    summary: `Completed "${routine?.title || "routine"}"`,
+  });
   notify();
 }
 
@@ -305,6 +365,11 @@ function snoozeOccurrence(occId, days = 1) {
   // from a "did the user hesitate on this" signal standpoint.
   const now = new Date();
   state.snoozeLog.push({ id: genId("snz"), routineId: occ.routineId, date: now.toISOString().slice(0, 10), dow: now.getDay() });
+  const routine = byId(state.routines, occ.routineId);
+  logActivity({
+    type: "routine_snoozed", category: "routine", entityId: routine?.id, entityType: "routine",
+    summary: `Snoozed "${routine?.title || "routine"}" for ${days} day${days === 1 ? "" : "s"}`,
+  });
   notify();
 }
 
@@ -427,7 +492,11 @@ function updateNotifySettings(patch) {
 // request) — see regenerate()'s own smoothingMode check and
 // runSmoothingNow() above.
 function setSmoothingMode(mode) {
-  state.household.smoothingMode = mode === "manual" ? "manual" : "auto";
+  const next = mode === "manual" ? "manual" : mode === "off" ? "off" : "auto";
+  if (next !== state.household.smoothingMode) {
+    logActivity({ type: "smoothing_mode_changed", category: "household", summary: `Load smoothing set to ${next === "off" ? "Off" : next === "manual" ? "Manual" : "Automatic"}` });
+  }
+  state.household.smoothingMode = next;
   regenerate();
   notify();
 }
@@ -435,6 +504,8 @@ function setSmoothingMode(mode) {
 function setActiveMode(key) {
   for (const m of state.modes) m.active = m.key === key;
   state.household.activeMode = key;
+  const mode = byId(state.modes, key);
+  logActivity({ type: "household_mode_changed", category: "household", summary: `Switched household mode to ${mode?.label || key}` });
   regenerate();
   notify();
 }
@@ -473,6 +544,7 @@ function addHouse({ name }) {
   // Switches focus to the house just created — same "jump to what you just
   // made" convention Add Space already follows.
   state.household.activeHouseIds = [house.id];
+  logActivity({ type: "house_added", category: "household", entityId: house.id, entityType: "house", summary: `Added house "${house.name}"` });
   notify();
   return house;
 }
@@ -485,7 +557,11 @@ function updateHouse(id, patch) {
     if (state.houses.some((h) => h.id !== id && h.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
     patch = { ...patch, name: trimmed };
   }
+  const oldName = house.name;
   Object.assign(house, patch);
+  if (patch.name && patch.name !== oldName) {
+    logActivity({ type: "house_renamed", category: "household", entityId: house.id, entityType: "house", summary: `Renamed house "${oldName}" to "${house.name}"` });
+  }
   notify();
   return house;
 }
@@ -496,6 +572,7 @@ function updateHouse(id, patch) {
 // house, and everything scoped to those spaces, goes with it.
 function deleteHouse(id) {
   if (state.houses.length <= 1) return false;
+  const houseName = byId(state.houses, id)?.name;
   const houseSpaceIds = new Set(state.spaces.filter((s) => s.houseId === id).map((s) => s.id));
   state.items = state.items.filter((i) => !houseSpaceIds.has(i.spaceId));
   state.assets = state.assets.filter((a) => !houseSpaceIds.has(a.spaceId));
@@ -505,6 +582,7 @@ function deleteHouse(id) {
   state.houses = state.houses.filter((h) => h.id !== id);
   state.household.activeHouseIds = (state.household.activeHouseIds || []).filter((hid) => hid !== id);
   if (!state.household.activeHouseIds.length) state.household.activeHouseIds = state.houses.map((h) => h.id);
+  logActivity({ type: "house_deleted", category: "household", summary: `Deleted house "${houseName || id}"` });
   notify();
   return true;
 }
@@ -538,6 +616,7 @@ function addSpace({ name, type, icon, houseId = null }) {
   if (state.spaces.some((s) => s.houseId === targetHouseId && s.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
   const space = { id: genId("sp"), name: trimmed, type, icon, houseId: targetHouseId, order: state.spaces.length + 1, active: true };
   state.spaces.push(space);
+  logActivity({ type: "space_added", category: "house", entityId: space.id, entityType: "space", summary: `Added space "${space.name}"` });
   notify();
   return space;
 }
@@ -550,7 +629,11 @@ function updateSpace(id, patch) {
     if (state.spaces.some((s) => s.id !== id && s.houseId === sp.houseId && s.name.trim().toLowerCase() === trimmed.toLowerCase())) return null;
     patch = { ...patch, name: trimmed };
   }
+  const oldName = sp.name;
   Object.assign(sp, patch);
+  if (patch.name && patch.name !== oldName) {
+    logActivity({ type: "space_renamed", category: "house", entityId: sp.id, entityType: "space", summary: `Renamed space "${oldName}" to "${sp.name}"` });
+  }
   notify();
   return sp;
 }
@@ -586,6 +669,7 @@ function deleteSpace(id, { reassignToId = null } = {}) {
   state.assets = moveOrDrop(state.assets);
   state.routines = moveOrDrop(state.routines);
   state.spaces = state.spaces.filter((s) => s.id !== id);
+  logActivity({ type: "space_deleted", category: "house", summary: `Deleted space "${space.name}"` });
   notify();
 }
 
@@ -599,6 +683,7 @@ function addItem(fields) {
   };
   if (item.qty > 0 && !item.lastRestockedAt) item.lastRestockedAt = new Date().toISOString();
   state.items.push(item);
+  logActivity({ type: "item_added", category: "stock", entityId: item.id, entityType: "item", summary: `Added "${item.name}" to Stock` });
   notify();
   return item;
 }
@@ -609,11 +694,14 @@ function updateItem(id, patch) {
   const qtyIncreased = patch.qty != null && patch.qty > item.qty;
   Object.assign(item, patch);
   if (qtyIncreased) item.lastRestockedAt = new Date().toISOString();
+  logActivity({ type: "item_edited", category: "stock", entityId: item.id, entityType: "item", summary: `Edited "${item.name}"` });
   notify();
 }
 
 function deleteItem(id) {
+  const item = byId(state.items, id);
   state.items = state.items.filter((i) => i.id !== id);
+  if (item) logActivity({ type: "item_deleted", category: "stock", summary: `Removed "${item.name}" from Stock` });
   notify();
 }
 
@@ -623,6 +711,10 @@ function adjustItemQty(id, delta) {
   item.qty = Math.max(0, item.qty + delta);
   item.status = item.qty <= 0 ? "out" : item.qty <= item.parLevel ? "low" : "ok";
   if (delta > 0) item.lastRestockedAt = new Date().toISOString();
+  logActivity({
+    type: "item_qty_adjusted", category: "stock", entityId: item.id, entityType: "item",
+    summary: `${delta > 0 ? "Added" : "Used"} ${Math.abs(round2(delta))} ${item.unit} of "${item.name}"`,
+  });
   notify();
 }
 
@@ -667,6 +759,7 @@ function addAsset(fields) {
   asset.nextServiceDue = computeNextServiceDue(asset);
   asset.replacementDueAt = computeReplacementDueAt(asset);
   state.assets.push(asset);
+  logActivity({ type: "asset_added", category: "asset", entityId: asset.id, entityType: "asset", summary: `Added asset "${asset.name}"` });
   notify();
   return asset;
 }
@@ -677,11 +770,14 @@ function updateAsset(id, patch) {
   Object.assign(asset, patch);
   if (patch.serviceIntervalDays != null) asset.nextServiceDue = computeNextServiceDue(asset);
   if (patch.purchaseDate != null || patch.expectedLifeYears != null) asset.replacementDueAt = computeReplacementDueAt(asset);
+  logActivity({ type: "asset_edited", category: "asset", entityId: asset.id, entityType: "asset", summary: `Edited "${asset.name}"` });
   notify();
 }
 
 function deleteAsset(id) {
+  const asset = byId(state.assets, id);
   state.assets = state.assets.filter((a) => a.id !== id);
+  if (asset) logActivity({ type: "asset_deleted", category: "asset", summary: `Deleted asset "${asset.name}"` });
   notify();
 }
 
@@ -706,6 +802,7 @@ function markAssetServiced(id) {
     const openOcc = state.occurrences.find((o) => o.routineId === asset.serviceRoutineId && o.state !== "done" && o.state !== "snoozed");
     if (openOcc) completeOccurrence(openOcc.id, null);
   }
+  logActivity({ type: "asset_serviced", category: "asset", entityId: asset.id, entityType: "asset", summary: `Marked "${asset.name}" serviced` });
   notify();
 }
 
@@ -738,17 +835,22 @@ function addPersonForJoiningUser({ name, email }) {
 // ---- person CRUD (memo §2.1) --------------------------------------------
 
 function addPerson(fields) {
-  state.people.push({
+  const person = {
     id: genId(fields.kind === "help" ? "p" : "u"), role: null, schedule: null, email: null,
     leave: [], payDay: null, payAmount: null, advances: [], handoverRoutineIds: [],
     avatarColor: "var(--gold)", ...fields,
-  });
+  };
+  state.people.push(person);
+  logActivity({ type: "person_added", category: "people", entityId: person.id, entityType: "person", summary: `Added ${person.kind === "help" ? "help" : "member"} "${person.name}"` });
   notify();
 }
 
 function updatePerson(id, patch) {
   const person = byId(state.people, id);
-  if (person) Object.assign(person, patch);
+  if (person) {
+    Object.assign(person, patch);
+    logActivity({ type: "person_edited", category: "people", entityId: person.id, entityType: "person", summary: `Edited "${person.name}"` });
+  }
   notify();
 }
 
@@ -766,12 +868,14 @@ function updatePerson(id, patch) {
 // stays true even after that person leaves, same as how leaving an
 // employer doesn't retroactively un-happen the work already done.
 function deletePerson(id) {
+  const person = byId(state.people, id);
   state.routines.forEach((r) => { if (r.defaultAssigneeId === id) r.defaultAssigneeId = null; });
   state.tasks.forEach((t) => { if (t.assigneeId === id) t.assigneeId = null; });
   const habitIds = new Set(state.habits.filter((h) => h.personId === id).map((h) => h.id));
   state.habits = state.habits.filter((h) => h.personId !== id);
   state.habitLog = state.habitLog.filter((l) => !habitIds.has(l.habitId));
   state.people = state.people.filter((p) => p.id !== id);
+  if (person) logActivity({ type: "person_deleted", category: "people", summary: `Removed "${person.name}" from the household` });
   notify();
 }
 
@@ -804,6 +908,10 @@ function addRoutine(fields) {
     active: true, source: "manual", packId: null, userEdited: true, ...fields,
   };
   state.routines.push(routine);
+  logActivity({
+    type: "routine_added", category: "routine", entityId: routine.id, entityType: "routine",
+    summary: `Added routine "${routine.title}"`,
+  });
   regenerate();
   notify();
   return routine;
@@ -813,6 +921,7 @@ function updateRoutine(id, patch) {
   const routine = byId(state.routines, id);
   if (!routine) return;
   Object.assign(routine, patch, { userEdited: true });
+  logActivity({ type: "routine_edited", category: "routine", entityId: routine.id, entityType: "routine", summary: `Edited "${routine.title}"` });
   // A routine that's never been completed yet has an open occurrence
   // sitting at whatever date it was originally generated for — editing
   // its start date should actually move that occurrence, not leave it
@@ -843,8 +952,10 @@ function updateRoutine(id, patch) {
 }
 
 function deleteRoutine(id) {
+  const routine = byId(state.routines, id);
   state.routines = state.routines.filter((r) => r.id !== id);
   state.occurrences = state.occurrences.filter((o) => o.routineId !== id);
+  if (routine) logActivity({ type: "routine_deleted", category: "routine", summary: `Deleted routine "${routine.title}"` });
   notify();
 }
 
@@ -852,6 +963,10 @@ function toggleRoutineActive(id) {
   const routine = byId(state.routines, id);
   if (!routine) return;
   routine.active = !routine.active;
+  logActivity({
+    type: routine.active ? "routine_resumed" : "routine_paused", category: "routine", entityId: routine.id, entityType: "routine",
+    summary: `${routine.active ? "Resumed" : "Paused"} "${routine.title}"`,
+  });
   regenerate();
   notify();
 }
@@ -872,18 +987,30 @@ function addWishlistItem(fields) {
     createdAt: new Date().toISOString(), acquiredAt: null, ...fields,
   };
   state.wishlist.push(entry);
+  logActivity({ type: "wishlist_added", category: "wishlist", entityId: entry.id, entityType: "wishlist", summary: `Added wishlist idea "${entry.title || entry.notes || "untitled"}"` });
   notify();
   return entry;
 }
 
 function updateWishlistItem(id, patch) {
   const entry = byId(state.wishlist, id);
-  if (entry) Object.assign(entry, patch);
+  if (entry) {
+    const wasAcquired = entry.status === "acquired";
+    Object.assign(entry, patch);
+    const label = entry.title || entry.notes || "idea";
+    if (!wasAcquired && entry.status === "acquired") {
+      logActivity({ type: "wishlist_acquired", category: "wishlist", entityId: entry.id, entityType: "wishlist", summary: `Marked "${label}" acquired` });
+    } else {
+      logActivity({ type: "wishlist_edited", category: "wishlist", entityId: entry.id, entityType: "wishlist", summary: `Edited wishlist idea "${label}"` });
+    }
+  }
   notify();
 }
 
 function deleteWishlistItem(id) {
+  const entry = byId(state.wishlist, id);
   state.wishlist = state.wishlist.filter((w) => w.id !== id);
+  if (entry) logActivity({ type: "wishlist_deleted", category: "wishlist", summary: `Deleted wishlist idea "${entry.title || entry.notes || "untitled"}"` });
   notify();
 }
 
@@ -908,19 +1035,25 @@ function deleteWishlistItem(id) {
 function addHabit(fields) {
   const habit = { id: genId("hb"), frequency: { type: "daily" }, createdAt: new Date().toISOString(), ...fields };
   state.habits.push(habit);
+  logActivity({ type: "habit_added", category: "habit", entityId: habit.id, entityType: "habit", summary: `Added habit "${habit.title}"` });
   notify();
   return habit;
 }
 
 function updateHabit(id, patch) {
   const habit = byId(state.habits, id);
-  if (habit) Object.assign(habit, patch);
+  if (habit) {
+    Object.assign(habit, patch);
+    logActivity({ type: "habit_edited", category: "habit", entityId: habit.id, entityType: "habit", summary: `Edited habit "${habit.title}"` });
+  }
   notify();
 }
 
 function deleteHabit(id) {
+  const habit = byId(state.habits, id);
   state.habits = state.habits.filter((h) => h.id !== id);
   state.habitLog = state.habitLog.filter((l) => l.habitId !== id);
+  if (habit) logActivity({ type: "habit_deleted", category: "habit", summary: `Deleted habit "${habit.title}"` });
   notify();
 }
 
@@ -938,10 +1071,13 @@ function isHabitDoneOn(habitId, dateStr) {
 function toggleHabitToday(habitId) {
   const date = todayStr();
   const existing = state.habitLog.find((l) => l.habitId === habitId && l.date === date);
+  const habit = byId(state.habits, habitId);
   if (existing) {
     state.habitLog = state.habitLog.filter((l) => l !== existing);
+    if (habit) logActivity({ type: "habit_undone", category: "habit", entityId: habitId, entityType: "habit", summary: `Unchecked "${habit.title}" for today` });
   } else {
     state.habitLog.push({ id: genId("hlg"), habitId, date });
+    if (habit) logActivity({ type: "habit_done", category: "habit", entityId: habitId, entityType: "habit", summary: `Checked off "${habit.title}"` });
   }
   notify();
 }
@@ -1024,18 +1160,24 @@ function isHabitDueToday(habit) {
 function addTask(fields) {
   const task = { id: genId("tsk"), spaceId: null, assetId: null, assigneeId: null, done: false, doneAt: null, createdAt: new Date().toISOString(), ...fields };
   state.tasks.push(task);
+  logActivity({ type: "task_added", category: "task", entityId: task.id, entityType: "task", summary: `Added task "${task.title}"` });
   notify();
   return task;
 }
 
 function updateTask(id, patch) {
   const task = byId(state.tasks, id);
-  if (task) Object.assign(task, patch);
+  if (task) {
+    Object.assign(task, patch);
+    logActivity({ type: "task_edited", category: "task", entityId: task.id, entityType: "task", summary: `Edited task "${task.title}"` });
+  }
   notify();
 }
 
 function deleteTask(id) {
+  const task = byId(state.tasks, id);
   state.tasks = state.tasks.filter((t) => t.id !== id);
+  if (task) logActivity({ type: "task_deleted", category: "task", summary: `Deleted task "${task.title}"` });
   notify();
 }
 
@@ -1044,6 +1186,7 @@ function completeTask(id) {
   if (!task) return;
   task.done = true;
   task.doneAt = new Date().toISOString();
+  logActivity({ type: "task_completed", category: "task", entityId: task.id, entityType: "task", summary: `Completed task "${task.title}"` });
   notify();
 }
 
@@ -1054,6 +1197,7 @@ function uncompleteTask(id) {
   if (!task) return;
   task.done = false;
   task.doneAt = null;
+  logActivity({ type: "task_uncompleted", category: "task", entityId: task.id, entityType: "task", summary: `Marked task "${task.title}" not done` });
   notify();
 }
 

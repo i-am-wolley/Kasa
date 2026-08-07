@@ -16,6 +16,7 @@ import { mount as mountWishlist } from "./routes/wishlist.js";
 import { mount as mountPeople } from "./routes/people.js";
 import { mount as mountAssets } from "./routes/assets.js";
 import { mount as mountHouses } from "./routes/houses.js";
+import { mount as mountActivity } from "./routes/activity.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
 import { mount as mountWelcome } from "./routes/welcome.js";
 
@@ -49,7 +50,8 @@ const MORE_ITEMS = [
   { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
   { id: "notifications", icon: "bell", label: "Notifications", meta: "Daily due-today summary, on this device" },
-  { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Automatic, or trigger it yourself from Today" },
+  { id: "smoothing", icon: "routine", label: "Load smoothing", meta: "Off, automatic, or trigger it yourself from Today" },
+  { id: "activity", icon: "activityLog", label: "Activity log", meta: "Everything you and Kasa have changed, clustered by day" },
 ];
 
 let activeTab = "today";
@@ -129,24 +131,43 @@ function openMoreSheet() {
   });
 }
 
-// Auto (default, existing behavior) or manual (2026-08-07, user request)
-// — manual mode surfaces a "Smoothen" chip next to Today's own Batches
-// toggle instead of running silently as part of every regenerate().
+// Off, or On with a Manual/Automatic sub-choice (2026-08-10, user request:
+// "have a toggle on or off, then automatic or manual" — was previously
+// always doing SOMETHING, auto or manual-with-a-button, with no real off
+// state). Manual mode surfaces a "Smoothen" chip next to Today's own
+// Batches toggle instead of running silently as part of every regenerate();
+// Automatic does it quietly. Whenever the household is currently off, the
+// sub-choice defaults to Manual the moment it's switched on (2026-08-10,
+// user request: "always when switched on let it do a manual first and then
+// automatic is switched by user if needed") — flipping back on after
+// already having a mode preserves that prior mode instead of resetting it.
 function openSmoothingSheet() {
   const state = getState();
-  const mode = state.household.smoothingMode || "auto";
+  const mode = state.household.smoothingMode || "off";
+  const isOn = mode !== "off";
+  const subMode = isOn ? mode : "manual";
   openSheet({
     title: "Load smoothing",
     bodyHtml: `
-      <p style="color:var(--ink-muted);margin-bottom:16px;">If a week's total effort goes over the household's ceiling, flexible routines can shift to a lighter week. Automatic does this quietly as things change; Manual only does it when you tap "Smoothen" on Today.</p>
-      ${field("Mode", chipGroup({ name: "smoothingMode", options: [{ value: "auto", label: "Automatic" }, { value: "manual", label: "Manual" }], value: mode }))}
+      <p style="color:var(--ink-muted);margin-bottom:16px;">If a week's total cosmetic-routine effort goes over the household's ceiling, some can shift to a lighter week.</p>
+      ${field("Load smoothing", chipGroup({ name: "smoothingOn", options: [{ value: "on", label: "On" }, { value: "off", label: "Off" }], value: isOn ? "on" : "off" }))}
+      <div id="smoothing-submode-field" style="display:${isOn ? "block" : "none"};">
+        ${field("Mode", chipGroup({ name: "smoothingSubMode", options: [{ value: "manual", label: "Manual — I'll tap Smoothen" }, { value: "auto", label: "Automatic — do it quietly" }], value: subMode }))}
+      </div>
       ${sheetActions({ saveLabel: "Save" })}
     `,
   });
   const root = document.getElementById("sheet-root");
-  wireChipGroup(root, "smoothingMode");
+  wireChipGroup(root, "smoothingOn");
+  wireChipGroup(root, "smoothingSubMode");
+  root.querySelector('[data-field="smoothingOn"]').addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-value]");
+    if (!btn) return;
+    root.querySelector("#smoothing-submode-field").style.display = btn.dataset.value === "on" ? "block" : "none";
+  });
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
-    setSmoothingMode(readChipGroup(root, "smoothingMode") || "auto");
+    const on = readChipGroup(root, "smoothingOn") === "on";
+    setSmoothingMode(on ? (readChipGroup(root, "smoothingSubMode") || "manual") : "off");
     closeSheet();
     showToast("Load smoothing settings saved");
   });
@@ -278,6 +299,9 @@ function mountScreen(screenId) {
       break;
     case "houses":
       mountHouses(screenEl, { onBack: () => switchTab(activeTab) });
+      break;
+    case "activity":
+      mountActivity(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     default:
       renderPlaceholder(screenEl, screenId, "Not built yet.");

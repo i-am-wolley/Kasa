@@ -22,7 +22,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 5;
+const CURRENT_SCHEMA_VERSION = 6;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -90,6 +90,13 @@ const migrations = {
           : UNHYGIENIC_TITLES.has(routine.title) ? "unhygienic" : "damaging";
       }
     }
+  },
+
+  // v5 -> v6 (2026-08-10): the activity log (state.js's logActivity()) — a
+  // pre-v6 household has no activityLog field at all.
+  6: (state) => {
+    if (state.activityLog) return;
+    state.activityLog = [];
   },
 };
 
