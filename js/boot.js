@@ -17,6 +17,7 @@ import { mount as mountPeople } from "./routes/people.js";
 import { mount as mountAssets } from "./routes/assets.js";
 import { mount as mountHouses } from "./routes/houses.js";
 import { mount as mountActivity } from "./routes/activity.js";
+import { mount as mountRoutinesTasks } from "./routes/routinesTasks.js";
 import { mount as mountOnboard } from "./routes/onboard.js";
 import { mount as mountWelcome } from "./routes/welcome.js";
 
@@ -46,6 +47,7 @@ const TABS = [
 // Screens reachable from the header's More button — not primary tabs
 // (memo §8.1: 5-tab limit; People/Assets/onboarding live one level down).
 const MORE_ITEMS = [
+  { id: "routinesTasks", icon: "routine", label: "Routines & Tasks", meta: "Every routine and task, grouped by space or category" },
   { id: "assets", icon: "warranty", label: "Assets", meta: "Service schedule, warranties, vendors" },
   { id: "houses", icon: "house", label: "Houses", meta: "Add, rename, or delete houses in this household" },
   { id: "people", icon: "person", label: "People & Household", meta: "Members, help, leave, habits, household code" },
@@ -302,6 +304,9 @@ function mountScreen(screenId) {
       break;
     case "activity":
       mountActivity(screenEl, { onBack: () => switchTab(activeTab) });
+      break;
+    case "routinesTasks":
+      mountRoutinesTasks(screenEl, { onBack: () => switchTab(activeTab) });
       break;
     default:
       renderPlaceholder(screenEl, screenId, "Not built yet.");
