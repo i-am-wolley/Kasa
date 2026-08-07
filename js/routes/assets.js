@@ -1,10 +1,10 @@
 // Assets screen (memo §8.2) — cards sorted by next service, warranty
 // countdown, detail with vendor call button and running service history.
 
-import { getState, subscribe, addAsset, updateAsset, deleteAsset, markAssetServiced, addRoutine, updateRoutine, deleteRoutine, nextSaturdayDateStr, visibleSpaceIds, byId } from "../state.js";
+import { getState, subscribe, addAsset, updateAsset, deleteAsset, duplicateAsset, markAssetServiced, addRoutine, updateRoutine, deleteRoutine, nextSaturdayDateStr, visibleSpaceIds, byId } from "../state.js";
 import { findByKey } from "../catalog.js";
 import { Icon } from "../ui/icons.js";
-import { emptyState, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
+import { emptyState, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openDuplicateToRoomSheet, openSheet, closeSheet, showToast } from "../ui/components.js";
 
 let mountEl = null;
 let unsubscribe = null;
@@ -190,6 +190,7 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       <div class="field" id="suggested-routines-field"></div>
       ${asset?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:8px;">Catalog key: <span class="font-num">${asset.catalogKey}</span></p>` : ""}
       ${sheetActions({ saveLabel: asset ? "Save changes" : "Add asset", showDelete: !!asset })}
+      ${asset ? `<button type="button" class="btn btn-ghost" id="duplicate-btn" style="width:100%;margin-top:8px;">Duplicate to another room</button>` : ""}
     `,
   });
   const root = document.getElementById("sheet-root");
@@ -337,6 +338,27 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       deleteAsset(asset.id);
       closeSheet();
       showToast("Asset removed");
+    });
+
+    // "These are unique assets for those rooms so need to have unique ids"
+    // (2026-08-10, user request) — a full copy in a different room, its own
+    // warranty/service history from that moment on, not a shared record.
+    // Unlike Stock's duplicate, never blocked — Round 7's own call stands
+    // ("no warning, add freely — two ACs in one room is legitimate").
+    root.querySelector("#duplicate-btn")?.addEventListener("click", () => {
+      const state = getState();
+      const options = assetSpaceOptions(state, asset.spaceId).filter((o) => o.value !== asset.spaceId);
+      if (!options.length) { showToast("No other rooms to duplicate into"); return; }
+      openDuplicateToRoomSheet({
+        title: `Duplicate "${asset.name}"`,
+        spaceOptions: options,
+        onPick: (targetSpaceId) => {
+          const copy = duplicateAsset(asset.id, targetSpaceId);
+          closeSheet();
+          showToast(copy ? "Asset duplicated" : "Couldn't duplicate");
+          onSaved?.(copy);
+        },
+      });
     });
   }
 }

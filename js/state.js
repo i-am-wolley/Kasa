@@ -705,6 +705,31 @@ function deleteItem(id) {
   notify();
 }
 
+// A room's stock item is genuinely its own record with its own qty/burn
+// rate/par level — "Toilet cleaner" in the master bath and "Toilet
+// cleaner" in the guest bath deplete independently (2026-08-10, user
+// request: "an option to duplicate routines, items, assets for different
+// rooms.. these are unique... need to have unique ids"). Copies every
+// field, then stamps a fresh id and the target room — same duplicate-guard
+// as a brand-new add (Round 7) so this can't silently create a second
+// tracked record for the same real-world thing already sitting in the
+// target room; the caller (stock.js) surfaces that as a toast rather than
+// a partial/confusing duplicate.
+function duplicateItem(id, targetSpaceId) {
+  const item = byId(state.items, id);
+  if (!item) return { blocked: false, item: null };
+  if (state.items.some((i) => i.spaceId === targetSpaceId && i.catalogKey === item.catalogKey)) {
+    return { blocked: true, item: null };
+  }
+  const targetSpace = byId(state.spaces, targetSpaceId);
+  const copy = { ...item, id: genId("itm") };
+  copy.spaceId = targetSpaceId;
+  state.items.push(copy);
+  logActivity({ type: "item_duplicated", category: "stock", entityId: copy.id, entityType: "item", summary: `Duplicated "${item.name}" to ${targetSpace?.name || "another room"}` });
+  notify();
+  return { blocked: false, item: copy };
+}
+
 function adjustItemQty(id, delta) {
   const item = byId(state.items, id);
   if (!item) return;
@@ -779,6 +804,26 @@ function deleteAsset(id) {
   state.assets = state.assets.filter((a) => a.id !== id);
   if (asset) logActivity({ type: "asset_deleted", category: "asset", summary: `Deleted asset "${asset.name}"` });
   notify();
+}
+
+// Same "each room's copy is its own real record" reasoning as duplicateItem
+// (2026-08-10, user request) — an AC in the bedroom and an AC in the living
+// room have their own warranty/service history/purchase date, not a shared
+// one. Assets were never duplicate-guarded even on a fresh add (Round 7:
+// "no warning, add freely — two ACs in one room is legitimate"), so this
+// doesn't block either. `serviceRoutineId` is deliberately cleared, not
+// copied — that field points at a routine tied to the ORIGINAL asset's own
+// id; the duplicate starts clean, same as a brand-new asset would, and
+// gets its own linked routine the next time its service interval is set.
+function duplicateAsset(id, targetSpaceId) {
+  const asset = byId(state.assets, id);
+  if (!asset) return null;
+  const targetSpace = byId(state.spaces, targetSpaceId);
+  const copy = { ...asset, id: genId("ast"), spaceId: targetSpaceId, serviceRoutineId: null };
+  state.assets.push(copy);
+  logActivity({ type: "asset_duplicated", category: "asset", entityId: copy.id, entityType: "asset", summary: `Duplicated "${asset.name}" to ${targetSpace?.name || "another room"}` });
+  notify();
+  return copy;
 }
 
 // Marks an asset serviced today, re-baselines its meter so the next
@@ -957,6 +1002,28 @@ function deleteRoutine(id) {
   state.occurrences = state.occurrences.filter((o) => o.routineId !== id);
   if (routine) logActivity({ type: "routine_deleted", category: "routine", summary: `Deleted routine "${routine.title}"` });
   notify();
+}
+
+// Same "each room's copy is its own real record" reasoning as
+// duplicateItem/duplicateAsset (2026-08-10, user request) — "Clean AC
+// filter" in the bedroom and the same routine in the living room need
+// independent due dates and completion history, not a shared one.
+// `assetId`/`requiresItemIds` are deliberately cleared, not copied — they
+// point at the SOURCE room's own asset/stock records, which don't exist in
+// the target room; the duplicate starts unlinked, same as a brand-new
+// routine would, and can be re-linked by hand if the target room has its
+// own matching asset/items. Gets a fresh occurrence via regenerate() below,
+// same as any newly added routine.
+function duplicateRoutine(id, targetSpaceId) {
+  const routine = byId(state.routines, id);
+  if (!routine) return null;
+  const targetSpace = byId(state.spaces, targetSpaceId);
+  const copy = { ...routine, id: genId("rt"), spaceId: targetSpaceId, assetId: null, requiresItemIds: [] };
+  state.routines.push(copy);
+  logActivity({ type: "routine_duplicated", category: "routine", entityId: copy.id, entityType: "routine", summary: `Duplicated "${routine.title}" to ${targetSpace?.name || "another room"}` });
+  regenerate();
+  notify();
+  return copy;
 }
 
 function toggleRoutineActive(id) {
@@ -1250,10 +1317,12 @@ export {
   addItem,
   updateItem,
   deleteItem,
+  duplicateItem,
   adjustItemQty,
   addAsset,
   updateAsset,
   deleteAsset,
+  duplicateAsset,
   markAssetServiced,
   addPerson,
   updatePerson,
@@ -1263,6 +1332,7 @@ export {
   addRoutine,
   updateRoutine,
   deleteRoutine,
+  duplicateRoutine,
   toggleRoutineActive,
   addWishlistItem,
   updateWishlistItem,

@@ -11,8 +11,8 @@
 // date, no recurrence, no required space/person) — but share this one
 // entry sheet with a Kind toggle up top switching which field block shows.
 
-import { getState, addRoutine, updateRoutine, deleteRoutine, addHabit, updateHabit, deleteHabit, addTask, updateTask, deleteTask, visibleSpaceIds, byId } from "../state.js";
-import { openSheet, closeSheet, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, showToast } from "../ui/components.js";
+import { getState, addRoutine, updateRoutine, deleteRoutine, duplicateRoutine, addHabit, updateHabit, deleteHabit, addTask, updateTask, deleteTask, visibleSpaceIds, byId } from "../state.js";
+import { openSheet, closeSheet, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openDuplicateToRoomSheet, showToast } from "../ui/components.js";
 
 const KIND_OPTIONS = [
   { value: "routine", label: "Household routine" },
@@ -245,6 +245,7 @@ function bodyHtml(routine, habit, task, spaceId, defaultPersonId, defaultKind) {
       <div id="task-fields" style="display:${kind === "task" ? "block" : "none"};">${taskFieldsHtml(task, spaceId, state)}</div>
     </form>
     ${sheetActions({ saveLabel: (routine || habit || task) ? "Save changes" : saveLabels[kind], showDelete: !!(routine || habit || task) })}
+    ${routine ? `<button type="button" class="btn btn-ghost" id="duplicate-btn" style="width:100%;margin-top:8px;">Duplicate to another room</button>` : ""}
   `;
 }
 
@@ -469,6 +470,26 @@ function openRoutineEditor({ routine = null, habit = null, task = null, defaultS
       onSaved?.();
     });
   }
+
+  // "These are unique routines for those rooms so need to have unique ids"
+  // (2026-08-10, user request) — a full copy in a different room, not a
+  // shared record; see state.js's duplicateRoutine for what gets cleared
+  // (assetId/requiresItemIds, which point at THIS room's own asset/stock).
+  root.querySelector("#duplicate-btn")?.addEventListener("click", () => {
+    const state = getState();
+    const options = spaceOptions(state, routine.spaceId).filter((o) => o.value !== routine.spaceId);
+    if (!options.length) { showToast("No other rooms to duplicate into"); return; }
+    openDuplicateToRoomSheet({
+      title: `Duplicate "${routine.title}"`,
+      spaceOptions: options,
+      onPick: (targetSpaceId) => {
+        const copy = duplicateRoutine(routine.id, targetSpaceId);
+        closeSheet();
+        showToast(copy ? "Routine duplicated" : "Couldn't duplicate");
+        onSaved?.();
+      },
+    });
+  });
 }
 
 export { openRoutineEditor };

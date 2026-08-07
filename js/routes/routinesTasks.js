@@ -76,14 +76,22 @@ function taskRowHtml(task, state) {
 }
 
 function routinesFilterRowHtml() {
+  // Wrapped in .today-section — same horizontal padding as the kind-toggle
+  // row above it (2026-08-10, user request: "the filter row in alignment
+  // with the routines and task button"). Without this the filter row sat
+  // flush against the screen edge while the Routines/Tasks toggle above it
+  // (which IS inside a .today-section) had the usual 14px inset, so the
+  // two rows' chips visibly started at different left edges.
   return `
-    <div class="member-filter-row routines-filter-row">
-      ${chip("Active", { active: statusFilter === "active", dataAttrs: 'data-status-filter="active"' })}
-      ${chip("Paused", { active: statusFilter === "paused", dataAttrs: 'data-status-filter="paused"' })}
-      ${chip("All", { active: statusFilter === "all", dataAttrs: 'data-status-filter="all"' })}
-      <span style="width:1px;background:var(--line);margin:2px 4px;flex-shrink:0;"></span>
-      ${chip("By space", { active: groupBy === "space", dataAttrs: 'data-group-by="space"' })}
-      ${chip("By category", { active: groupBy === "tier", dataAttrs: 'data-group-by="tier"' })}
+    <div class="today-section" style="padding-top:0;">
+      <div class="member-filter-row routines-filter-row">
+        ${chip("Active", { active: statusFilter === "active", dataAttrs: 'data-status-filter="active"' })}
+        ${chip("Paused", { active: statusFilter === "paused", dataAttrs: 'data-status-filter="paused"' })}
+        ${chip("All", { active: statusFilter === "all", dataAttrs: 'data-status-filter="all"' })}
+        <span style="width:1px;background:var(--line);margin:2px 4px;flex-shrink:0;"></span>
+        ${chip("By space", { active: groupBy === "space", dataAttrs: 'data-group-by="space"' })}
+        ${chip("By category", { active: groupBy === "tier", dataAttrs: 'data-group-by="tier"' })}
+      </div>
     </div>
   `;
 }

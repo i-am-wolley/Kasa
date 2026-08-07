@@ -3,9 +3,9 @@
 // it doesn't order (memo §7) — the list goes to the clipboard for the
 // user to paste into WhatsApp, a quick-commerce app, whatever they use.
 
-import { getState, subscribe, addItem, updateItem, deleteItem, adjustItemQty, visibleSpaceIds, byId } from "../state.js";
+import { getState, subscribe, addItem, updateItem, deleteItem, duplicateItem, adjustItemQty, visibleSpaceIds, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
-import { emptyState, stepper, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast, haptic } from "../ui/components.js";
+import { emptyState, stepper, field, textInput, catalogField, wireCatalogField, resolveCatalogField, chipGroup, readChipGroup, wireChipGroup, sheetActions, openDuplicateToRoomSheet, openSheet, closeSheet, showToast, haptic } from "../ui/components.js";
 
 const UNITS = ["piece", "ml", "g", "kg", "pack", "roll", "litre"];
 const EXPIRING_WITHIN_DAYS = 14;
@@ -255,6 +255,7 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       </form>
       ${item?.catalogKey ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-bottom:6px;">Catalog key: <span class="font-num">${item.catalogKey}</span></p>` : ""}
       ${sheetActions({ saveLabel: item ? "Save changes" : "Add item", showDelete: !!item })}
+      ${item ? `<button type="button" class="btn btn-ghost" id="duplicate-btn" style="width:100%;margin-top:8px;">Duplicate to another room</button>` : ""}
     `,
   });
   const root = document.getElementById("sheet-root");
@@ -467,6 +468,26 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
       deleteItem(item.id);
       closeSheet();
       showToast("Item removed");
+    });
+
+    // "These are unique items for those rooms so need to have unique ids"
+    // (2026-08-10, user request) — a full copy in a different room, its own
+    // qty/burn-rate/par-level from that moment on, not a shared record.
+    root.querySelector("#duplicate-btn")?.addEventListener("click", () => {
+      const state = getState();
+      const options = itemSpaceOptions(state, item.spaceId).filter((o) => o.value !== item.spaceId);
+      if (!options.length) { showToast("No other rooms to duplicate into"); return; }
+      openDuplicateToRoomSheet({
+        title: `Duplicate "${item.name}"`,
+        spaceOptions: options,
+        onPick: (targetSpaceId) => {
+          const result = duplicateItem(item.id, targetSpaceId);
+          closeSheet();
+          if (result.blocked) showToast(`${item.name} is already tracked in that room — adjust it there instead`);
+          else showToast("Item duplicated");
+          onSaved?.(result.item);
+        },
+      });
     });
   }
 }

@@ -210,6 +210,32 @@ function sheetActions({ saveLabel = "Save", showDelete = false }) {
   `;
 }
 
+// Shared "duplicate this into another room" room-picker (2026-08-10, user
+// request: routines/items/assets are each unique per room — a full copy
+// with its own id, not a shared record — so duplicating always needs to
+// ask which OTHER room to copy into first). One small helper rather than
+// three near-identical ones in routine.js/stock.js/assets.js — each caller
+// just supplies the room options (already excluding the source room) and
+// what to do once one's picked. Replaces whatever's currently in
+// sheet-root (the edit sheet this was opened from), matching how every
+// other confirm-and-close flow in this app already behaves.
+function openDuplicateToRoomSheet({ title, spaceOptions, onPick }) {
+  openSheet({
+    title,
+    bodyHtml: `
+      ${field("Room", chipGroup({ name: "dupTargetSpace", options: spaceOptions, value: null }))}
+      ${sheetActions({ saveLabel: "Duplicate" })}
+    `,
+  });
+  const root = document.getElementById("sheet-root");
+  wireChipGroup(root, "dupTargetSpace");
+  root.querySelector('[data-action="save"]').addEventListener("click", () => {
+    const targetId = readChipGroup(root, "dupTargetSpace");
+    if (!targetId) { showToast("Pick a room first"); return; }
+    onPick(targetId);
+  });
+}
+
 // ---- Toast — imperative, since it's transient and outlives any one render ----
 
 let toastTimer = null;
@@ -290,6 +316,7 @@ export {
   readChipGroup,
   wireChipGroup,
   sheetActions,
+  openDuplicateToRoomSheet,
   showToast,
   openSheet,
   closeSheet,
