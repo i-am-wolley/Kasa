@@ -250,6 +250,10 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       name: entry.name,
       catalogKey: entry.key,
       icon: entry.icon,
+      // Not user-editable — always trust the catalog's own classification
+      // for whichever entry is currently selected (2026-08-10, added so
+      // Insights' Forecast section can cluster "similar assets together").
+      category: entry.category ?? null,
       spaceId,
       brand: root.querySelector("#f-asset-brand").value.trim() || null,
       purchaseDate: root.querySelector("#f-asset-purchased").value || null,

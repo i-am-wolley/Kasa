@@ -16,13 +16,15 @@
 // CURRENT_SCHEMA_VERSION. Nothing else changes — state.js calls migrate()
 // once at load and isn't aware of individual steps.
 
+import { findByKey } from "./catalog.js";
+
 let migIdSeq = 0;
 function migId(prefix) {
   migIdSeq += 1;
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 6;
+const CURRENT_SCHEMA_VERSION = 7;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -97,6 +99,22 @@ const migrations = {
   6: (state) => {
     if (state.activityLog) return;
     state.activityLog = [];
+  },
+
+  // v6 -> v7 (2026-08-10): backfills `category` onto every existing asset
+  // from its catalog entry — a real gap found while building Insights'
+  // Forecast clustering (user request: "similar assets together"), which
+  // needs `category` to group by. The catalog has always carried a
+  // `category` per entry, but nothing ever copied it onto the asset
+  // RECORD itself the way `icon`/`expectedLifeYears` already are — assets.js
+  // now stamps it on every future add/edit, this one-time pass catches
+  // everything that already existed before that.
+  7: (state) => {
+    for (const asset of state.assets || []) {
+      if (asset.category != null || !asset.catalogKey) continue;
+      const entry = findByKey(asset.catalogKey, "asset");
+      if (entry?.category) asset.category = entry.category;
+    }
   },
 };
 

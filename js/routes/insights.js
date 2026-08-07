@@ -362,34 +362,91 @@ function seasonalHtml(state) {
   `;
 }
 
+const FORECAST_CATEGORY_LABEL = {
+  water_heating: "Water heating", water_treatment: "Water treatment", climate: "Climate & air",
+  power: "Power", appliance: "Appliances", safety: "Safety", electronics: "Electronics",
+};
+function forecastCategoryLabel(category) {
+  return FORECAST_CATEGORY_LABEL[category] || (category ? category.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Other");
+}
+
+function forecastRowHtml(icon, title, detail) {
+  return `
+    <div class="list-row" style="cursor:default;">
+      <div class="occ-row-icon">${Icon(icon, { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${title}</div>
+        <div class="occ-row-meta">${detail}</div>
+      </div>
+    </div>
+  `;
+}
+
 // §5.9 correlation and forecasting — failure prediction, consumable
-// coupling, neglect clustering. Grouped as one "Forecast" section since
-// each fires rarely and none needs its own eyebrow to stay legible.
+// coupling, neglect clustering. Redesigned 2026-08-10 on direct user
+// feedback ("can it be clustered somehow, like similar assets together") —
+// was one flat list interleaving three unrelated signal types with no
+// visual distinction at all. Now: a labeled sub-section per signal type
+// (only the ones that actually have anything to show), and within "Aging
+// assets" specifically — the one that can genuinely grow long in a bigger
+// household — a further cluster by the asset's own catalog category
+// (water heating, climate, appliances, ...), biggest cluster first, with
+// the more urgent "service frequency rising" assets sorted to the top
+// within each. The category sub-label itself only renders when there's
+// more than one category present — clustering a single-category household
+// into one redundantly-labeled group wouldn't add anything.
 function forecastHtml(state) {
   const failures = failurePredictions(state);
   const coupled = consumableCoupling(state);
   const neglect = neglectClusters(state);
   if (!failures.length && !coupled.length && !neglect.length) return "";
-  const rows = [
-    ...failures.map((f) => ({ icon: "warranty", title: f.name, detail: f.detail })),
-    ...coupled.map((c) => ({ icon: "stock", title: c.assetName, detail: `Recently serviced — ${c.items.join(", ")} may need replacing sooner than the calendar suggests.` })),
-    ...neglect.map((n) => ({ icon: "house", title: n.spaceName, detail: `${n.overdueCount} of ${n.totalCount} routines here are overdue — still apply, or worth pausing/removing some?` })),
-  ];
+
+  const byCategory = {};
+  const catOrder = [];
+  for (const f of failures) {
+    if (!byCategory[f.category]) { byCategory[f.category] = []; catOrder.push(f.category); }
+    byCategory[f.category].push(f);
+  }
+  catOrder.sort((a, b) => byCategory[b].length - byCategory[a].length);
+  for (const cat of catOrder) {
+    byCategory[cat].sort((a, b) => (b.risingFrequency - a.risingFrequency) || (b.ageYears - a.ageYears));
+  }
+  const showCategoryLabels = catOrder.length > 1;
+
+  const sectionLabel = (label) => `<div style="color:var(--ink-faint);font-size:var(--fs-micro);font-weight:var(--fw-semibold);text-transform:uppercase;letter-spacing:0.04em;margin:10px 0 6px;">${label}</div>`;
+
+  const failuresHtml = failures.length
+    ? `
+      ${sectionLabel("Aging assets")}
+      ${catOrder
+        .map(
+          (cat) => `
+        ${showCategoryLabels ? `<div style="color:var(--ink-muted);font-size:var(--fs-micro);margin:6px 0 2px;">${forecastCategoryLabel(cat)}</div>` : ""}
+        ${byCategory[cat].map((f) => forecastRowHtml(f.icon, f.name, f.detail)).join("")}
+      `,
+        )
+        .join("")}
+    `
+    : "";
+
+  const coupledHtml = coupled.length
+    ? `
+      ${sectionLabel("Consumables to watch")}
+      ${coupled.map((c) => forecastRowHtml("stock", c.assetName, `Recently serviced — ${c.items.join(", ")} may need replacing sooner than the calendar suggests.`)).join("")}
+    `
+    : "";
+
+  const neglectHtml = neglect.length
+    ? `
+      ${sectionLabel("Neglected spaces")}
+      ${neglect.map((n) => forecastRowHtml("house", n.spaceName, `${n.overdueCount} of ${n.totalCount} routines here are overdue — still apply, or worth pausing/removing some?`)).join("")}
+    `
+    : "";
+
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Forecast</span></div>
-      ${rows
-        .map(
-          (r) => `
-        <div class="list-row" style="cursor:default;">
-          <div class="occ-row-icon">${Icon(r.icon, { size: 16 })}</div>
-          <div class="occ-row-body">
-            <div class="occ-row-title">${r.title}</div>
-            <div class="occ-row-meta">${r.detail}</div>
-          </div>
-        </div>`,
-        )
-        .join("")}
+      ${failuresHtml}${coupledHtml}${neglectHtml}
     </div>
   `;
 }

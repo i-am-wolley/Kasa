@@ -338,6 +338,10 @@ function seasonalBoosts(state) {
 // there's real service history to measure a trend from — with fewer than
 // 3 recorded services there's nothing to call "rising," so the copy stays
 // honestly age-only rather than claiming a trend that isn't there.
+// `category`/`icon` are carried through from the catalog (2026-08-10, user
+// request: cluster the Forecast section "similar assets together") so
+// insights.js can group same-category assets (water heating, climate,
+// appliances, ...) without re-resolving each asset itself.
 function failurePredictions(state) {
   const now = new Date();
   const predictions = [];
@@ -360,6 +364,8 @@ function failurePredictions(state) {
     predictions.push({
       assetId: asset.id,
       name: asset.name,
+      category: asset.category || "other",
+      icon: asset.icon || "warranty",
       ageYears: Math.round(ageYears * 10) / 10,
       expectedLifeYears: asset.expectedLifeYears,
       risingFrequency,
