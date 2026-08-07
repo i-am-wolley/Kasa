@@ -16,6 +16,7 @@ import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../u
 import { openRoutineEditor } from "./routine.js";
 import { bucketOf } from "./stock.js";
 import { batches as intelBatches } from "../intel.js";
+import { getCurrentUser } from "../auth.js";
 
 // 2026-08-09: consequence tiers renamed (safety->unsafe, degrading->unhygienic)
 const TIER_RANK = { unsafe: 4, damaging: 3, unhygienic: 2, cosmetic: 1 };
@@ -223,11 +224,27 @@ function habitRowHtml(habit) {
 // one person in the household, habits only appear once a specific person
 // is picked via the member filter above; a single-person household has
 // nothing to leak, so its one person's habits always show.
+//
+// "Everyone" no longer means "nobody's habits" (2026-08-10, user request:
+// "all the respective logged in users habit needs to appear if that habit
+// is scheduled for the day") — the signed-in person's OWN habits should
+// just be there by default, not require tapping their own name first
+// every time. Resolved by matching the Firebase Auth email to a Person
+// record, same lookup addPersonForJoiningUser already uses elsewhere.
+// Anyone ELSE's habits still stay hidden under "Everyone" — this only
+// removes the friction of seeing your own, the privacy boundary between
+// different people's habits is unchanged.
+function currentPersonId(state) {
+  const email = getCurrentUser()?.email;
+  if (!email) return null;
+  return state.people.find((p) => p.email && p.email.toLowerCase() === email.toLowerCase())?.id ?? null;
+}
+
 function visibleDueHabits(state) {
   const relevantPeopleCount = state.people.filter((p) => p.kind === "member" || p.kind === "help").length;
-  return relevantPeopleCount < 2
-    ? state.habits.filter((h) => isHabitDueToday(h))
-    : state.habits.filter((h) => isHabitDueToday(h) && memberFilter && h.personId === memberFilter);
+  if (relevantPeopleCount < 2) return state.habits.filter((h) => isHabitDueToday(h));
+  const effectiveFilter = memberFilter ?? currentPersonId(state);
+  return effectiveFilter ? state.habits.filter((h) => isHabitDueToday(h) && h.personId === effectiveFilter) : [];
 }
 
 function habitsSectionHtml(state) {
