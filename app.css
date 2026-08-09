@@ -347,6 +347,28 @@ h1, h2, h3, p { margin: 0; }
   .stat-tile-label { font-size: var(--fs-micro); }
 }
 
+/* Wishlist's own 4-tile metrics row (2026-08-10, user request: "let it be
+   in a single line even on mobile so build the size accordingly") — unlike
+   Today's 5-tile .stat-row (2/3-column on phone, wraps to a second row),
+   this one has to stay one row at every width, so it gets tighter sizing
+   layered on top of the same .stat-row/.stat-tile shapes rather than
+   reusing Today's own breakpoint behavior. Source order after .stat-row's
+   own rules above is what lets these win the grid-template-columns tie. */
+.wish-stat-row {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.wish-stat-row .stat-tile { padding: 7px 3px; }
+.wish-stat-row .stat-tile-value { font-size: 14px; }
+.wish-stat-row .stat-tile-label { font-size: 8.5px; }
+
+@media (min-width: 600px) {
+  .wish-stat-row { gap: 10px; }
+  .wish-stat-row .stat-tile { padding: 10px 8px; }
+  .wish-stat-row .stat-tile-value { font-size: 17px; }
+  .wish-stat-row .stat-tile-label { font-size: 10px; }
+}
+
 /* ---- Today sections ------------------------------------------------------ */
 
 .today-section { padding: 16px 14px 0; }

@@ -64,6 +64,75 @@ function formatCost(cost) {
   return `₹${Number(cost).toLocaleString("en-IN")}`;
 }
 
+// Compact currency for the stat row's tight tiles (2026-08-10) — "₹12,000"
+// or "₹1,25,000" comfortably fits a full-width Estimated cost field but not
+// a quarter-width stat tile at phone width, so large values abbreviate to
+// k/L (thousand/lakh, the Indian grouping this app already uses elsewhere).
+function formatCostCompact(n) {
+  if (!n) return "₹0";
+  const round1 = (x) => Math.round(x * 10) / 10;
+  if (n >= 100000) return `₹${round1(n / 100000)}L`;
+  if (n >= 1000) return `₹${round1(n / 1000)}k`;
+  return `₹${Math.round(n)}`;
+}
+
+// The four wishlist metrics (2026-08-10, user request), computed over
+// whatever's currently filtered by typeFilter — "the filters on the page
+// to apply to these metrics as well." Drills into each project's own
+// checklist for cost/task counting ("look inside each project as well"):
+// a project WITH a checklist contributes each sub-item as its own task and
+// its own cost (not the project entry itself, which would double-count —
+// the project's own status is already derived from its checklist); a
+// project with no checklist yet, or a plain asset/item entry, contributes
+// itself as exactly one task. Total cost always means the FULL cost of
+// everything wanted, done or not — note this is deliberately NOT the same
+// number as a project's own stored `estimatedCost` (Round 42 changed that
+// field to mean REMAINING cost), so a project's total here is recomputed
+// fresh from its subItems rather than read off the entry.
+function computeWishMetrics(entries) {
+  let totalCost = 0, spentCost = 0, totalTasks = 0, doneTasks = 0;
+  for (const w of entries) {
+    if (w.type === "project" && w.subItems?.length) {
+      for (const s of w.subItems) {
+        totalTasks += 1;
+        totalCost += s.cost || 0;
+        if (s.done) { doneTasks += 1; spentCost += s.cost || 0; }
+      }
+    } else {
+      totalTasks += 1;
+      const cost = w.estimatedCost || 0;
+      totalCost += cost;
+      if (w.status === "acquired") { doneTasks += 1; spentCost += cost; }
+    }
+  }
+  const pctComplete = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  return { totalItems: entries.length, totalCost, spentCost, pctComplete };
+}
+
+// Single-line at every width (2026-08-10, user request: "let it be in a
+// single line even on mobile so build the size accordingly") — reuses
+// Today's .stat-row/.stat-tile shapes with a scoped .wish-stat-row override
+// (app.css) that tightens sizing enough for 4 tiles to fit one row on a
+// phone, rather than the 2/3-column-then-wrap layout Today's own 5-tile
+// row uses. Intuitively named to match how the rest of the app already
+// talks about a wishlist entry ("idea") and its lifecycle.
+function wishStatRowHtml(entries) {
+  const { totalItems, totalCost, spentCost, pctComplete } = computeWishMetrics(entries);
+  const tile = (value, label) => `
+    <div class="stat-tile">
+      <div class="stat-tile-value">${value}</div>
+      <div class="stat-tile-label">${label}</div>
+    </div>`;
+  return `
+    <div class="stat-row wish-stat-row">
+      ${tile(totalItems, "Ideas")}
+      ${tile(formatCostCompact(totalCost), "Total cost")}
+      ${tile(formatCostCompact(spentCost), "Spent")}
+      ${tile(`${pctComplete}%`, "Complete")}
+    </div>
+  `;
+}
+
 // Sum of every NOT-YET-DONE checklist sub-item's own cost — a project's
 // Estimated cost is what's still left to spend, not the original total
 // (2026-08-10, user request: "when something is completed inside the
@@ -133,6 +202,7 @@ function render() {
       <button class="btn btn-tinted" id="add-wish-btn">${Icon("plus", { size: 16 })} Idea</button>
     </div>
     ${state.wishlist.length ? typeFilterRowHtml() : ""}
+    ${state.wishlist.length ? wishStatRowHtml(filtered) : ""}
     ${sectionHtml("High priority", byPriority.high)}
     ${sectionHtml("Soon", byPriority.soon)}
     ${sectionHtml("Someday", byPriority.someday)}
