@@ -1105,6 +1105,7 @@ function addRoutine(fields) {
 function updateRoutine(id, patch) {
   const routine = byId(state.routines, id);
   if (!routine) return;
+  const oldStartDate = routine.trigger?.startDate;
   Object.assign(routine, patch, { userEdited: true });
   logActivity({ type: "routine_edited", category: "routine", entityId: routine.id, entityType: "routine", summary: `Edited "${routine.title}"` });
   // A routine that's never been completed yet has an open occurrence
@@ -1124,7 +1125,19 @@ function updateRoutine(id, patch) {
   // handling), the stale occurrence is dropped and regenerate() below
   // rebuilds it fresh via the engine, so past/future/repeat-type handling
   // is always computed the one real way, not duplicated here.
-  if (routine.trigger?.startDate) {
+  //
+  // Gated on the start date actually CHANGING (2026-08-10 — a real bug
+  // found live: a weekly routine genuinely overdue since yesterday, still
+  // incomplete, silently read as due NEXT WEEK instead. Any edit at all to
+  // a never-yet-completed routine fired this reset regardless of whether
+  // startDate was touched, and since firstFloatingOccurrence always walks
+  // forward to a point >= now, the freshly regenerated occurrence could
+  // never land in the past — an incomplete routine could never show as
+  // overdue again once anything re-saved it. Comparing old vs new
+  // startDate is what "editing its start date" above always meant to
+  // check; it just never actually checked for it.
+  const newStartDate = routine.trigger?.startDate;
+  if (newStartDate && newStartDate !== oldStartDate) {
     const everCompleted = state.ledger.some((l) => l.routineId === id);
     if (!everCompleted) {
       state.occurrences = state.occurrences.filter(
