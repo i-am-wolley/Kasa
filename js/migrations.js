@@ -24,7 +24,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 7;
+const CURRENT_SCHEMA_VERSION = 8;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -114,6 +114,21 @@ const migrations = {
       if (asset.category != null || !asset.catalogKey) continue;
       const entry = findByKey(asset.catalogKey, "asset");
       if (entry?.category) asset.category = entry.category;
+    }
+  },
+
+  // v7 -> v8 (2026-08-10): backfills `cost: 0` onto every wishlist project
+  // checklist sub-item that predates the per-item cost field (user
+  // request: "for the already created projects with assets/items/tasks –
+  // put 0 as the default during migration as else it will be redundancy")
+  // — sumSubItemCosts() (wishlist.js) treats a missing cost as 0 anyway,
+  // but stamping it explicitly here keeps the stored data itself honest
+  // rather than leaning on a runtime fallback everywhere it's read.
+  8: (state) => {
+    for (const entry of state.wishlist || []) {
+      for (const sub of entry.subItems || []) {
+        if (sub.cost == null) sub.cost = 0;
+      }
     }
   },
 };

@@ -884,6 +884,15 @@ h1, h2, h3, p { margin: 0; }
      .text-input's left-aligned text (2026-08-09, user request). */
   text-align: left;
 }
+/* text-align on the host input doesn't reliably reach the native date-edit
+   segments (day/month/year) on every Chromium version — some still center
+   them internally regardless (2026-08-10, user report: still centered).
+   Targets the actual internal box directly as a more robust belt-and-
+   suspenders fix. */
+.text-input[type="date"]::-webkit-datetime-edit,
+.text-input[type="time"]::-webkit-datetime-edit {
+  text-align: left;
+}
 
 .chip-group {
   display: flex;

@@ -110,12 +110,21 @@ function nextSeasonalWindow(months, now) {
 // firstFloatingOccurrence. Missing `startDate` (legacy routines created
 // before this field existed) falls through to each type's original
 // behavior, unchanged.
+// Compared at day granularity, not exact timestamp (2026-08-10, real bug
+// found live: a routine with startDate = today was skipping straight to
+// its NEXT occurrence instead of occurring today first). `start` parses a
+// date-only string to local midnight, so on the very day it's set, `start`
+// is always a few hours behind `now` — an exact-timestamp comparison read
+// that as "already past," walked the interval forward once, and skipped
+// today entirely. Comparing calendar dates instead (same dateOnly()
+// convention stateOf()/overdueDays already use, see their own comments)
+// means "today" correctly counts as the start, not the past.
 function firstFloatingOccurrence(startDateStr, intervalDays, now) {
   if (!startDateStr) return now;
   const start = new Date(startDateStr);
-  if (start > now) return start;
+  if (dateOnly(start) >= dateOnly(now)) return start;
   let candidate = start;
-  while (candidate < now) candidate = addDays(candidate, intervalDays);
+  while (dateOnly(candidate) < dateOnly(now)) candidate = addDays(candidate, intervalDays);
   return candidate;
 }
 

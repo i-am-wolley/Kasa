@@ -46,6 +46,15 @@ function formatCost(cost) {
   return `₹${Number(cost).toLocaleString("en-IN")}`;
 }
 
+// Sum of every checklist sub-item's own cost (2026-08-10, user request:
+// per-item cost that "automatically sums to the total of the project
+// cost") — a project's overall Estimated cost becomes this sum once it
+// has any checklist items, rather than a separately-typed number that can
+// drift out of sync with what's actually in the checklist.
+function sumSubItemCosts(subItems) {
+  return subItems.reduce((sum, s) => sum + (s.cost || 0), 0);
+}
+
 // Footer is two centered halves on one line — cost bottom-left, checklist
 // progress bottom-right (2026-08-04, user request: drop the redundant
 // Soon/Someday label from the tile since the section header above it
@@ -125,8 +134,10 @@ function subitemNameFieldHtml(kind, value) {
   });
 }
 
-function subItemsChecklistHtml(entry) {
-  const subs = entry.subItems || [];
+// Takes the plain array directly, not an entry (2026-08-10 — the checklist
+// now works before a project has even been saved, see openWishSheet's
+// `subItems` local, so there isn't always an `entry` to read it from).
+function subItemsChecklistHtml(subs) {
   if (!subs.length) return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No checklist items yet — add one below.</p>`;
   const doneCount = subs.filter((s) => s.done).length;
   return `
@@ -140,6 +151,7 @@ function subItemsChecklistHtml(entry) {
           <div class="occ-row-title">${s.title}</div>
           <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "asset" ? "Asset to buy" : "Item to buy"}</div>
         </div>
+        ${s.cost ? `<span style="font-size:var(--fs-micro);color:var(--ink-muted);white-space:nowrap;margin-right:2px;">${formatCost(s.cost)}</span>` : ""}
         <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}">${s.done ? "Undo" : s.kind === "task" ? "Mark done" : "Buy"}</button>
         <button type="button" class="stepper-btn" data-delete-subitem="${s.id}">${Icon("trash", { size: 12 })}</button>
       </div>`,
@@ -169,11 +181,31 @@ function wishSpaceOptions(state, currentSpaceId) {
     });
 }
 
-function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
+// `draft` carries a project add-form's in-progress field values across a
+// round trip through the real Assets/Stock add sheet (2026-08-10, user
+// request: the checklist — and now its Add-item controls — should work
+// while ADDING a new project, not only once it already exists to edit).
+// Opening that nested sheet fully replaces sheet-root, so anything typed
+// into this form so far (title, space, priority, notes, the checklist
+// itself) would otherwise be lost the moment it closes; `draft` is a plain
+// snapshot of those fields, captured right before the nested sheet opens,
+// used to rebuild this same in-progress Add form instead of starting over.
+function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {}) {
   const state = getState();
-  const initialType = entry?.type ?? "asset";
+  // `draft.type` (when present) wins over `entry.type` — it means the
+  // Type chip was just switched mid-edit (see the wishType click handler
+  // below) and should take effect immediately rather than reverting to
+  // whatever the persisted entry still says. Falls back to "project" for
+  // the older draft shape (the nested Assets/Stock-sheet round trip below
+  // never sets `type`, since it only ever hands off from a project's own
+  // checklist).
+  const initialType = draft?.type ?? entry?.type ?? (draft ? "project" : "asset");
   const isProject = initialType === "project";
-  const hasSubItems = !!entry?.subItems?.length;
+  // The one working set of checklist items regardless of add vs. edit mode
+  // — seeded from whichever of entry/draft actually has them, `[]` for a
+  // genuinely brand-new project. Reassigned (not just mutated) by the
+  // delete-subitem handler below, so `let`, not `const`.
+  let subItems = entry?.subItems ? [...entry.subItems] : draft?.subItems ? [...draft.subItems] : [];
   openSheet({
     title: entry ? "Edit idea" : "Add idea",
     bodyHtml: `
@@ -183,28 +215,32 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
           ${catalogNameFieldHtml(initialType === "item" ? "item" : "asset", !isProject ? (entry?.title ?? "") : "")}
         </div>
         <div id="plain-name-wrap" style="display:${isProject ? "block" : "none"};">
-          ${field("Title", textInput({ id: "f-wish-title", value: isProject ? (entry?.title ?? "") : "", placeholder: "e.g. Repaint living room walls" }))}
+          ${field("Title", textInput({ id: "f-wish-title", value: isProject ? (draft?.title ?? entry?.title ?? "") : "", placeholder: "e.g. Repaint living room walls" }))}
         </div>
-        ${field("Space (optional)", chipGroup({ name: "wishSpaceId", options: wishSpaceOptions(state, entry?.spaceId), value: entry?.spaceId ?? defaultSpaceId ?? null }))}
-        ${field("Priority", chipGroup({ name: "wishPriority", options: PRIORITIES, value: entry?.priority ?? "someday" }))}
-        ${field("Estimated cost (optional)", textInput({ id: "f-wish-cost", type: "number", value: entry?.estimatedCost ?? "", placeholder: "e.g. 12000", min: 0 }))}
-        ${field("Notes (optional)", textInput({ id: "f-wish-notes", value: entry?.notes ?? "", placeholder: "Why, or what to look for" }))}
+        ${field("Space (optional)", chipGroup({ name: "wishSpaceId", options: wishSpaceOptions(state, entry?.spaceId ?? draft?.spaceId), value: entry?.spaceId ?? draft?.spaceId ?? defaultSpaceId ?? null }))}
+        ${field("Priority", chipGroup({ name: "wishPriority", options: PRIORITIES, value: entry?.priority ?? draft?.priority ?? "someday" }))}
+        ${field(
+          subItems.length ? "Estimated cost (sum of checklist items)" : "Estimated cost (optional)",
+          textInput({ id: "f-wish-cost", type: "number", value: subItems.length ? sumSubItemCosts(subItems) : (entry?.estimatedCost ?? ""), placeholder: "e.g. 12000", min: 0 }),
+        )}
+        ${field("Notes (optional)", textInput({ id: "f-wish-notes", value: draft?.notes ?? entry?.notes ?? "", placeholder: "Why, or what to look for" }))}
       </form>
-      ${entry && isProject ? `
+      ${isProject ? `
         <div class="field">
           <span class="field-label">Checklist — complete when everything here is done</span>
-          <div id="subitems-list">${subItemsChecklistHtml(entry)}</div>
+          <div id="subitems-list">${subItemsChecklistHtml(subItems)}</div>
           <div style="margin-top:8px;">
             ${chipGroup({ name: "newSubKind", options: SUBITEM_KINDS, value: "task" })}
-            <div style="display:flex;gap:8px;margin-top:8px;">
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-start;">
               <div id="subitem-name-wrap" style="flex:1;position:relative;">${subitemNameFieldHtml("task", "")}</div>
+              <div style="width:88px;flex:none;">${textInput({ id: "f-subitem-cost", type: "number", placeholder: "₹ cost", min: 0 })}</div>
               <button type="button" class="btn btn-ghost" id="add-subitem-btn">Add</button>
             </div>
           </div>
         </div>
       ` : ""}
       ${sheetActions({ saveLabel: entry ? "Save changes" : "Add idea", showDelete: !!entry })}
-      ${entry && entry.status !== "acquired" && !(isProject && hasSubItems) ? `<button type="button" class="btn btn-accent" id="mark-acquired-btn" style="width:100%;margin-top:8px;">${Icon("check", { size: 14 })} ${entry.type === "project" ? "Mark done" : "Mark acquired"}</button>` : ""}
+      ${entry && entry.status !== "acquired" && !(isProject && subItems.length) ? `<button type="button" class="btn btn-accent" id="mark-acquired-btn" style="width:100%;margin-top:8px;">${Icon("check", { size: 14 })} ${entry.type === "project" ? "Mark done" : "Mark acquired"}</button>` : ""}
     `,
   });
   const root = document.getElementById("sheet-root");
@@ -215,7 +251,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
     if (currentSubKind === "task") return;
     wireCatalogField(root, "f-new-subitem", currentSubKind);
   }
-  if (entry && isProject) {
+  if (isProject) {
     wireChipGroup(root, "newSubKind");
     root.querySelectorAll('[data-field="newSubKind"] [data-value]').forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -237,8 +273,37 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
   root.querySelectorAll('[data-field="wishType"] [data-value]').forEach((btn) => {
     btn.addEventListener("click", () => {
       const type = btn.dataset.value;
+      // Switching in or out of "project" reopens the sheet with the
+      // current field values carried over as a draft (2026-08-10, real
+      // bug found live: clicking the Project chip on a fresh "Add idea"
+      // sheet — default type "asset" — never revealed the checklist. Its
+      // markup only exists in this sheet's initial bodyHtml when isProject
+      // was already true at OPEN time, so there was nothing in the DOM for
+      // this handler to reveal). A full re-render is simpler and more
+      // consistent with the draft-preservation mechanism already used for
+      // the nested Assets/Stock sheet round trip than teaching this
+      // handler to inject and wire the checklist's markup in place.
+      if ((type === "project") !== isProject) {
+        openWishSheet({
+          entry,
+          defaultSpaceId,
+          draft: {
+            type,
+            title: isProject ? (root.querySelector("#f-wish-title")?.value ?? "") : "",
+            spaceId: readChipGroup(root, "wishSpaceId"),
+            priority: readChipGroup(root, "wishPriority"),
+            notes: root.querySelector("#f-wish-notes")?.value ?? "",
+            subItems: isProject ? subItems : [],
+          },
+        });
+        return;
+      }
       const catalogWrap = root.querySelector("#catalog-name-wrap");
       const plainWrap = root.querySelector("#plain-name-wrap");
+      // Below here isProject never actually changed (a redundant reclick of
+      // the already-selected type, or an asset<->item switch — neither is a
+      // project transition) — restore the plain type-based show/hide rather
+      // than assuming "not a transition" means "must be catalog-backed."
       if (type === "project") {
         catalogWrap.style.display = "none";
         plainWrap.style.display = "block";
@@ -257,12 +322,49 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
     });
   });
 
-  // ---- Project checklist — only wired when editing an existing project;
-  // a brand-new entry needs to exist first before sub-items can attach.
-  if (entry && isProject) {
+  // ---- Project checklist — now wired for a brand-new project too
+  // (2026-08-10, user request: "when I add a project itself I want the add
+  // items, asset, task to come in the modal, currently it only comes in
+  // edit"). `subItems` (declared above, in the outer openWishSheet scope)
+  // is the one working set either way; the only real difference is WHEN it
+  // gets persisted — immediately, for an existing entry, or bundled into
+  // the initial addWishlistItem() call once "Add idea" is actually clicked.
+  if (isProject) {
+    // Captures this in-progress Add form's current field values — used
+    // right before handing off to the real Assets/Stock add sheet below,
+    // so returning from it can rebuild the same in-progress form instead
+    // of losing everything typed so far (see openWishSheet's own `draft`
+    // param comment).
+    function currentDraft() {
+      return {
+        title: root.querySelector("#f-wish-title")?.value ?? "",
+        spaceId: readChipGroup(root, "wishSpaceId"),
+        priority: readChipGroup(root, "wishPriority"),
+        notes: root.querySelector("#f-wish-notes")?.value ?? "",
+        subItems: [...subItems],
+      };
+    }
+
+    // Keeps the Estimated cost field showing the live checklist sum
+    // (2026-08-10, user request: cost "automatically sums to the total of
+    // the project cost") — read-only once there's anything to sum, so it
+    // can't drift out of sync with a manually-typed number.
+    function syncCostField() {
+      const costInput = root.querySelector("#f-wish-cost");
+      if (!costInput) return;
+      if (subItems.length) {
+        costInput.value = sumSubItemCosts(subItems);
+        costInput.readOnly = true;
+      } else {
+        costInput.readOnly = false;
+      }
+    }
+
     function persistSubItems() {
-      const allDone = entry.subItems.length > 0 && entry.subItems.every((s) => s.done);
-      const patch = { subItems: entry.subItems };
+      syncCostField();
+      if (!entry) return; // add-mode: nothing to persist until "Add idea" is clicked — see the save handler below
+      const allDone = subItems.length > 0 && subItems.every((s) => s.done);
+      const patch = { subItems, estimatedCost: subItems.length ? sumSubItemCosts(subItems) : entry.estimatedCost };
       if (allDone && entry.status !== "acquired") {
         patch.status = "acquired";
         patch.acquiredAt = new Date().toISOString();
@@ -274,19 +376,19 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
       }
       updateWishlistItem(entry.id, patch);
       Object.assign(entry, patch);
-      // The manual "Mark done" button was computed once at sheet-open time
-      // (hasSubItems), so adding the first checklist item after opening
-      // left it visibly stale — completion should only ever come from the
-      // checklist once one exists.
+      // The manual "Mark done" button was computed once at sheet-open time,
+      // so adding the first checklist item after opening left it visibly
+      // stale — completion should only ever come from the checklist once
+      // one exists.
       const acquireBtn = root.querySelector("#mark-acquired-btn");
-      if (acquireBtn) acquireBtn.style.display = entry.subItems.length ? "none" : "block";
+      if (acquireBtn) acquireBtn.style.display = subItems.length ? "none" : "block";
     }
 
     function rewireSubItems() {
-      root.querySelector("#subitems-list").innerHTML = subItemsChecklistHtml(entry);
+      root.querySelector("#subitems-list").innerHTML = subItemsChecklistHtml(subItems);
       root.querySelectorAll("[data-toggle-subitem]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const sub = entry.subItems.find((s) => s.id === btn.dataset.toggleSubitem);
+          const sub = subItems.find((s) => s.id === btn.dataset.toggleSubitem);
           if (!sub) return;
           if (sub.done) {
             // Undo — protects against an accidental tap (2026-08-04, user
@@ -306,23 +408,30 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
           }
           // Asset/item sub-item — hand off to the real Assets/Stock add
           // sheet for full detail collection, then come back to this
-          // checklist once it's saved.
+          // checklist once it's saved. Capture a draft BEFORE opening it
+          // if this project hasn't been saved yet — openSheet() is about
+          // to replace sheet-root out from under this form entirely.
+          const draftSnapshot = entry ? null : currentDraft();
           const openFn = sub.kind === "asset" ? openAssetSheet : openItemSheet;
           openFn({
             defaultName: sub.title,
-            defaultSpaceId: entry.spaceId,
+            defaultSpaceId: entry?.spaceId ?? draftSnapshot?.spaceId,
             onSaved: (record) => {
               sub.done = true;
               sub.createdId = record?.id || null;
-              persistSubItems();
-              openWishSheet({ entry: byId(getState().wishlist, entry.id) });
+              if (entry) {
+                persistSubItems();
+                openWishSheet({ entry: byId(getState().wishlist, entry.id) });
+              } else {
+                openWishSheet({ draft: { ...draftSnapshot, subItems } });
+              }
             },
           });
         });
       });
       root.querySelectorAll("[data-delete-subitem]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          entry.subItems = entry.subItems.filter((s) => s.id !== btn.dataset.deleteSubitem);
+          subItems = subItems.filter((s) => s.id !== btn.dataset.deleteSubitem);
           persistSubItems();
           rewireSubItems();
         });
@@ -336,6 +445,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
     // report), not a mobile-specific issue, just harder to notice on
     // desktop while actively adding items during testing.
     rewireSubItems();
+    syncCostField();
 
     root.querySelector("#add-subitem-btn").addEventListener("click", () => {
       const kind = readChipGroup(root, "newSubKind") || "task";
@@ -352,9 +462,11 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
         catalogKey = resolved.key;
         icon = resolved.icon;
       }
-      entry.subItems = [...(entry.subItems || []), { id: genId("wlsub"), title, kind, catalogKey, icon, done: false, createdId: null }];
+      const cost = Math.max(0, Number(root.querySelector("#f-subitem-cost").value) || 0);
+      subItems.push({ id: genId("wlsub"), title, kind, catalogKey, icon, done: false, createdId: null, cost });
       persistSubItems();
       root.querySelector("#subitem-name-wrap").innerHTML = subitemNameFieldHtml(currentSubKind, "");
+      root.querySelector("#f-subitem-cost").value = "";
       wireSubitemNameField();
       rewireSubItems();
     });
@@ -392,12 +504,24 @@ function openWishSheet({ entry = null, defaultSpaceId = null } = {}) {
       priority: readChipGroup(root, "wishPriority") || "someday",
       estimatedCost: Math.max(0, Number(root.querySelector("#f-wish-cost").value) || 0) || null,
       notes: root.querySelector("#f-wish-notes").value.trim(),
+      // Bundled in here (not just persisted incrementally as each sub-item
+      // changes) so a brand-new project's checklist — built entirely before
+      // this entry exists at all — actually gets saved on first "Add idea".
+      ...(type === "project" ? { subItems } : {}),
     };
   }
 
   root.querySelector('[data-action="save"]').addEventListener("click", () => {
     const fields = readWishFields();
     if (!fields) return;
+    // A project whose checklist was fully finished before ever hitting
+    // "Add idea" (e.g. every sub-item was a plain task, checked off during
+    // the add flow) should land already-acquired, same as persistSubItems
+    // already does for an existing entry.
+    if (fields.type === "project" && fields.subItems?.length && fields.subItems.every((s) => s.done)) {
+      fields.status = "acquired";
+      fields.acquiredAt = new Date().toISOString();
+    }
     if (entry) updateWishlistItem(entry.id, fields);
     else addWishlistItem(fields);
     closeSheet();
