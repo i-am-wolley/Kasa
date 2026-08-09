@@ -4,7 +4,7 @@
 import { getState, subscribe, addSpace, updateSpace, deleteSpace, addItem, addAsset, addRoutine, toggleRoutineActive, deleteRoutine, visibleSpaceIds, MANDATORY_SPACE_TYPES, nextSaturdayDateStr, byId } from "../state.js";
 import { templateFor } from "../roomTemplates.js";
 import { Icon } from "../ui/icons.js";
-import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast } from "../ui/components.js";
+import { emptyState, field, textInput, chipGroup, readChipGroup, wireChipGroup, sheetActions, openSheet, closeSheet, showToast, round2 } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
 import { openItemSheet } from "./stock.js";
 import { openAssetSheet } from "./assets.js";
@@ -131,7 +131,7 @@ function detailHtml(state) {
       <div class="tile" data-open-item="${i.id}">
         <div class="tile-icon">${Icon(i.icon || "stock", { size: 16 })}</div>
         <div class="tile-title">${i.name}</div>
-        <div class="tile-meta">${i.qty} ${i.unit}</div>
+        <div class="tile-meta">${round2(i.qty)} ${i.unit}</div>
       </div>`,
     )
     .join("");

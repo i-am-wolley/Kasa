@@ -50,13 +50,19 @@ function listRow({ icon, title, meta, right = "", dataAttrs = "" }) {
   `;
 }
 
+// Rounded to 2dp for DISPLAY only — auto-depleting items accumulate long
+// floating-point tails (e.g. 0.9384291452777778) that overflow a tile's
+// fixed width (2026-08-03, caught during testing) and, more generally,
+// just read as noise anywhere a quantity is shown as plain text (2026-08-10,
+// user report: "within the spaces, the items are shown as fractions").
+// Stored values keep full precision always — this only ever touches what's
+// rendered.
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
 function stepper(value, { min = 0, dataAttrs = "" } = {}) {
-  // Rounded to 2dp for display only — auto-depleting items accumulate long
-  // floating-point tails (e.g. 0.9384291452777778) that were overflowing
-  // the tile's fixed width and pushing the −/+ buttons outside the card
-  // (2026-08-03, caught during testing). The stored value keeps full
-  // precision; only what's shown here is trimmed.
-  const displayValue = Math.round(value * 100) / 100;
+  const displayValue = round2(value);
   return `
     <div class="stepper" ${dataAttrs}>
       <button class="stepper-btn" data-step="-1" ${value <= min ? "disabled" : ""}>−</button>
@@ -305,6 +311,7 @@ function closeSheet() {
 
 export {
   haptic,
+  round2,
   chip,
   badge,
   emptyState,

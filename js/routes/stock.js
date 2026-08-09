@@ -142,7 +142,7 @@ function tileHtml(item) {
     : item.status === "out" ? "Out"
     : usesLeft !== null ? `~${usesLeft} use${usesLeft === 1 ? "" : "s"} left`
     : daysLeft !== null ? `~${daysLeft}d left`
-    : `${item.qty} ${item.unit}`;
+    : `${round2(item.qty)} ${item.unit}`;
   const control = item.binary
     ? `<button type="button" class="chip" data-item-toggle="${item.id}" aria-pressed="${item.qty > 0}">${item.qty > 0 ? "In stock" : "Mark in stock"}</button>`
     : stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` });
