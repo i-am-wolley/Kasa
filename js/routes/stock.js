@@ -1,7 +1,6 @@
 // Stock screen (memo §8.2) — unified across every room. Out · Low ·
-// Expiring · OK. Primary action builds a shopping list; Kasa routes,
-// it doesn't order (memo §7) — the list goes to the clipboard for the
-// user to paste into WhatsApp, a quick-commerce app, whatever they use.
+// Expiring · OK. ("Build shopping list" — memo §7's clipboard-based
+// routing, not ordering — removed 2026-08-10 per direct user request.)
 
 import { getState, subscribe, addItem, updateItem, deleteItem, duplicateItem, adjustItemQty, visibleSpaceIds, byId } from "../state.js";
 import { Icon } from "../ui/icons.js";
@@ -129,20 +128,31 @@ function bucketOf(item) {
   return "ok";
 }
 
+// Which room an item is in, house-prefixed only when more than one house is
+// currently active (2026-08-10, user request: "add the space they are
+// present in... in case multiple houses are selected then house and
+// space") — same activeHouseIds-aware multiHouse check house.js's own grid
+// already uses, for consistency.
+function spaceLabel(item, state) {
+  const space = byId(state.spaces, item.spaceId);
+  if (!space) return "";
+  const multiHouse = state.household.activeHouseIds?.length > 1 || (state.houses.length > 1 && !state.household.activeHouseIds?.length);
+  if (!multiHouse) return space.name;
+  const house = byId(state.houses, space.houseId);
+  return house ? `${house.name} · ${space.name}` : space.name;
+}
+
 // Square-ish tile, not a full row (2026-08-03, user request: "simplify with
 // squares... just for the look and feel") — same info as before (name, days
-// left, qty), just laid out in a grid instead of stacked rows. The space
-// name is dropped from the tile face (no room at this size); it's still
-// shown in the edit sheet.
-function tileHtml(item) {
-  const daysLeft = projectedDaysLeft(item);
-  const usesLeft = projectedUsesLeft(item);
-  const meta = item.binary
-    ? item.qty > 0 ? "In stock" : "Out"
-    : item.status === "out" ? "Out"
-    : usesLeft !== null ? `~${usesLeft} use${usesLeft === 1 ? "" : "s"} left`
-    : daysLeft !== null ? `~${daysLeft}d left`
-    : `${round2(item.qty)} ${item.unit}`;
+// left, qty), just laid out in a grid instead of stacked rows.
+// The tile-meta caption shows the room (+ house, see spaceLabel) instead of
+// a status/projection string (2026-08-10, user request: "instead of out, in
+// stock, ~1 use left — add the space they are present in") — each tile
+// already sits inside a section headed "Out"/"Low"/"Expiring"/"OK", so
+// restating that same status on every tile within it was redundant; the
+// room is what's actually missing at a glance across a screen that pools
+// every space's items together.
+function tileHtml(item, state) {
   const control = item.binary
     ? `<button type="button" class="chip" data-item-toggle="${item.id}" aria-pressed="${item.qty > 0}">${item.qty > 0 ? "In stock" : "Mark in stock"}</button>`
     : stepper(item.qty, { dataAttrs: `data-item-stepper="${item.id}"` });
@@ -151,19 +161,19 @@ function tileHtml(item) {
       <div class="tile-body" data-open-item="${item.id}">
         <div class="tile-icon">${Icon(item.icon || "stock", { size: 16 })}</div>
         <div class="tile-title">${item.name}</div>
-        <div class="tile-meta">${meta}</div>
+        <div class="tile-meta">${spaceLabel(item, state)}</div>
       </div>
       <div class="tile-stepper">${control}</div>
     </div>
   `;
 }
 
-function sectionHtml(title, items) {
+function sectionHtml(title, items, state) {
   if (!items.length) return "";
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">${title} (${items.length})</span></div>
-      <div class="tile-grid">${items.map(tileHtml).join("")}</div>
+      <div class="tile-grid">${items.map((i) => tileHtml(i, state)).join("")}</div>
     </div>
   `;
 }
@@ -187,13 +197,10 @@ function render() {
         <button class="btn btn-tinted" id="add-item-btn">${Icon("plus", { size: 16 })} Item</button>
       </div>
     </div>
-    <div class="today-section" style="padding-top:4px;">
-      <button class="btn btn-solid" id="build-list-btn" style="width:100%;">${Icon("receipt", { size: 16 })} Build shopping list</button>
-    </div>
-    ${sectionHtml("Out", buckets.out)}
-    ${sectionHtml("Low", buckets.low)}
-    ${sectionHtml("Expiring", buckets.expiring)}
-    ${sectionHtml("OK", buckets.ok)}
+    ${sectionHtml("Out", buckets.out, state)}
+    ${sectionHtml("Low", buckets.low, state)}
+    ${sectionHtml("Expiring", buckets.expiring, state)}
+    ${sectionHtml("OK", buckets.ok, state)}
     ${!state.items.length ? emptyState({ message: "Nothing tracked yet.", actionLabel: null }) : ""}
   `;
 
@@ -504,24 +511,8 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
   }
 }
 
-function buildShoppingList() {
-  const state = getState();
-  const visible = visibleSpaceIds(state);
-  const needed = state.items.filter((i) => visible.has(i.spaceId) && (i.status === "out" || i.status === "low"));
-  if (!needed.length) {
-    showToast("Nothing to reorder right now");
-    return;
-  }
-  const text = needed.map((i) => `- ${i.name} (${byId(state.spaces, i.spaceId)?.name || ""})`).join("\n");
-  navigator.clipboard?.writeText(text).then(
-    () => showToast(`Shopping list copied — ${needed.length} item${needed.length === 1 ? "" : "s"}`),
-    () => showToast("Couldn't copy — clipboard unavailable"),
-  );
-}
-
 function wireEvents(state) {
   document.getElementById("add-item-btn")?.addEventListener("click", () => openItemSheet());
-  document.getElementById("build-list-btn")?.addEventListener("click", buildShoppingList);
 
   mountEl.querySelectorAll("[data-open-item]").forEach((el) => {
     el.addEventListener("click", () => openItemSheet({ item: byId(state.items, el.dataset.openItem) }));

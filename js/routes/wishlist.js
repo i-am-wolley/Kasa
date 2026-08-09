@@ -32,27 +32,46 @@ const PRIORITIES = [
   { value: "soon", label: "Soon" },
   { value: "someday", label: "Someday" },
 ];
+// "asset"/"item" match the catalog-linked Buy flow into the real Assets/
+// Stock sheets — labeled "Asset"/"Stock" (2026-08-10, user request: match
+// terminology used across the rest of the app, where consumables are
+// always "Stock," never "Items"). "items" is new the same round — a plain
+// checklist entry with the exact same mechanics as "task" (free text, no
+// catalog, Mark done) but a different label/meaning: a physical thing
+// worth listing that isn't going through the real Stock/Assets system.
 const SUBITEM_KINDS = [
   { value: "task", label: "Task" },
-  { value: "asset", label: "Asset to buy" },
-  { value: "item", label: "Item to buy" },
+  { value: "items", label: "Items" },
+  { value: "asset", label: "Asset" },
+  { value: "item", label: "Stock" },
 ];
 
 let mountEl = null;
 let unsubscribe = null;
+// Filters the whole page by entry type (2026-08-10, user request: "add a
+// filter for projects, assets, stock items") — "all" shows everything,
+// matching the screen's original behavior.
+let typeFilter = "all";
+const TYPE_FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "project", label: "Projects" },
+  { value: "asset", label: "Assets" },
+  { value: "item", label: "Stock" },
+];
 
 function formatCost(cost) {
   if (!cost) return "";
   return `₹${Number(cost).toLocaleString("en-IN")}`;
 }
 
-// Sum of every checklist sub-item's own cost (2026-08-10, user request:
-// per-item cost that "automatically sums to the total of the project
-// cost") — a project's overall Estimated cost becomes this sum once it
-// has any checklist items, rather than a separately-typed number that can
-// drift out of sync with what's actually in the checklist.
+// Sum of every NOT-YET-DONE checklist sub-item's own cost — a project's
+// Estimated cost is what's still left to spend, not the original total
+// (2026-08-10, user request: "when something is completed inside the
+// project, the total cost to be subtracted... from the estimated cost").
+// Marking an item done drops its cost out of this sum immediately, since
+// syncCostField()/persistSubItems() re-run it on every toggle.
 function sumSubItemCosts(subItems) {
-  return subItems.reduce((sum, s) => sum + (s.cost || 0), 0);
+  return subItems.reduce((sum, s) => sum + (s.done ? 0 : (s.cost || 0)), 0);
 }
 
 // Footer is two centered halves on one line — cost bottom-left, checklist
@@ -89,10 +108,21 @@ function sectionHtml(title, entries) {
   `;
 }
 
+function typeFilterRowHtml() {
+  return `
+    <div class="today-section" style="padding-top:0;">
+      <div class="chip-group" style="flex-wrap:nowrap;overflow-x:auto;">
+        ${TYPE_FILTER_OPTIONS.map((o) => `<button type="button" class="chip" data-type-filter="${o.value}" aria-pressed="${typeFilter === o.value}">${o.label}</button>`).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   const state = getState();
-  const active = state.wishlist.filter((w) => w.status !== "acquired");
-  const acquired = state.wishlist.filter((w) => w.status === "acquired");
+  const filtered = typeFilter === "all" ? state.wishlist : state.wishlist.filter((w) => w.type === typeFilter);
+  const active = filtered.filter((w) => w.status !== "acquired");
+  const acquired = filtered.filter((w) => w.status === "acquired");
 
   const byPriority = { high: [], soon: [], someday: [] };
   for (const w of active) (byPriority[w.priority] || byPriority.someday).push(w);
@@ -102,11 +132,12 @@ function render() {
       <h1>Wishlist</h1>
       <button class="btn btn-tinted" id="add-wish-btn">${Icon("plus", { size: 16 })} Idea</button>
     </div>
+    ${state.wishlist.length ? typeFilterRowHtml() : ""}
     ${sectionHtml("High priority", byPriority.high)}
     ${sectionHtml("Soon", byPriority.soon)}
     ${sectionHtml("Someday", byPriority.someday)}
     ${sectionHtml("Acquired", acquired)}
-    ${!state.wishlist.length ? emptyState({ message: "No ideas yet — add something you'd like for the house.", actionLabel: null }) : ""}
+    ${!state.wishlist.length ? emptyState({ message: "No ideas yet — add something you'd like for the house.", actionLabel: null }) : !filtered.length ? emptyState({ message: "Nothing here for this filter.", actionLabel: null }) : ""}
   `;
 
   wireEvents(state);
@@ -125,8 +156,8 @@ function catalogNameFieldHtml(type, value) {
 // similar to other places") — a plain task doesn't have a catalog to
 // search, so it stays a bare text input.
 function subitemNameFieldHtml(kind, value) {
-  if (kind === "task") {
-    return textInput({ id: "f-new-subitem", value, placeholder: "e.g. Get quotes from painters" });
+  if (kind === "task" || kind === "items") {
+    return textInput({ id: "f-new-subitem", value, placeholder: kind === "items" ? "e.g. Curtains" : "e.g. Get quotes from painters" });
   }
   return catalogField({
     id: "f-new-subitem", type: kind, value,
@@ -151,13 +182,13 @@ function subItemsChecklistHtml(subs) {
       .map(
         (s) => `
       <div class="list-row" style="margin-bottom:6px;opacity:${s.done ? 0.55 : 1};">
-        <div class="occ-row-icon">${Icon(s.icon || (s.kind === "task" ? "check" : s.kind === "asset" ? "warranty" : "stock"), { size: 14 })}</div>
+        <div class="occ-row-icon">${Icon(s.icon || (s.kind === "task" || s.kind === "items" ? "check" : s.kind === "asset" ? "warranty" : "stock"), { size: 14 })}</div>
         <div class="occ-row-body" data-edit-subitem="${s.id}" style="cursor:pointer;">
           <div class="occ-row-title">${s.title}</div>
-          <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "asset" ? "Asset to buy" : "Item to buy"}</div>
+          <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "items" ? "Items" : s.kind === "asset" ? "Asset" : "Stock"}</div>
         </div>
         ${s.cost ? `<span style="font-size:var(--fs-micro);color:var(--ink-muted);white-space:nowrap;margin-right:2px;">${formatCost(s.cost)}</span>` : ""}
-        <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}">${s.done ? "Undo" : s.kind === "task" ? "Mark done" : "Buy"}</button>
+        <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}">${s.done ? "Undo" : s.kind === "task" || s.kind === "items" ? "Mark done" : "Buy"}</button>
         <button type="button" class="stepper-btn" data-delete-subitem="${s.id}">${Icon("trash", { size: 12 })}</button>
       </div>`,
       )
@@ -225,7 +256,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
         ${field("Space (optional)", chipGroup({ name: "wishSpaceId", options: wishSpaceOptions(state, entry?.spaceId ?? draft?.spaceId), value: entry?.spaceId ?? draft?.spaceId ?? defaultSpaceId ?? null }))}
         ${field("Priority", chipGroup({ name: "wishPriority", options: PRIORITIES, value: entry?.priority ?? draft?.priority ?? "someday" }))}
         ${field(
-          subItems.length ? "Estimated cost (sum of checklist items)" : "Estimated cost (optional)",
+          subItems.length ? "Estimated cost (remaining, sum of unchecked items)" : "Estimated cost (optional)",
           textInput({ id: "f-wish-cost", type: "number", value: subItems.length ? sumSubItemCosts(subItems) : (entry?.estimatedCost ?? ""), placeholder: "e.g. 12000", min: 0 }),
         )}
         ${field("Notes (optional)", textInput({ id: "f-wish-notes", value: draft?.notes ?? entry?.notes ?? "", placeholder: "Why, or what to look for" }))}
@@ -253,7 +284,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
 
   let currentSubKind = "task";
   function wireSubitemNameField() {
-    if (currentSubKind === "task") return;
+    if (currentSubKind === "task" || currentSubKind === "items") return;
     wireCatalogField(root, "f-new-subitem", currentSubKind);
   }
   if (isProject) {
@@ -460,7 +491,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
             rewireSubItems();
             return;
           }
-          if (sub.kind === "task") {
+          if (sub.kind === "task" || sub.kind === "items") {
             sub.done = true;
             persistSubItems();
             rewireSubItems();
@@ -510,7 +541,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
     root.querySelector("#add-subitem-btn").addEventListener("click", () => {
       const kind = readChipGroup(root, "newSubKind") || "task";
       let title, catalogKey, icon;
-      if (kind === "task") {
+      if (kind === "task" || kind === "items") {
         title = root.querySelector("#f-new-subitem").value.trim();
         if (!title) return;
         catalogKey = null;
@@ -632,6 +663,12 @@ function wireEvents(state) {
   document.getElementById("add-wish-btn")?.addEventListener("click", () => openWishSheet({}));
   mountEl.querySelectorAll("[data-open-wish]").forEach((el) => {
     el.addEventListener("click", () => openWishSheet({ entry: byId(state.wishlist, el.dataset.openWish) }));
+  });
+  mountEl.querySelectorAll("[data-type-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      typeFilter = btn.dataset.typeFilter;
+      render();
+    });
   });
 }
 
