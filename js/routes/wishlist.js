@@ -76,37 +76,41 @@ function formatCostCompact(n) {
   return `₹${Math.round(n)}`;
 }
 
-// The four wishlist metrics (2026-08-10, user request), computed over
-// whatever's currently filtered by typeFilter — "the filters on the page
-// to apply to these metrics as well." Drills into each project's own
-// checklist for cost/task counting ("look inside each project as well"):
-// a project WITH a checklist contributes each sub-item as its own task and
-// its own cost (not the project entry itself, which would double-count —
-// the project's own status is already derived from its checklist); a
-// project with no checklist yet, or a plain asset/item entry, contributes
-// itself as exactly one task. Total cost always means the FULL cost of
-// everything wanted, done or not — note this is deliberately NOT the same
-// number as a project's own stored `estimatedCost` (Round 42 changed that
-// field to mean REMAINING cost), so a project's total here is recomputed
-// fresh from its subItems rather than read off the entry.
+// The four wishlist metrics, computed over whatever's currently filtered by
+// typeFilter — "the filters on the page to apply to these metrics as well."
+// Reworked 2026-08-10 (same day, direct follow-up) from an Ideas-total/
+// Total-cost/Spent/%-complete set into two intuitive pairs instead: how
+// many ideas are still open vs. already done (plain entry counts — "Ideas
+// in progress" still means ideas, i.e. top-level entries, just re-scoped
+// from "all" to "not yet acquired"), and how much money is left to spend
+// vs. already spent. The cost pair still drills into each project's own
+// checklist ("look inside each project as well," carried over from the
+// original request) — a project WITH a checklist contributes each
+// sub-item's own cost (not the project entry itself, which would double-
+// count, since the project's own status is already derived from its
+// checklist); a project with no checklist yet, or a plain asset/item
+// entry, contributes its own `estimatedCost`. Cost is always recomputed
+// from a project's raw subItems, never read off the entry's own
+// `estimatedCost` — Round 42 changed that stored field to mean REMAINING
+// cost, not total, so reusing it here would silently undercount any
+// project with something already checked off.
 function computeWishMetrics(entries) {
-  let totalCost = 0, spentCost = 0, totalTasks = 0, doneTasks = 0;
+  let totalCost = 0, spentCost = 0, ideasInProgress = 0, ideasCompleted = 0;
   for (const w of entries) {
+    if (w.status === "acquired") ideasCompleted += 1;
+    else ideasInProgress += 1;
     if (w.type === "project" && w.subItems?.length) {
       for (const s of w.subItems) {
-        totalTasks += 1;
         totalCost += s.cost || 0;
-        if (s.done) { doneTasks += 1; spentCost += s.cost || 0; }
+        if (s.done) spentCost += s.cost || 0;
       }
     } else {
-      totalTasks += 1;
       const cost = w.estimatedCost || 0;
       totalCost += cost;
-      if (w.status === "acquired") { doneTasks += 1; spentCost += cost; }
+      if (w.status === "acquired") spentCost += cost;
     }
   }
-  const pctComplete = totalTasks ? Math.round((doneTasks / totalTasks) * 100) : 0;
-  return { totalItems: entries.length, totalCost, spentCost, pctComplete };
+  return { ideasInProgress, ideasCompleted, costRemaining: totalCost - spentCost, costCompleted: spentCost };
 }
 
 // Single-line at every width (2026-08-10, user request: "let it be in a
@@ -114,10 +118,13 @@ function computeWishMetrics(entries) {
 // Today's .stat-row/.stat-tile shapes with a scoped .wish-stat-row override
 // (app.css) that tightens sizing enough for 4 tiles to fit one row on a
 // phone, rather than the 2/3-column-then-wrap layout Today's own 5-tile
-// row uses. Intuitively named to match how the rest of the app already
-// talks about a wishlist entry ("idea") and its lifecycle.
+// row uses. Labels are the fuller, more descriptive names as directly
+// requested ("Ideas in progress," not a truncated "In progress") — the
+// tile-label font is small enough (and free to wrap to 2 lines within its
+// own tile) that the longer text fits without pushing the row itself onto
+// a second line.
 function wishStatRowHtml(entries) {
-  const { totalItems, totalCost, spentCost, pctComplete } = computeWishMetrics(entries);
+  const { ideasInProgress, ideasCompleted, costRemaining, costCompleted } = computeWishMetrics(entries);
   const tile = (value, label) => `
     <div class="stat-tile">
       <div class="stat-tile-value">${value}</div>
@@ -125,10 +132,10 @@ function wishStatRowHtml(entries) {
     </div>`;
   return `
     <div class="stat-row wish-stat-row">
-      ${tile(totalItems, "Ideas")}
-      ${tile(formatCostCompact(totalCost), "Total cost")}
-      ${tile(formatCostCompact(spentCost), "Spent")}
-      ${tile(`${pctComplete}%`, "Complete")}
+      ${tile(ideasInProgress, "Ideas in progress")}
+      ${tile(ideasCompleted, "Completed")}
+      ${tile(formatCostCompact(costRemaining), "Cost remaining")}
+      ${tile(formatCostCompact(costCompleted), "Cost of completed")}
     </div>
   `;
 }

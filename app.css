@@ -353,20 +353,25 @@ h1, h2, h3, p { margin: 0; }
    this one has to stay one row at every width, so it gets tighter sizing
    layered on top of the same .stat-row/.stat-tile shapes rather than
    reusing Today's own breakpoint behavior. Source order after .stat-row's
-   own rules above is what lets these win the grid-template-columns tie. */
+   own rules above is what lets these win the grid-template-columns tie.
+   Labels went from single words (Ideas/Spent) to full phrases ("Ideas in
+   progress"/"Cost of completed") the same day — label font shrunk further
+   (8.5px -> 7.5px on phone) and allowed to wrap onto its own 2 lines
+   (tight 1.1 line-height, no white-space:nowrap) so the ROW still fits one
+   line even though an individual tile's title no longer always does. */
 .wish-stat-row {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 .wish-stat-row .stat-tile { padding: 7px 3px; }
 .wish-stat-row .stat-tile-value { font-size: 14px; }
-.wish-stat-row .stat-tile-label { font-size: 8.5px; }
+.wish-stat-row .stat-tile-label { font-size: 7.5px; line-height: 1.1; }
 
 @media (min-width: 600px) {
   .wish-stat-row { gap: 10px; }
   .wish-stat-row .stat-tile { padding: 10px 8px; }
   .wish-stat-row .stat-tile-value { font-size: 17px; }
-  .wish-stat-row .stat-tile-label { font-size: 10px; }
+  .wish-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
 }
 
 /* ---- Today sections ------------------------------------------------------ */
