@@ -137,25 +137,41 @@ function subitemNameFieldHtml(kind, value) {
 // Takes the plain array directly, not an entry (2026-08-10 — the checklist
 // now works before a project has even been saved, see openWishSheet's
 // `subItems` local, so there isn't always an `entry` to read it from).
-function subItemsChecklistHtml(subs) {
+// `editingId`, when set, swaps that one row for an inline title+cost edit
+// form instead of its usual view (2026-08-10, user request: "can they be
+// editable after added both text and cost.. in a elegant way") — tapping
+// the row's own title/meta area (not its action buttons) is the entry
+// point, so there's no extra edit icon competing for space in an already
+// tight row; Save/Cancel replace the Mark-done/Buy/Undo + delete buttons
+// for the one row being edited, never both sets at once.
+function subItemsChecklistHtml(subs, editingId = null) {
   if (!subs.length) return `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">No checklist items yet — add one below.</p>`;
   const doneCount = subs.filter((s) => s.done).length;
   return `
     <p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:8px;">${doneCount}/${subs.length} done</p>
     ${subs
-      .map(
-        (s) => `
+      .map((s) => {
+        if (s.id === editingId) {
+          return `
+      <div class="list-row" style="margin-bottom:6px;align-items:flex-start;gap:8px;">
+        <div style="flex:1;">${textInput({ id: `f-subitem-edit-title-${s.id}`, value: s.title })}</div>
+        <div style="width:88px;flex:none;">${textInput({ id: `f-subitem-edit-cost-${s.id}`, type: "number", value: s.cost || "", placeholder: "₹ cost", min: 0 })}</div>
+        <button type="button" class="stepper-btn" data-save-subitem-edit="${s.id}" title="Save">${Icon("check", { size: 12 })}</button>
+        <button type="button" class="stepper-btn" data-cancel-subitem-edit="${s.id}" title="Cancel">${Icon("close", { size: 12 })}</button>
+      </div>`;
+        }
+        return `
       <div class="list-row" style="margin-bottom:6px;opacity:${s.done ? 0.55 : 1};">
         <div class="occ-row-icon">${Icon(s.icon || (s.kind === "task" ? "check" : s.kind === "asset" ? "warranty" : "stock"), { size: 14 })}</div>
-        <div class="occ-row-body">
+        <div class="occ-row-body" data-edit-subitem="${s.id}" style="cursor:pointer;">
           <div class="occ-row-title">${s.title}</div>
           <div class="occ-row-meta">${s.kind === "task" ? "Task" : s.kind === "asset" ? "Asset to buy" : "Item to buy"}</div>
         </div>
         ${s.cost ? `<span style="font-size:var(--fs-micro);color:var(--ink-muted);white-space:nowrap;margin-right:2px;">${formatCost(s.cost)}</span>` : ""}
         <button type="button" class="chip" data-toggle-subitem="${s.id}" aria-pressed="${s.done}">${s.done ? "Undo" : s.kind === "task" ? "Mark done" : "Buy"}</button>
         <button type="button" class="stepper-btn" data-delete-subitem="${s.id}">${Icon("trash", { size: 12 })}</button>
-      </div>`,
-      )
+      </div>`;
+      })
       .join("")}
   `;
 }
@@ -206,6 +222,11 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
   // genuinely brand-new project. Reassigned (not just mutated) by the
   // delete-subitem handler below, so `let`, not `const`.
   let subItems = entry?.subItems ? [...entry.subItems] : draft?.subItems ? [...draft.subItems] : [];
+  // Which checklist row (if any) is currently showing its inline edit form
+  // — see subItemsChecklistHtml's own comment. Always starts closed; a row
+  // being edited never survives the draft round-trip through a nested Buy
+  // sheet, which is fine, since Buy itself isn't available mid-edit anyway.
+  let editingSubItemId = null;
   openSheet({
     title: entry ? "Edit idea" : "Add idea",
     bodyHtml: `
@@ -228,7 +249,7 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
       ${isProject ? `
         <div class="field">
           <span class="field-label">Checklist — complete when everything here is done</span>
-          <div id="subitems-list">${subItemsChecklistHtml(subItems)}</div>
+          <div id="subitems-list">${subItemsChecklistHtml(subItems, editingSubItemId)}</div>
           <div style="margin-top:8px;">
             ${chipGroup({ name: "newSubKind", options: SUBITEM_KINDS, value: "task" })}
             <div style="display:flex;gap:8px;margin-top:8px;align-items:flex-start;">
@@ -384,8 +405,50 @@ function openWishSheet({ entry = null, defaultSpaceId = null, draft = null } = {
       if (acquireBtn) acquireBtn.style.display = subItems.length ? "none" : "block";
     }
 
+    // Commits the inline edit form for one row — reads the two fields it
+    // wrote in subItemsChecklistHtml, back into that same subItems entry.
+    // A blank title is refused (silently, matching the plain-title field's
+    // own "no empty title" convention elsewhere in this sheet) rather than
+    // saving something with nothing to show.
+    function commitSubItemEdit(id) {
+      const sub = subItems.find((s) => s.id === id);
+      if (!sub) return;
+      const title = root.querySelector(`#f-subitem-edit-title-${id}`)?.value.trim();
+      if (!title) return;
+      sub.title = title;
+      sub.cost = Math.max(0, Number(root.querySelector(`#f-subitem-edit-cost-${id}`)?.value) || 0);
+      editingSubItemId = null;
+      persistSubItems();
+      rewireSubItems();
+    }
+
     function rewireSubItems() {
-      root.querySelector("#subitems-list").innerHTML = subItemsChecklistHtml(subItems);
+      root.querySelector("#subitems-list").innerHTML = subItemsChecklistHtml(subItems, editingSubItemId);
+      root.querySelectorAll("[data-edit-subitem]").forEach((el) => {
+        el.addEventListener("click", () => {
+          editingSubItemId = el.dataset.editSubitem;
+          rewireSubItems();
+          root.querySelector(`#f-subitem-edit-title-${editingSubItemId}`)?.focus();
+        });
+      });
+      root.querySelectorAll("[data-save-subitem-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => commitSubItemEdit(btn.dataset.saveSubitemEdit));
+      });
+      root.querySelectorAll("[data-cancel-subitem-edit]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          editingSubItemId = null;
+          rewireSubItems();
+        });
+      });
+      if (editingSubItemId) {
+        // Enter saves, Escape cancels — the edit form is otherwise mouse-only.
+        root.querySelectorAll(`#f-subitem-edit-title-${editingSubItemId}, #f-subitem-edit-cost-${editingSubItemId}`).forEach((input) => {
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); commitSubItemEdit(editingSubItemId); }
+            else if (e.key === "Escape") { editingSubItemId = null; rewireSubItems(); }
+          });
+        });
+      }
       root.querySelectorAll("[data-toggle-subitem]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const sub = subItems.find((s) => s.id === btn.dataset.toggleSubitem);
