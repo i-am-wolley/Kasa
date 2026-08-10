@@ -57,40 +57,73 @@ function rowHtml(asset, state) {
   `;
 }
 
-// Three metrics (2026-08-10, user request), computed over the same
-// visible-house-scoped list the page already shows. "Past halfway" and
-// "New" both need a purchase date to compute an age from — assets without
-// one (never entered) are simply excluded from those two counts rather
-// than guessed at; Total still counts every asset regardless.
+// Reworked from a 3-tile number row into a single proportional bar
+// (2026-08-10 follow-up, user request: "visually represents... a single
+// rectangle... color the % of its area") — one rounded-corner rectangle,
+// its width split into segments proportional to how many assets fall into
+// each lifecycle bucket, plus a small legend since a bare colored bar with
+// no key would be unreadable on its own.
+//
+// Priority order matters — an asset could technically qualify for more
+// than one bucket (e.g. a short-lived asset that's both newly bought AND
+// already within 2 years of its own end of life), so each asset is
+// classified into exactly ONE bucket, most-urgent-first:
+//   1. "over"    — already past its expected life entirely (red)
+//   2. "nearing" — not yet over, but under 2 years of REMAINING life (amber)
+//   3. "new"     — bought under 2 years ago (dark green)
+//   4. "healthy" — everything else with enough data to say so (light green)
+//   5. "unknown" — missing a purchase date, or missing an expected life AND
+//                  not new enough to call healthy either (neutral gray) —
+//                  kept as its own honest bucket rather than silently
+//                  excluded, so the bar's full width always represents
+//                  every asset, not just the ones with complete data.
 const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
-function computeAssetMetrics(assets) {
-  let pastHalfway = 0, newAssets = 0;
-  const now = Date.now();
-  for (const a of assets) {
-    if (!a.purchaseDate) continue;
-    const ageYears = (now - new Date(a.purchaseDate).getTime()) / YEAR_MS;
-    if (a.expectedLifeYears > 0 && ageYears / a.expectedLifeYears > 0.5) pastHalfway += 1;
-    if (ageYears < 2) newAssets += 1;
+function classifyAssetLife(asset) {
+  if (!asset.purchaseDate) return "unknown";
+  const ageYears = (Date.now() - new Date(asset.purchaseDate).getTime()) / YEAR_MS;
+  const life = asset.expectedLifeYears;
+  if (life > 0) {
+    if (ageYears >= life) return "over";
+    if (life - ageYears < 2) return "nearing";
   }
-  return { total: assets.length, pastHalfway, newAssets };
+  if (ageYears < 2) return "new";
+  return life > 0 ? "healthy" : "unknown";
 }
 
-// Single line at every width, same technique as Wishlist's own metrics row
-// (2026-08-10) — a scoped .asset-stat-row override on the shared .stat-row/
-// .stat-tile shapes, tight enough that 3 tiles never wrap to a second row
-// on a phone.
-function assetStatRowHtml(assets) {
-  const { total, pastHalfway, newAssets } = computeAssetMetrics(assets);
-  const tile = (value, label) => `
-    <div class="stat-tile">
-      <div class="stat-tile-value">${value}</div>
-      <div class="stat-tile-label">${label}</div>
-    </div>`;
+// Colors derived from the app's own existing tokens, not new one-off hexes
+// (2026-08-10, "all colors to be in sync with the theme") — red/amber
+// reuse --danger/--gold exactly as Stock's own out/low tiles just did;
+// the two greens are both derived from --done (the app's one existing
+// "completion" green) at different color-mix strengths, rather than
+// inventing a second, unrelated green from nowhere.
+const LIFE_BUCKETS = [
+  { key: "new", label: "New (< 2 yrs)", color: "var(--done)" },
+  { key: "healthy", label: "Healthy", color: "color-mix(in srgb, var(--done) 42%, var(--surface))" },
+  { key: "nearing", label: "< 2 yrs left", color: "var(--gold)" },
+  { key: "over", label: "Past expected life", color: "var(--danger)" },
+  { key: "unknown", label: "No data", color: "var(--line)" },
+];
+
+function assetLifeBarHtml(assets) {
+  const counts = Object.fromEntries(LIFE_BUCKETS.map((b) => [b.key, 0]));
+  for (const a of assets) counts[classifyAssetLife(a)] += 1;
+  const present = LIFE_BUCKETS.filter((b) => counts[b.key] > 0);
+  const segments = present
+    .map((b) => `<div style="flex:${counts[b.key]} 0 0;background:${b.color};" title="${b.label}: ${counts[b.key]}"></div>`)
+    .join("");
+  const legend = present
+    .map((b) => `
+      <div class="asset-life-legend-item">
+        <span class="asset-life-swatch" style="background:${b.color};"></span>
+        <span>${b.label}</span>
+        <span class="font-num" style="color:var(--ink-muted);">${counts[b.key]}</span>
+      </div>`)
+    .join("");
   return `
-    <div class="stat-row asset-stat-row">
-      ${tile(total, "Total assets")}
-      ${tile(pastHalfway, "Past halfway")}
-      ${tile(newAssets, "New (under 2 yrs)")}
+    <div class="today-section" style="padding-bottom:4px;">
+      <div class="asset-life-bar">${segments}</div>
+      <div class="asset-life-legend">${legend}</div>
+      <p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-top:8px;">${assets.length} asset${assets.length === 1 ? "" : "s"} total</p>
     </div>
   `;
 }
@@ -104,7 +137,7 @@ function render() {
       <h1 style="flex:1;">Assets</h1>
       <button class="btn btn-tinted" id="add-asset-btn">${Icon("plus", { size: 16 })} Asset</button>
     </div>
-    ${list.length ? assetStatRowHtml(list) : ""}
+    ${list.length ? assetLifeBarHtml(list) : ""}
     <div class="today-section">
       ${list.map((a) => rowHtml(a, state)).join("") || emptyState({ message: "No assets tracked yet.", actionLabel: null })}
     </div>

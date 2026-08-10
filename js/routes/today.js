@@ -326,11 +326,12 @@ function batchesSectionHtml(state, actionableRows) {
 // (the same increment the Stock screen's own stepper "+1" button uses),
 // or "mark in stock" for a binary yes/no item — rather than opening a
 // sheet, since the whole point is a fast one-tap top-up from Today.
-// Color-coded from the app's own existing tokens (--danger for Out,
-// --gold for Low — the same amber-adjacent color already used for the
-// "Due today" stat tile's tone), soft washes rather than solid blocks to
-// stay "in tune with the theme" per direct request, matching how
-// consequence tiers are already tinted elsewhere in the app.
+// Just name + room, no icon/status text (2026-08-10 follow-up, user
+// request: "only the item name and room, everything else not needed") —
+// the out/low distinction is carried entirely by the tile's own color
+// (--danger red / --gold amber, the same tokens the app already uses for
+// Out stock and the "Due today" tone respectively), soft `color-mix`
+// washes rather than solid blocks to stay "in tune with the theme."
 function shoppingListSectionHtml(state) {
   const visibleSpaces = visibleSpaceIds(state);
   const items = state.items
@@ -339,13 +340,12 @@ function shoppingListSectionHtml(state) {
     .filter((x) => x.bucket === "out" || x.bucket === "low");
   if (!items.length) return "";
   const tileHtml = ({ item, bucket }) => {
-    const isOut = bucket === "out";
-    const tone = isOut ? "var(--danger)" : "var(--gold)";
+    const tone = bucket === "out" ? "var(--danger)" : "var(--gold)";
+    const roomName = byId(state.spaces, item.spaceId)?.name || "";
     return `
       <div class="tile" data-shopping-restock="${item.id}" style="cursor:pointer;background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
-        <div class="tile-icon" style="color:${tone};">${Icon(item.icon || "stock", { size: 16 })}</div>
         <div class="tile-title">${item.name}</div>
-        <div class="tile-meta" style="color:${tone};font-weight:var(--fw-semibold);">${isOut ? "Out" : "Low"}</div>
+        <div class="tile-meta">${roomName}</div>
       </div>
     `;
   };

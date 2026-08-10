@@ -374,22 +374,44 @@ h1, h2, h3, p { margin: 0; }
   .wish-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
 }
 
-/* Assets' own 3-tile metrics row (2026-08-10, user request) — same single-
-   line-at-every-width technique as .wish-stat-row above, just less
-   aggressive sizing since 3 tiles have more room than 4. */
-.asset-stat-row {
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* Assets' lifecycle bar — replaced the earlier 3-tile number row the same
+   day (2026-08-10, user follow-up: "lets redo the assets metrics... show
+   this visually... a single rectangle... color the % of its area"). One
+   rounded-corner bar, flex-proportional segments (assetLifeBarHtml already
+   sets each segment's flex-grow to its own count, so this CSS only needs
+   to lay the row out and clip the corners — the math lives in JS). */
+.asset-life-bar {
+  display: flex;
+  height: 34px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  border: 1px solid var(--line);
 }
-.asset-stat-row .stat-tile { padding: 8px 4px; }
-.asset-stat-row .stat-tile-value { font-size: 16px; }
-.asset-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
+
+.asset-life-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 10px;
+}
+
+.asset-life-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-micro);
+  color: var(--ink);
+}
+
+.asset-life-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
 
 @media (min-width: 600px) {
-  .asset-stat-row { gap: 12px; }
-  .asset-stat-row .stat-tile { padding: 11px 8px; }
-  .asset-stat-row .stat-tile-value { font-size: 18px; }
-  .asset-stat-row .stat-tile-label { font-size: 10.5px; }
+  .asset-life-bar { height: 40px; }
 }
 
 /* ---- Today sections ------------------------------------------------------ */
