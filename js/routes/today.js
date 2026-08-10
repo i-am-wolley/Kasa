@@ -9,7 +9,7 @@
 // Overdue/Due Today view, plus a subtle member filter and a quick-add
 // button that opens the shared routine/habit/task sheet directly from here.
 
-import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, visibleSpaceIds, runSmoothingNow, byId } from "../state.js";
+import { getState, subscribe, completeOccurrence, snoozeOccurrence, setActiveMode, undoLast, isHabitDueToday, toggleHabitToday, taskState, taskOverdueDays, completeTask, uncompleteTask, visibleSpaceIds, runSmoothingNow, adjustItemQty, updateItem, byId } from "../state.js";
 import { stateOf, overdueDays } from "../engine.js";
 import { Icon } from "../ui/icons.js";
 import { chip, emptyState, showToast, openSheet, closeSheet, haptic } from "../ui/components.js";
@@ -318,6 +318,45 @@ function batchesSectionHtml(state, actionableRows) {
   `;
 }
 
+// Out/low stock, shown as tappable tiles at the very bottom of Today
+// (2026-08-10, user request) — same bucketing Stock itself uses
+// (stock.js's own bucketOf, already relied on for the "Low stock" stat
+// tile above), so this always matches what Stock would show. Tapping a
+// tile restocks by the smallest possible step — +1 for a quantity item
+// (the same increment the Stock screen's own stepper "+1" button uses),
+// or "mark in stock" for a binary yes/no item — rather than opening a
+// sheet, since the whole point is a fast one-tap top-up from Today.
+// Color-coded from the app's own existing tokens (--danger for Out,
+// --gold for Low — the same amber-adjacent color already used for the
+// "Due today" stat tile's tone), soft washes rather than solid blocks to
+// stay "in tune with the theme" per direct request, matching how
+// consequence tiers are already tinted elsewhere in the app.
+function shoppingListSectionHtml(state) {
+  const visibleSpaces = visibleSpaceIds(state);
+  const items = state.items
+    .filter((i) => visibleSpaces.has(i.spaceId))
+    .map((i) => ({ item: i, bucket: bucketOf(i) }))
+    .filter((x) => x.bucket === "out" || x.bucket === "low");
+  if (!items.length) return "";
+  const tileHtml = ({ item, bucket }) => {
+    const isOut = bucket === "out";
+    const tone = isOut ? "var(--danger)" : "var(--gold)";
+    return `
+      <div class="tile" data-shopping-restock="${item.id}" style="cursor:pointer;background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
+        <div class="tile-icon" style="color:${tone};">${Icon(item.icon || "stock", { size: 16 })}</div>
+        <div class="tile-title">${item.name}</div>
+        <div class="tile-meta" style="color:${tone};font-weight:var(--fw-semibold);">${isOut ? "Out" : "Low"}</div>
+      </div>
+    `;
+  };
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Shopping list</span></div>
+      <div class="tile-grid">${items.map(tileHtml).join("")}</div>
+    </div>
+  `;
+}
+
 function statRowHtml(state) {
   const activeModeKey = state.household.activeMode;
   const visibleSpaces = visibleSpaceIds(state);
@@ -453,6 +492,7 @@ function render() {
         ? emptyState({ message: "Nothing due right now. The house is quiet.", actionLabel: null })
         : ""
     }
+    ${shoppingListSectionHtml(state)}
   `;
 
   wireEvents();
@@ -519,6 +559,21 @@ function wireEvents() {
   mountEl.querySelectorAll(".occ-row[data-habit-id]").forEach((row) => {
     const habitId = row.dataset.habitId;
     attachSwipe(row, { onSwipeRight: () => markHabitDone(habitId), onSwipeLeft: () => markHabitDone(habitId) });
+  });
+
+  // Shopping list tiles restock by the smallest step on tap — +1 for a
+  // quantity item, "mark in stock" for a binary one (2026-08-10) — same
+  // mutations Stock's own stepper/toggle buttons already use.
+  mountEl.querySelectorAll("[data-shopping-restock]").forEach((tile) => {
+    tile.addEventListener("click", () => {
+      const id = tile.dataset.shoppingRestock;
+      const item = byId(getState().items, id);
+      if (!item) return;
+      if (item.binary) updateItem(id, { qty: 1, status: "ok" });
+      else adjustItemQty(id, 1);
+      haptic(4);
+      showToast(`Restocked — ${item.name}`);
+    });
   });
 
   // Stat tiles: "jump" scrolls to a section already on screen, "today"/

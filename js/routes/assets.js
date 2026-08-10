@@ -57,6 +57,44 @@ function rowHtml(asset, state) {
   `;
 }
 
+// Three metrics (2026-08-10, user request), computed over the same
+// visible-house-scoped list the page already shows. "Past halfway" and
+// "New" both need a purchase date to compute an age from — assets without
+// one (never entered) are simply excluded from those two counts rather
+// than guessed at; Total still counts every asset regardless.
+const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+function computeAssetMetrics(assets) {
+  let pastHalfway = 0, newAssets = 0;
+  const now = Date.now();
+  for (const a of assets) {
+    if (!a.purchaseDate) continue;
+    const ageYears = (now - new Date(a.purchaseDate).getTime()) / YEAR_MS;
+    if (a.expectedLifeYears > 0 && ageYears / a.expectedLifeYears > 0.5) pastHalfway += 1;
+    if (ageYears < 2) newAssets += 1;
+  }
+  return { total: assets.length, pastHalfway, newAssets };
+}
+
+// Single line at every width, same technique as Wishlist's own metrics row
+// (2026-08-10) — a scoped .asset-stat-row override on the shared .stat-row/
+// .stat-tile shapes, tight enough that 3 tiles never wrap to a second row
+// on a phone.
+function assetStatRowHtml(assets) {
+  const { total, pastHalfway, newAssets } = computeAssetMetrics(assets);
+  const tile = (value, label) => `
+    <div class="stat-tile">
+      <div class="stat-tile-value">${value}</div>
+      <div class="stat-tile-label">${label}</div>
+    </div>`;
+  return `
+    <div class="stat-row asset-stat-row">
+      ${tile(total, "Total assets")}
+      ${tile(pastHalfway, "Past halfway")}
+      ${tile(newAssets, "New (under 2 yrs)")}
+    </div>
+  `;
+}
+
 function render() {
   const state = getState();
   const list = sortedAssets(state);
@@ -66,6 +104,7 @@ function render() {
       <h1 style="flex:1;">Assets</h1>
       <button class="btn btn-tinted" id="add-asset-btn">${Icon("plus", { size: 16 })} Asset</button>
     </div>
+    ${list.length ? assetStatRowHtml(list) : ""}
     <div class="today-section">
       ${list.map((a) => rowHtml(a, state)).join("") || emptyState({ message: "No assets tracked yet.", actionLabel: null })}
     </div>

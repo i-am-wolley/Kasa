@@ -374,6 +374,24 @@ h1, h2, h3, p { margin: 0; }
   .wish-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
 }
 
+/* Assets' own 3-tile metrics row (2026-08-10, user request) — same single-
+   line-at-every-width technique as .wish-stat-row above, just less
+   aggressive sizing since 3 tiles have more room than 4. */
+.asset-stat-row {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.asset-stat-row .stat-tile { padding: 8px 4px; }
+.asset-stat-row .stat-tile-value { font-size: 16px; }
+.asset-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
+
+@media (min-width: 600px) {
+  .asset-stat-row { gap: 12px; }
+  .asset-stat-row .stat-tile { padding: 11px 8px; }
+  .asset-stat-row .stat-tile-value { font-size: 18px; }
+  .asset-stat-row .stat-tile-label { font-size: 10.5px; }
+}
+
 /* ---- Today sections ------------------------------------------------------ */
 
 .today-section { padding: 16px 14px 0; }
