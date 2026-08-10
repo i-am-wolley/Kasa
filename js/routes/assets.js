@@ -16,6 +16,11 @@ let currentSuggested = [];
 // active segment/legend item clears it back to null, same toggle
 // convention as every other filter chip in this app.
 let lifeFilter = null;
+// Title substring match (2026-08-10, user request: "add a search option in
+// assets"). Lives outside #results-body (same technique routinesTasks.js
+// uses) so re-rendering just the list on every keystroke never rebuilds
+// the search input itself and drops focus mid-type.
+let searchQuery = "";
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -145,12 +150,19 @@ function assetLifeBarHtml(assets) {
   `;
 }
 
+// The bar always reflects the FULL list; the rows below narrow by both
+// lifeFilter (bucket click) and searchQuery (title search) together.
+function resultsListHtml(state) {
+  const list = sortedAssets(state);
+  let visibleList = lifeFilter ? list.filter((a) => classifyAssetLife(a) === lifeFilter) : list;
+  if (searchQuery) visibleList = visibleList.filter((a) => a.name.toLowerCase().includes(searchQuery));
+  const emptyMessage = searchQuery ? "No assets match your search." : lifeFilter ? "Nothing in this bucket." : "No assets tracked yet.";
+  return visibleList.map((a) => rowHtml(a, state)).join("") || emptyState({ message: emptyMessage, actionLabel: null });
+}
+
 function render() {
   const state = getState();
   const list = sortedAssets(state);
-  // The bar itself always reflects the FULL list; only the rows below
-  // narrow when a bucket is selected.
-  const visibleList = lifeFilter ? list.filter((a) => classifyAssetLife(a) === lifeFilter) : list;
   mountEl.innerHTML = `
     <div class="topbar">
       <button class="btn btn-ghost" id="back-to-more" style="padding:8px;">${Icon("chevronLeft", { size: 18 })}</button>
@@ -158,8 +170,9 @@ function render() {
       <button class="btn btn-tinted" id="add-asset-btn">${Icon("plus", { size: 16 })} Asset</button>
     </div>
     ${list.length ? assetLifeBarHtml(list) : ""}
-    <div class="today-section">
-      ${visibleList.map((a) => rowHtml(a, state)).join("") || emptyState({ message: lifeFilter ? "Nothing in this bucket." : "No assets tracked yet.", actionLabel: null })}
+    ${list.length ? `<div class="today-section" style="padding-bottom:0;">${textInput({ id: "f-asset-search", value: searchQuery, placeholder: "Search assets by name" })}</div>` : ""}
+    <div class="today-section" id="results-body">
+      ${resultsListHtml(state)}
     </div>
   `;
   wireEvents(state);
@@ -197,6 +210,7 @@ function assetFormFields(asset, state, defaultSpaceId, defaultName) {
     ${field("Space", chipGroup({ name: "assetSpaceId", options: assetSpaceOptions(state, asset?.spaceId), value: asset?.spaceId ?? defaultSpaceId ?? [...visibleSpaceIds(state)][0] ?? state.spaces[0]?.id }))}
     ${field("Brand / model", textInput({ id: "f-asset-brand", value: asset?.brand ?? "" }))}
     ${field("Purchase date", textInput({ id: "f-asset-purchased", type: "date", value: asset?.purchaseDate ?? "" }))}
+    ${field("Cost (optional)", textInput({ id: "f-asset-cost", type: "number", value: asset?.cost ?? "", placeholder: "e.g. 15000", min: 0 }))}
     ${field("Warranty until", textInput({ id: "f-asset-warranty", type: "date", value: asset?.warrantyUntil ?? "" }))}
     ${field("Service every N days", textInput({ id: "f-asset-interval", type: "number", value: asset?.serviceIntervalDays ?? "", min: 1 }))}
     <div id="last-serviced-field" style="display:${hasInterval ? "block" : "none"};">
@@ -349,6 +363,12 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
       spaceId,
       brand: root.querySelector("#f-asset-brand").value.trim() || null,
       purchaseDate: root.querySelector("#f-asset-purchased").value || null,
+      // Optional, not wired into anything yet (2026-08-10, user request:
+      // "can be used for future") — no asset/item anywhere in the app has
+      // ever tracked a cost before this, only Wishlist's own pre-purchase
+      // estimate. Capturing it now means it's already there once a real
+      // spend/value insight gets built later, without a backfill.
+      cost: root.querySelector("#f-asset-cost").value ? Number(root.querySelector("#f-asset-cost").value) : null,
       warrantyUntil: root.querySelector("#f-asset-warranty").value || null,
       serviceIntervalDays,
       expectedLifeYears: root.querySelector("#f-asset-life").value ? Number(root.querySelector("#f-asset-life").value) : null,
@@ -480,12 +500,17 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
   }
 }
 
-function wireEvents(state) {
-  document.getElementById("back-to-more")?.addEventListener("click", () => onBack?.());
-  document.getElementById("add-asset-btn")?.addEventListener("click", () => openAssetSheet());
+// Only [data-asset-id] rows live inside #results-body — re-wired both by a
+// full render() and by the search box's own targeted update below.
+function wireResultRows(state) {
   mountEl.querySelectorAll("[data-asset-id]").forEach((row) => {
     row.addEventListener("click", () => openAssetSheet({ asset: byId(state.assets, row.dataset.assetId) }));
   });
+}
+
+function wireEvents(state) {
+  document.getElementById("back-to-more")?.addEventListener("click", () => onBack?.());
+  document.getElementById("add-asset-btn")?.addEventListener("click", () => openAssetSheet());
   mountEl.querySelectorAll("[data-life-bucket]").forEach((el) => {
     el.addEventListener("click", () => {
       const key = el.dataset.lifeBucket;
@@ -493,6 +518,16 @@ function wireEvents(state) {
       render();
     });
   });
+  // Updates only #results-body, never the outer chrome the search input
+  // itself lives in — a full render() here would rebuild the input and
+  // drop focus/cursor position mid-keystroke.
+  document.getElementById("f-asset-search")?.addEventListener("input", (e) => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    const fresh = getState();
+    document.getElementById("results-body").innerHTML = resultsListHtml(fresh);
+    wireResultRows(fresh);
+  });
+  wireResultRows(state);
 }
 
 function mount(el, { onBack: back } = {}) {

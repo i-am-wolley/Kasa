@@ -735,11 +735,14 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 
-.shopping-pill-room {
-  font-weight: var(--fw-regular);
+/* Count badge, not a room label anymore (2026-08-10 follow-up — the pill
+   now represents the same item across every room it's low/out in, not one
+   room specifically, same "×N" suffix pattern Miso's own list uses). */
+.shopping-pill-count {
+  font-weight: var(--fw-semibold);
   color: var(--ink-muted);
   font-size: var(--fs-micro);
-  margin-left: 3px;
+  margin-left: 4px;
 }
 
 /* ---- Tile grid (House spaces, Stock items) ------------------------------

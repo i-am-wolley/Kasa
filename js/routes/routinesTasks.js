@@ -9,7 +9,7 @@
 
 import { getState, subscribe, byId, visibleSpaceIds, taskState, taskOverdueDays } from "../state.js";
 import { Icon } from "../ui/icons.js";
-import { emptyState, chip } from "../ui/components.js";
+import { emptyState, chip, textInput } from "../ui/components.js";
 import { openRoutineEditor } from "./routine.js";
 
 let mountEl = null;
@@ -18,6 +18,12 @@ let onBack = null;
 let kind = "routine"; // "routine" | "task"
 let statusFilter = "active"; // routines only: "active" | "paused" | "all"
 let groupBy = "space"; // routines only: "space" | "tier"
+// Title substring match, both kinds (2026-08-10, user request: "add a
+// search option in... routines in more"). Lives outside #results-body so
+// re-rendering just the results on every keystroke never touches the
+// input itself — a full render() on 'input' would rebuild the field and
+// lose focus/cursor position mid-type.
+let searchQuery = "";
 
 const EFFORT_LABEL = { 1: "2 min", 2: "15 min", 3: "1 hr", 4: "Half day", 5: "Vendor" };
 const TIER_RANK = { unsafe: 4, damaging: 3, unhygienic: 2, cosmetic: 1 };
@@ -100,6 +106,7 @@ function routinesBodyHtml(state, visible) {
   let routines = state.routines.filter((r) => visible.has(r.spaceId));
   if (statusFilter === "active") routines = routines.filter((r) => r.active);
   else if (statusFilter === "paused") routines = routines.filter((r) => !r.active);
+  if (searchQuery) routines = routines.filter((r) => r.title.toLowerCase().includes(searchQuery));
 
   if (!routines.length) {
     return routinesFilterRowHtml() + emptyState({ message: "No routines match this filter.", actionLabel: null });
@@ -141,8 +148,9 @@ function routinesBodyHtml(state, visible) {
 }
 
 function tasksBodyHtml(state, visible) {
-  const tasks = state.tasks.filter((t) => !t.spaceId || visible.has(t.spaceId));
-  if (!tasks.length) return emptyState({ message: "No tasks yet.", actionLabel: null });
+  let tasks = state.tasks.filter((t) => !t.spaceId || visible.has(t.spaceId));
+  if (searchQuery) tasks = tasks.filter((t) => t.title.toLowerCase().includes(searchQuery));
+  if (!tasks.length) return emptyState({ message: searchQuery ? "No tasks match your search." : "No tasks yet.", actionLabel: null });
 
   const buckets = { overdue: [], due: [], upcoming: [], done: [] };
   for (const t of tasks) buckets[taskState(t)].push(t);
@@ -170,6 +178,10 @@ function tasksBodyHtml(state, visible) {
     .join("");
 }
 
+function resultsHtml(state, visible) {
+  return kind === "routine" ? routinesBodyHtml(state, visible) : tasksBodyHtml(state, visible);
+}
+
 function render() {
   const state = getState();
   const visible = visibleSpaceIds(state);
@@ -186,19 +198,18 @@ function render() {
         ${chip("Tasks", { active: kind === "task", dataAttrs: 'data-kind="task"' })}
       </div>
     </div>
-    ${kind === "routine" ? routinesBodyHtml(state, visible) : tasksBodyHtml(state, visible)}
+    <div class="today-section" style="padding-top:0;">
+      ${textInput({ id: "f-search", value: searchQuery, placeholder: `Search ${kind === "routine" ? "routines" : "tasks"} by title` })}
+    </div>
+    <div id="results-body">${resultsHtml(state, visible)}</div>
   `;
   wireEvents(state);
 }
 
-function wireEvents(state) {
-  document.getElementById("back-to-more")?.addEventListener("click", () => onBack?.());
-  document.getElementById("add-btn")?.addEventListener("click", () => {
-    openRoutineEditor({ defaultKind: kind });
-  });
-  mountEl.querySelectorAll("[data-kind]").forEach((btn) => {
-    btn.addEventListener("click", () => { kind = btn.dataset.kind; render(); });
-  });
+// Only [data-status-filter]/[data-group-by]/[data-routine-id]/[data-task-id]
+// live inside #results-body — re-wired every time it's replaced, whether
+// by a full render() or by the search box's own targeted update below.
+function wireResultRows(state) {
   mountEl.querySelectorAll("[data-status-filter]").forEach((btn) => {
     btn.addEventListener("click", () => { statusFilter = btn.dataset.statusFilter; render(); });
   });
@@ -217,6 +228,26 @@ function wireEvents(state) {
       if (task) openRoutineEditor({ task });
     });
   });
+}
+
+function wireEvents(state) {
+  document.getElementById("back-to-more")?.addEventListener("click", () => onBack?.());
+  document.getElementById("add-btn")?.addEventListener("click", () => {
+    openRoutineEditor({ defaultKind: kind });
+  });
+  mountEl.querySelectorAll("[data-kind]").forEach((btn) => {
+    btn.addEventListener("click", () => { kind = btn.dataset.kind; render(); });
+  });
+  // Updates only #results-body, never the outer chrome the search input
+  // itself lives in — a full render() here would rebuild the input and
+  // drop focus/cursor position mid-keystroke.
+  document.getElementById("f-search")?.addEventListener("input", (e) => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    const fresh = getState();
+    document.getElementById("results-body").innerHTML = resultsHtml(fresh, visibleSpaceIds(fresh));
+    wireResultRows(fresh);
+  });
+  wireResultRows(state);
 }
 
 function mount(el, { onBack: back } = {}) {

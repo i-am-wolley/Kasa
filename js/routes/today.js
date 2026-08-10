@@ -327,34 +327,51 @@ function batchesSectionHtml(state, actionableRows) {
 // or "mark in stock" for a binary yes/no item — rather than opening a
 // sheet, since the whole point is a fast one-tap top-up from Today.
 // A flex-wrap row of small rounded pills, not a full-width row per item
-// (2026-08-10 follow-up, user request: "very similar to Miso shopping
-// list, reference and do that") — pulled directly from Miso's own actual
-// shopping-list implementation (Pantry-OS-App/index.html's missing-
-// ingredients chips: padding "5px 10px", pill border-radius, flex-wrap
-// container, gap 6) rather than guessed at. Item name + room together in
-// one small pill, room as a smaller muted suffix (Miso's own pattern for
-// a pill's secondary detail, e.g. its "×2"/"AI" suffixes). Out/low still
-// carried by the pill's own color (--danger red / --gold amber).
+// (2026-08-10, user request: "very similar to Miso shopping list") —
+// pulled directly from Miso's own actual shopping-list implementation
+// (Pantry-OS-App/index.html's missing-ingredients chips).
+//
+// Grouped by catalogKey — the same "real-world thing" identity the rest of
+// the app already uses (falling back to lowercased name for a custom item
+// with no catalog link) — rather than by individual per-room item record,
+// so the same consumable being low in several rooms shows as ONE pill with
+// a count instead of one pill per room (2026-08-10 follow-up: "let it not
+// show the room but instead if same item across rooms are low then put a
+// count similar to miso like x3" — Miso's own list does exactly this for
+// an ingredient needed by more than one dish). Tapping a grouped pill
+// restocks every item in the group, not just one — buying "3× Toilet
+// cleaner" naturally means topping up all three rooms' own copies, not an
+// arbitrary single one. Worst status within the group wins (any "out"
+// makes the whole pill red, even if others in the group are only "low").
 function shoppingListSectionHtml(state) {
   const visibleSpaces = visibleSpaceIds(state);
-  const items = state.items
+  const eligible = state.items
     .filter((i) => visibleSpaces.has(i.spaceId))
     .map((i) => ({ item: i, bucket: bucketOf(i) }))
     .filter((x) => x.bucket === "out" || x.bucket === "low");
-  if (!items.length) return "";
-  const pillHtml = ({ item, bucket }) => {
-    const tone = bucket === "out" ? "var(--danger)" : "var(--gold)";
-    const roomName = byId(state.spaces, item.spaceId)?.name || "";
+  if (!eligible.length) return "";
+
+  const groups = new Map();
+  for (const { item, bucket } of eligible) {
+    const key = item.catalogKey || item.name.toLowerCase().trim();
+    if (!groups.has(key)) groups.set(key, { name: item.name, itemIds: [], worst: "low" });
+    const g = groups.get(key);
+    g.itemIds.push(item.id);
+    if (bucket === "out") g.worst = "out";
+  }
+
+  const pillHtml = (g) => {
+    const tone = g.worst === "out" ? "var(--danger)" : "var(--gold)";
     return `
-      <div class="shopping-pill" data-shopping-restock="${item.id}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
-        ${item.name}${roomName ? `<span class="shopping-pill-room">· ${roomName}</span>` : ""}
+      <div class="shopping-pill" data-shopping-restock="${g.itemIds.join(",")}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
+        ${g.name}${g.itemIds.length > 1 ? `<span class="shopping-pill-count">×${g.itemIds.length}</span>` : ""}
       </div>
     `;
   };
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Shopping list</span></div>
-      <div class="shopping-pill-row">${items.map(pillHtml).join("")}</div>
+      <div class="shopping-pill-row">${[...groups.values()].map(pillHtml).join("")}</div>
     </div>
   `;
 }
@@ -568,13 +585,20 @@ function wireEvents() {
   // mutations Stock's own stepper/toggle buttons already use.
   mountEl.querySelectorAll("[data-shopping-restock]").forEach((tile) => {
     tile.addEventListener("click", () => {
-      const id = tile.dataset.shoppingRestock;
-      const item = byId(getState().items, id);
-      if (!item) return;
-      if (item.binary) updateItem(id, { qty: 1, status: "ok" });
-      else adjustItemQty(id, 1);
+      // Comma-separated when the pill represents the same item low/out
+      // across more than one room (shoppingListSectionHtml's own grouping)
+      // — restocking the pill tops up every one of them, not just one.
+      const ids = tile.dataset.shoppingRestock.split(",");
+      let name = "";
+      for (const id of ids) {
+        const item = byId(getState().items, id);
+        if (!item) continue;
+        name = item.name;
+        if (item.binary) updateItem(id, { qty: 1, status: "ok" });
+        else adjustItemQty(id, 1);
+      }
       haptic(4);
-      showToast(`Restocked — ${item.name}`);
+      showToast(ids.length > 1 ? `Restocked ${ids.length} — ${name}` : `Restocked — ${name}`);
     });
   });
 

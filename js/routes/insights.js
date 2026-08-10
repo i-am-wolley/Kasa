@@ -132,6 +132,75 @@ function healthCardHtml(state) {
   `;
 }
 
+// ---- Per-room health ranking (2026-08-10, user request) -------------------
+// Exact same weighting as computeHealth() above, just scoped to one space's
+// own routines/items/assets instead of the whole household — "which room
+// needs attention" answered directly, rather than only the one aggregate
+// number. Ranked worst-first, since that's the actual useful reading order
+// (where to look first), not alphabetical.
+function computeSpaceHealth(state, spaceId) {
+  const activeModeKey = state.household.activeMode;
+  const overdueByTier = { unsafe: 0, damaging: 0, unhygienic: 0, cosmetic: 0 };
+  for (const occ of state.occurrences) {
+    if (occ.state === "done" || occ.state === "snoozed") continue;
+    const routine = byId(state.routines, occ.routineId);
+    if (!routine || isPausedNow(routine, activeModeKey) || routine.spaceId !== spaceId) continue;
+    if (stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()) !== "overdue") continue;
+    overdueByTier[routine.consequence] = (overdueByTier[routine.consequence] || 0) + 1;
+  }
+  let overduePenalty = 0;
+  for (const [tier, count] of Object.entries(overdueByTier)) overduePenalty += (TIER_PENALTY[tier] || 1) * count;
+  overduePenalty = Math.min(40, overduePenalty);
+
+  const spaceItems = state.items.filter((i) => i.spaceId === spaceId);
+  const outCount = spaceItems.filter((i) => i.status === "out").length;
+  const lowCount = spaceItems.filter((i) => i.status === "low").length;
+  const stockPenalty = Math.min(30, outCount * 3 + lowCount);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const overdueAssets = state.assets.filter((a) => a.spaceId === spaceId && a.nextServiceDue && new Date(a.nextServiceDue) < today).length;
+  const assetPenalty = Math.min(30, overdueAssets * 5);
+
+  const score = Math.max(0, Math.round(100 - overduePenalty - stockPenalty - assetPenalty));
+  return { score };
+}
+
+function scoreTone(score) {
+  if (score >= 90) return "var(--done)";
+  if (score >= 70) return "var(--ink-muted)";
+  if (score >= 50) return "var(--gold)";
+  return "var(--danger)";
+}
+
+function roomHealthSectionHtml(state) {
+  const visible = visibleSpaceIds(state);
+  const spaces = state.spaces.filter((s) => visible.has(s.id));
+  if (spaces.length < 2) return ""; // nothing to rank against with one room
+  const ranked = spaces
+    .map((s) => ({ space: s, score: computeSpaceHealth(state, s.id).score }))
+    .sort((a, b) => a.score - b.score);
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Room health</span></div>
+      ${ranked
+        .map(
+          (r) => `
+        <div class="list-row" style="cursor:default;">
+          <div class="occ-row-icon">${Icon(r.space.icon || "house", { size: 16 })}</div>
+          <div class="occ-row-body">
+            <div class="occ-row-title">${r.space.name}</div>
+            <div class="occ-row-meta">${scoreLabel(r.score)}</div>
+          </div>
+          <div class="list-row-right font-num" style="color:${scoreTone(r.score)};font-weight:var(--fw-semibold);font-size:16px;">${r.score}</div>
+        </div>
+      `,
+        )
+        .join("")}
+    </div>
+  `;
+}
+
 // ---- Help on leave impact (memo §6.3 hero feature) ------------------------
 
 function helpLeaveImpacts(state) {
@@ -541,6 +610,7 @@ function render() {
   mountEl.innerHTML = `
     <div class="topbar"><h1>Insights</h1></div>
     ${healthCardHtml(state)}
+    ${roomHealthSectionHtml(state)}
     ${smoothingNoticeHtml(state)}
     ${snoozeSuggestionsHtml(state)}
     ${loadBalanceHtml(state)}
