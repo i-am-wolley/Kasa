@@ -36,6 +36,10 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 56 — Seasonal section hidden from Insights (added 2026-08-10, same session)
+
+User asked how the seasonal insight worked (confirmed live it was genuinely firing — Bengaluru, inside the Monsoon window, matched a real "seepage/damp" routine), then asked to hide it for now. `js/routes/insights.js`'s `render()` no longer calls `seasonalHtml(state)` — the logic (`intel.js`'s `seasonalBoosts`) and the rendering function itself are both left intact, just not invoked, so turning it back on later is a one-line change, not a rebuild. Verified live: section confirmed absent from the real Insights page, zero console errors.
+
 ## Round 55 — Room health rebuilt with a real formula, gated to only what needs attention, click for reasoning (added 2026-08-10, same session)
 
 User follow-up on Round 54's per-room health section, given as a spec to design and confirm before building ("build a mathematical model then we implement it, show me first"): only show the section if some room scores under 80; the score itself should combine routines/tasks *due* (not just overdue), aging assets (past expected life, or under 2 years of life left), and understocked stock, with the actual weighting worked out and shared as a formula; separately highlight rooms with zero routines/tasks; and tapping a room should show its reasoning. Shared the full formula plus a worked example (a "Kitchen" scoring 76 from named contributors) before writing any code; user approved, then asked for the click-to-explain addition on top.

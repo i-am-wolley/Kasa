@@ -725,7 +725,10 @@ function render() {
     ${snoozeSuggestionsHtml(state)}
     ${loadBalanceHtml(state)}
     ${forecastHtml(state)}
-    ${seasonalHtml(state)}
+    ${/* Seasonal section hidden (2026-08-10, direct user request: "hide
+       this section for now") — logic (intel.js's seasonalBoosts) and
+       rendering (seasonalHtml below) both left intact, just not called
+       here, so re-enabling later is a one-line change. */ ""}
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}
     <div class="today-section">
