@@ -49,6 +49,12 @@ function parseRRule(rrule) {
   return parts;
 }
 
+// Strictly forward from a genuine ledger completion — used only when
+// `lastDoneAt` is real (the routine has actually been done before). This
+// one's correctly forward-only and always has been: `after` is a real
+// timestamp that only ever moves forward as completions happen, so there's
+// no session-reload staleness to worry about here, unlike the
+// never-completed case below.
 function nextRRuleOccurrence(rrule, after) {
   const p = parseRRule(rrule);
   const start = new Date(after.getFullYear(), after.getMonth(), after.getDate());
@@ -74,6 +80,55 @@ function nextRRuleOccurrence(rrule, after) {
       if (targetDows.includes(candidate.getDay())) return candidate;
     }
     return null;
+  }
+
+  return null;
+}
+
+// For a NEVER-completed routine — the same class of bug just fixed in
+// firstFloatingOccurrence, found by auditing every trigger type after that
+// fix (2026-08-10, user request: "check for all repeats options"). The old
+// code faked `after = now - 1 day` and reused nextRRuleOccurrence's
+// strictly-forward search — for a MONTHLY/WEEKLY day that had already
+// passed this cycle, that always jumped to the NEXT cycle (next month /
+// next week), silently discarding the missed occurrence on every session
+// reload, exactly like the floating_since_last bug. Fix: compute THIS
+// cycle's occurrence directly (this month's BYMONTHDAY, or the most recent
+// matching weekday within the last 7 days) and let it be in the past —
+// that's what makes it overdue. Only walks forward past it when the
+// result would predate the routine's own start date (it can't have missed
+// an occurrence that happened before it existed) — mirrors
+// firstFloatingOccurrence's own start-date floor.
+function currentRRuleOccurrence(rrule, startDateStr, now) {
+  const p = parseRRule(rrule);
+  const today = dateOnly(now);
+  const start = startDateStr ? dateOnly(new Date(startDateStr)) : null;
+
+  if (p.FREQ === "MONTHLY" && p.BYMONTHDAY) {
+    const dom = Number(p.BYMONTHDAY);
+    let candidate = new Date(today.getFullYear(), today.getMonth(), dom);
+    if (start && candidate < start) {
+      candidate = new Date(start.getFullYear(), start.getMonth(), dom);
+      if (candidate < start) candidate = new Date(start.getFullYear(), start.getMonth() + 1, dom);
+    }
+    return candidate;
+  }
+
+  if (p.FREQ === "WEEKLY" && p.BYDAY) {
+    const targetDows = p.BYDAY.split(",").map((d) => WEEKDAY_INDEX[d]).filter((d) => d !== undefined);
+    if (!targetDows.length) return null;
+    let candidate = null;
+    for (let i = 0; i < 7; i++) {
+      const c = addDays(today, -i);
+      if (targetDows.includes(c.getDay())) { candidate = c; break; }
+    }
+    if (start && candidate && candidate < start) {
+      for (let i = 0; i < 7; i++) {
+        const c = addDays(start, i);
+        if (targetDows.includes(c.getDay())) { candidate = c; break; }
+      }
+    }
+    return candidate;
   }
 
   return null;
@@ -163,8 +218,13 @@ function computeNext(routine, ctx) {
 
   switch (t.type) {
     case "fixed_calendar": {
-      const after = lastDoneAt || addDays(now, -1);
-      const dueAt = nextRRuleOccurrence(t.rrule, after);
+      // Genuinely completed before -> strictly the next occurrence after
+      // that. Never completed -> this cycle's occurrence, which may
+      // already be in the past (overdue) — see currentRRuleOccurrence's
+      // own comment for why these can't share one code path.
+      const dueAt = lastDoneAt
+        ? nextRRuleOccurrence(t.rrule, lastDoneAt)
+        : currentRRuleOccurrence(t.rrule, t.startDate, now);
       return dueAt ? { dueAt, windowDays: DEFAULT_WINDOW_DAYS } : null;
     }
 
