@@ -318,20 +318,23 @@ function batchesSectionHtml(state, actionableRows) {
   `;
 }
 
-// Out/low stock, shown as tappable tiles at the very bottom of Today
+// Out/low stock, shown as tappable rows at the very bottom of Today
 // (2026-08-10, user request) — same bucketing Stock itself uses
 // (stock.js's own bucketOf, already relied on for the "Low stock" stat
 // tile above), so this always matches what Stock would show. Tapping a
-// tile restocks by the smallest possible step — +1 for a quantity item
+// row restocks by the smallest possible step — +1 for a quantity item
 // (the same increment the Stock screen's own stepper "+1" button uses),
 // or "mark in stock" for a binary yes/no item — rather than opening a
 // sheet, since the whole point is a fast one-tap top-up from Today.
-// Just name + room, no icon/status text (2026-08-10 follow-up, user
-// request: "only the item name and room, everything else not needed") —
-// the out/low distinction is carried entirely by the tile's own color
-// (--danger red / --gold amber, the same tokens the app already uses for
-// Out stock and the "Due today" tone respectively), soft `color-mix`
-// washes rather than solid blocks to stay "in tune with the theme."
+// Plain `.list-row`s, not square tiles (2026-08-10 follow-up, user
+// request: "reduce to a simple table which can hold the text properly,
+// why do we need such a big one") — name left, room right (reusing the
+// existing `.list-row-right` shape), one line each, far denser than a
+// tile grid for what's just two short strings. The out/low distinction
+// is still carried entirely by the row's own color (--danger red / --gold
+// amber, same tokens Stock's own out/low state already uses), soft
+// `color-mix` washes rather than solid blocks to stay "in tune with the
+// theme."
 function shoppingListSectionHtml(state) {
   const visibleSpaces = visibleSpaceIds(state);
   const items = state.items
@@ -339,20 +342,20 @@ function shoppingListSectionHtml(state) {
     .map((i) => ({ item: i, bucket: bucketOf(i) }))
     .filter((x) => x.bucket === "out" || x.bucket === "low");
   if (!items.length) return "";
-  const tileHtml = ({ item, bucket }) => {
+  const rowHtml = ({ item, bucket }) => {
     const tone = bucket === "out" ? "var(--danger)" : "var(--gold)";
     const roomName = byId(state.spaces, item.spaceId)?.name || "";
     return `
-      <div class="tile" data-shopping-restock="${item.id}" style="cursor:pointer;background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
-        <div class="tile-title">${item.name}</div>
-        <div class="tile-meta">${roomName}</div>
+      <div class="list-row" data-shopping-restock="${item.id}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
+        <span style="flex:1;font-weight:var(--fw-semibold);">${item.name}</span>
+        <span class="list-row-right">${roomName}</span>
       </div>
     `;
   };
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Shopping list</span></div>
-      <div class="tile-grid">${items.map(tileHtml).join("")}</div>
+      ${items.map(rowHtml).join("")}
     </div>
   `;
 }

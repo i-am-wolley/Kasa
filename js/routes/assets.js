@@ -10,6 +10,12 @@ let mountEl = null;
 let unsubscribe = null;
 let onBack = null;
 let currentSuggested = [];
+// Which lifecycle bucket the list below is currently narrowed to, or null
+// for everyone (2026-08-10, user request: "clicking on the segment can it
+// filter those assets? also clicking on the key") — clicking an already-
+// active segment/legend item clears it back to null, same toggle
+// convention as every other filter chip in this app.
+let lifeFilter = null;
 
 function daysUntil(dateStr) {
   if (!dateStr) return null;
@@ -104,26 +110,37 @@ const LIFE_BUCKETS = [
   { key: "unknown", label: "No data", color: "var(--line)" },
 ];
 
+// `assets` is always the FULL visible list, not whatever lifeFilter has
+// narrowed the list below to — the bar itself should always show the true
+// overall breakdown, only the rows below react to a click.
 function assetLifeBarHtml(assets) {
   const counts = Object.fromEntries(LIFE_BUCKETS.map((b) => [b.key, 0]));
   for (const a of assets) counts[classifyAssetLife(a)] += 1;
   const present = LIFE_BUCKETS.filter((b) => counts[b.key] > 0);
+  // Dim whichever buckets AREN'T the active filter, so it's visually clear
+  // something's narrowed — same "quiet unless active" convention as
+  // Today's own member-filter chips.
+  const dim = (key) => (lifeFilter && lifeFilter !== key ? "opacity:0.35;" : "");
   const segments = present
-    .map((b) => `<div style="flex:${counts[b.key]} 0 0;background:${b.color};" title="${b.label}: ${counts[b.key]}"></div>`)
+    .map((b) => `<div data-life-bucket="${b.key}" style="cursor:pointer;flex:${counts[b.key]} 0 0;background:${b.color};${dim(b.key)}" title="${b.label}: ${counts[b.key]}"></div>`)
     .join("");
   const legend = present
     .map((b) => `
-      <div class="asset-life-legend-item">
+      <div class="asset-life-legend-item" data-life-bucket="${b.key}" style="cursor:pointer;${dim(b.key)}">
         <span class="asset-life-swatch" style="background:${b.color};"></span>
         <span>${b.label}</span>
         <span class="font-num" style="color:var(--ink-muted);">${counts[b.key]}</span>
       </div>`)
     .join("");
+  const activeBucket = lifeFilter ? LIFE_BUCKETS.find((b) => b.key === lifeFilter) : null;
+  const caption = activeBucket
+    ? `Showing ${counts[lifeFilter]} of ${assets.length} — ${activeBucket.label} (tap again to clear)`
+    : `${assets.length} asset${assets.length === 1 ? "" : "s"} total`;
   return `
     <div class="today-section" style="padding-bottom:4px;">
       <div class="asset-life-bar">${segments}</div>
       <div class="asset-life-legend">${legend}</div>
-      <p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-top:8px;">${assets.length} asset${assets.length === 1 ? "" : "s"} total</p>
+      <p style="color:var(--ink-muted);font-size:var(--fs-micro);margin-top:8px;">${caption}</p>
     </div>
   `;
 }
@@ -131,6 +148,9 @@ function assetLifeBarHtml(assets) {
 function render() {
   const state = getState();
   const list = sortedAssets(state);
+  // The bar itself always reflects the FULL list; only the rows below
+  // narrow when a bucket is selected.
+  const visibleList = lifeFilter ? list.filter((a) => classifyAssetLife(a) === lifeFilter) : list;
   mountEl.innerHTML = `
     <div class="topbar">
       <button class="btn btn-ghost" id="back-to-more" style="padding:8px;">${Icon("chevronLeft", { size: 18 })}</button>
@@ -139,7 +159,7 @@ function render() {
     </div>
     ${list.length ? assetLifeBarHtml(list) : ""}
     <div class="today-section">
-      ${list.map((a) => rowHtml(a, state)).join("") || emptyState({ message: "No assets tracked yet.", actionLabel: null })}
+      ${visibleList.map((a) => rowHtml(a, state)).join("") || emptyState({ message: lifeFilter ? "Nothing in this bucket." : "No assets tracked yet.", actionLabel: null })}
     </div>
   `;
   wireEvents(state);
@@ -465,6 +485,13 @@ function wireEvents(state) {
   document.getElementById("add-asset-btn")?.addEventListener("click", () => openAssetSheet());
   mountEl.querySelectorAll("[data-asset-id]").forEach((row) => {
     row.addEventListener("click", () => openAssetSheet({ asset: byId(state.assets, row.dataset.assetId) }));
+  });
+  mountEl.querySelectorAll("[data-life-bucket]").forEach((el) => {
+    el.addEventListener("click", () => {
+      const key = el.dataset.lifeBucket;
+      lifeFilter = lifeFilter === key ? null : key;
+      render();
+    });
   });
 }
 
