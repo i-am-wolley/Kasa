@@ -48,16 +48,6 @@ const SUBITEM_KINDS = [
 
 let mountEl = null;
 let unsubscribe = null;
-// Filters the whole page by entry type (2026-08-10, user request: "add a
-// filter for projects, assets, stock items") — "all" shows everything,
-// matching the screen's original behavior.
-let typeFilter = "all";
-const TYPE_FILTER_OPTIONS = [
-  { value: "all", label: "All" },
-  { value: "project", label: "Projects" },
-  { value: "asset", label: "Assets" },
-  { value: "item", label: "Stock" },
-];
 
 function formatCost(cost) {
   if (!cost) return "";
@@ -76,9 +66,10 @@ function formatCostCompact(n) {
   return `₹${Math.round(n)}`;
 }
 
-// The four wishlist metrics, computed over whatever's currently filtered by
-// typeFilter — "the filters on the page to apply to these metrics as well."
-// Reworked 2026-08-10 (same day, direct follow-up) from an Ideas-total/
+// The four wishlist metrics, computed over the whole wishlist (the
+// All/Projects/Assets/Stock type filter this originally respected was
+// removed again the same day it shipped — see render()'s own comment).
+// Reworked 2026-08-10 from an Ideas-total/
 // Total-cost/Spent/%-complete set into two intuitive pairs instead: how
 // many ideas are still open vs. already done (plain entry counts — "Ideas
 // in progress" still means ideas, i.e. top-level entries, just re-scoped
@@ -184,21 +175,13 @@ function sectionHtml(title, entries) {
   `;
 }
 
-function typeFilterRowHtml() {
-  return `
-    <div class="today-section" style="padding-top:0;">
-      <div class="chip-group" style="flex-wrap:nowrap;overflow-x:auto;">
-        ${TYPE_FILTER_OPTIONS.map((o) => `<button type="button" class="chip" data-type-filter="${o.value}" aria-pressed="${typeFilter === o.value}">${o.label}</button>`).join("")}
-      </div>
-    </div>
-  `;
-}
-
+// The All/Projects/Assets/Stock type filter (Round 42) was removed again
+// the same day it shipped (2026-08-10, direct follow-up) — back to always
+// showing everything, grouped by priority as before.
 function render() {
   const state = getState();
-  const filtered = typeFilter === "all" ? state.wishlist : state.wishlist.filter((w) => w.type === typeFilter);
-  const active = filtered.filter((w) => w.status !== "acquired");
-  const acquired = filtered.filter((w) => w.status === "acquired");
+  const active = state.wishlist.filter((w) => w.status !== "acquired");
+  const acquired = state.wishlist.filter((w) => w.status === "acquired");
 
   const byPriority = { high: [], soon: [], someday: [] };
   for (const w of active) (byPriority[w.priority] || byPriority.someday).push(w);
@@ -208,13 +191,12 @@ function render() {
       <h1>Wishlist</h1>
       <button class="btn btn-tinted" id="add-wish-btn">${Icon("plus", { size: 16 })} Idea</button>
     </div>
-    ${state.wishlist.length ? typeFilterRowHtml() : ""}
-    ${state.wishlist.length ? wishStatRowHtml(filtered) : ""}
+    ${state.wishlist.length ? wishStatRowHtml(state.wishlist) : ""}
     ${sectionHtml("High priority", byPriority.high)}
     ${sectionHtml("Soon", byPriority.soon)}
     ${sectionHtml("Someday", byPriority.someday)}
     ${sectionHtml("Acquired", acquired)}
-    ${!state.wishlist.length ? emptyState({ message: "No ideas yet — add something you'd like for the house.", actionLabel: null }) : !filtered.length ? emptyState({ message: "Nothing here for this filter.", actionLabel: null }) : ""}
+    ${!state.wishlist.length ? emptyState({ message: "No ideas yet — add something you'd like for the house.", actionLabel: null }) : ""}
   `;
 
   wireEvents(state);
@@ -740,12 +722,6 @@ function wireEvents(state) {
   document.getElementById("add-wish-btn")?.addEventListener("click", () => openWishSheet({}));
   mountEl.querySelectorAll("[data-open-wish]").forEach((el) => {
     el.addEventListener("click", () => openWishSheet({ entry: byId(state.wishlist, el.dataset.openWish) }));
-  });
-  mountEl.querySelectorAll("[data-type-filter]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      typeFilter = btn.dataset.typeFilter;
-      render();
-    });
   });
 }
 

@@ -36,6 +36,10 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 53 — removed the Wishlist type filter again (added 2026-08-10, same session)
+
+User request: remove the All/Projects/Assets/Stock filter chips from Wishlist (Round 42). Reverted cleanly — `typeFilter` state, `TYPE_FILTER_OPTIONS`, `typeFilterRowHtml()`, and its click wiring all removed; `render()`/`computeWishMetrics()` go back to always operating on the full `state.wishlist`, and the "Nothing here for this filter" empty-state branch (only ever reachable via the now-gone filter) is gone too. Metrics row (Round 43/44) is unaffected — it already worked over whatever list was passed to it, just always the full list again now. Verified live: filter chips confirmed gone, stat tiles still compute correctly. Zero console errors.
+
 ## Round 52 — Shopping list matches Miso's real pill-chip pattern, not a full row (added 2026-08-10, same session)
 
 User follow-up, same day: "i dont want a full row, very similar to miso shopping list.. can you reference and do that." Round 51's `.list-row` version (one full-width bar per item) wasn't it — went and read Miso's own actual shopping-list code (`../Kitchen/Pantry-OS-App/index.html`, the missing-ingredients chip list around its "Shopping list for the week" section) rather than guessing at "similar."
