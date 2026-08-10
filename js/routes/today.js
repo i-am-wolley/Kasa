@@ -318,23 +318,23 @@ function batchesSectionHtml(state, actionableRows) {
   `;
 }
 
-// Out/low stock, shown as tappable rows at the very bottom of Today
+// Out/low stock, shown as tappable pills at the very bottom of Today
 // (2026-08-10, user request) — same bucketing Stock itself uses
 // (stock.js's own bucketOf, already relied on for the "Low stock" stat
 // tile above), so this always matches what Stock would show. Tapping a
-// row restocks by the smallest possible step — +1 for a quantity item
+// pill restocks by the smallest possible step — +1 for a quantity item
 // (the same increment the Stock screen's own stepper "+1" button uses),
 // or "mark in stock" for a binary yes/no item — rather than opening a
 // sheet, since the whole point is a fast one-tap top-up from Today.
-// Plain `.list-row`s, not square tiles (2026-08-10 follow-up, user
-// request: "reduce to a simple table which can hold the text properly,
-// why do we need such a big one") — name left, room right (reusing the
-// existing `.list-row-right` shape), one line each, far denser than a
-// tile grid for what's just two short strings. The out/low distinction
-// is still carried entirely by the row's own color (--danger red / --gold
-// amber, same tokens Stock's own out/low state already uses), soft
-// `color-mix` washes rather than solid blocks to stay "in tune with the
-// theme."
+// A flex-wrap row of small rounded pills, not a full-width row per item
+// (2026-08-10 follow-up, user request: "very similar to Miso shopping
+// list, reference and do that") — pulled directly from Miso's own actual
+// shopping-list implementation (Pantry-OS-App/index.html's missing-
+// ingredients chips: padding "5px 10px", pill border-radius, flex-wrap
+// container, gap 6) rather than guessed at. Item name + room together in
+// one small pill, room as a smaller muted suffix (Miso's own pattern for
+// a pill's secondary detail, e.g. its "×2"/"AI" suffixes). Out/low still
+// carried by the pill's own color (--danger red / --gold amber).
 function shoppingListSectionHtml(state) {
   const visibleSpaces = visibleSpaceIds(state);
   const items = state.items
@@ -342,20 +342,19 @@ function shoppingListSectionHtml(state) {
     .map((i) => ({ item: i, bucket: bucketOf(i) }))
     .filter((x) => x.bucket === "out" || x.bucket === "low");
   if (!items.length) return "";
-  const rowHtml = ({ item, bucket }) => {
+  const pillHtml = ({ item, bucket }) => {
     const tone = bucket === "out" ? "var(--danger)" : "var(--gold)";
     const roomName = byId(state.spaces, item.spaceId)?.name || "";
     return `
-      <div class="list-row" data-shopping-restock="${item.id}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
-        <span style="flex:1;font-weight:var(--fw-semibold);">${item.name}</span>
-        <span class="list-row-right">${roomName}</span>
+      <div class="shopping-pill" data-shopping-restock="${item.id}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
+        ${item.name}${roomName ? `<span class="shopping-pill-room">· ${roomName}</span>` : ""}
       </div>
     `;
   };
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Shopping list</span></div>
-      ${items.map(rowHtml).join("")}
+      <div class="shopping-pill-row">${items.map(pillHtml).join("")}</div>
     </div>
   `;
 }

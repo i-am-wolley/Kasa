@@ -715,6 +715,33 @@ h1, h2, h3, p { margin: 0; }
   text-align: right;
 }
 
+/* Today's Shopping list — small flowing pills, not full-width rows
+   (2026-08-10, user request: "very similar to Miso shopping list") —
+   shape pulled directly from Miso's own real implementation
+   (Pantry-OS-App/index.html's missing-ingredients chips: 5px/10px
+   padding, pill radius, flex-wrap, 6px gap), not guessed at. */
+.shopping-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shopping-pill {
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-meta);
+  font-weight: var(--fw-semibold);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.shopping-pill-room {
+  font-weight: var(--fw-regular);
+  color: var(--ink-muted);
+  font-size: var(--fs-micro);
+  margin-left: 3px;
+}
+
 /* ---- Tile grid (House spaces, Stock items) ------------------------------
    Square-ish rounded cards, replacing full-width list rows for a lighter,
    more scannable "grid of things" read (2026-08-03, user request — "convert

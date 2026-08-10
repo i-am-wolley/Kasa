@@ -36,6 +36,14 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 52 — Shopping list matches Miso's real pill-chip pattern, not a full row (added 2026-08-10, same session)
+
+User follow-up, same day: "i dont want a full row, very similar to miso shopping list.. can you reference and do that." Round 51's `.list-row` version (one full-width bar per item) wasn't it — went and read Miso's own actual shopping-list code (`../Kitchen/Pantry-OS-App/index.html`, the missing-ingredients chip list around its "Shopping list for the week" section) rather than guessing at "similar."
+
+- **Miso's real shape, confirmed from its own source**: a `flex-wrap` container (`gap:6`) of small pills, each sized to its own content — `padding:"5px 10px"`, full pill `border-radius`, `fontSize:13`, toggled by a tap, with a smaller muted suffix badge for secondary detail (Miso uses this for a `×2`/staple/`AI` indicator). Not a list of full-width rows at all.
+- **`js/routes/today.js` / `app.css`** — replaced Round 51's `.list-row` shopping-list rows with new `.shopping-pill-row` (flex-wrap, 6px gap) of `.shopping-pill`s (5px/10px padding, pill radius, semibold) — item name plus a muted `.shopping-pill-room` suffix ("· Whole home"), same role Miso's own secondary-detail suffix plays. Out/low still carried by the pill's own `color-mix` tint (`--danger`/`--gold`), tap-to-restock behavior unchanged from Round 49/51.
+- Verified live: pills render compact and inline (3 test items fit on one line, sized to their own text, screenshot-confirmed matching Miso's flowing-chip look), color tint confirmed distinguishable per bucket on zoom, tap-to-restock re-confirmed still correctly incrementing quantity and recalculating status. Zero console errors. Test items deleted after.
+
 ## Round 51 — Shopping list rows instead of tiles, Assets lifecycle bar is click-to-filter (added 2026-08-10, same session)
 
 User follow-up, same day: Today's Shopping list shouldn't use square tiles at all — "reduce to a simple table which can hold the text properly, why do we need such a big one"; and on the Assets lifecycle bar, can clicking a segment (or its legend key) filter the asset list below to that bucket.
