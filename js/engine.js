@@ -119,12 +119,34 @@ function nextSeasonalWindow(months, now) {
 // today entirely. Comparing calendar dates instead (same dateOnly()
 // convention stateOf()/overdueDays already use, see their own comments)
 // means "today" correctly counts as the start, not the past.
+//
+// Walks to the MOST RECENTLY PASSED grid point (start, start+interval,
+// start+2*interval, ...), not the next future one (2026-08-10, real bug
+// found live: a routine created yesterday with a 2-day interval, never
+// completed, correctly showed as due/overdue that same session — but on
+// the very next app reload it read as "due tomorrow" instead of overdue).
+// Root cause: occurrences aren't persisted (state.js's hydrateState()
+// wipes and rebuilds them every session) — so this function reruns from
+// scratch on every reload with a later `now` than before, and the OLD
+// walk-forward-to-first-point->=now logic can, by construction, never
+// return a date before `now` — a routine that's fallen behind its
+// schedule was silently pushed to the next FUTURE grid point every single
+// reload, never once surfacing as overdue. Walking to the last point
+// <= now instead means a missed occurrence stays exactly where it was
+// (still overdue, by however many days) no matter how many times it gets
+// regenerated — while still capping how "wildly overdue" a long-neglected
+// routine can ever look, since the result is never more than one interval
+// older than `now` (this was the actual point of the walk in the first
+// place — see Round 23's own worked example: a start date 25 days back
+// with a 10-day interval should read as a few days overdue, not 25).
 function firstFloatingOccurrence(startDateStr, intervalDays, now) {
   if (!startDateStr) return now;
   const start = new Date(startDateStr);
   if (dateOnly(start) >= dateOnly(now)) return start;
   let candidate = start;
-  while (dateOnly(candidate) < dateOnly(now)) candidate = addDays(candidate, intervalDays);
+  while (dateOnly(addDays(candidate, intervalDays)) <= dateOnly(now)) {
+    candidate = addDays(candidate, intervalDays);
+  }
   return candidate;
 }
 
