@@ -304,13 +304,25 @@ function genId(prefix) {
 let lastSnapshot = null;
 
 function snapshotOccurrence(occ) {
-  lastSnapshot = { occ: { ...occ }, ledgerLength: state.ledger.length };
+  lastSnapshot = { occ: { ...occ }, ledgerLength: state.ledger.length, takenAt: new Date().toISOString() };
 }
 
 function undoLast() {
   if (!lastSnapshot) return false;
   const occ = byId(state.occurrences, lastSnapshot.occ.id);
-  if (occ) Object.assign(occ, lastSnapshot.occ);
+  if (occ) {
+    Object.assign(occ, lastSnapshot.occ);
+    // completeOccurrence() now calls regenerate() immediately (2026-08-10,
+    // see its own comment) — that may have created a FRESH occurrence for
+    // this same routine right after the one being restored here. Drop
+    // anything for this routine generated since the snapshot was taken
+    // (the restored occurrence itself always predates it, so it's never
+    // caught by this), or undo would leave two open occurrences for the
+    // same routine.
+    state.occurrences = state.occurrences.filter(
+      (o) => !(o.routineId === occ.routineId && o.id !== occ.id && o.generatedAt >= lastSnapshot.takenAt),
+    );
+  }
   state.ledger.length = lastSnapshot.ledgerLength;
   lastSnapshot = null;
   notify();
@@ -349,9 +361,28 @@ function completeOccurrence(occId, doneBy = null) {
     type: "routine_completed", category: "routine", entityId: routine?.id, entityType: "routine",
     summary: `Completed "${routine?.title || "routine"}"`,
   });
+  // Generate the next occurrence right away instead of leaving the routine
+  // with no open occurrence until some unrelated mutation (or a full app
+  // reload) happens to trigger regenerate() (2026-08-10, user report: House
+  // showed "—" for just-completed routines' next date). Safe to call here
+  // specifically because this occurrence is now permanently "done" — it's
+  // excluded from openRoutineIds for good, unlike a snooze (see
+  // snoozeOccurrence's own comment for why THAT one doesn't get the same
+  // treatment). undoLast() cleans up whatever this creates if the
+  // completion itself gets undone within the 5s window.
+  regenerate();
   notify();
 }
 
+// Deliberately does NOT call regenerate() the way completeOccurrence()
+// does — a snoozed occurrence is excluded from openRoutineIds too (so
+// wakeSnoozedOccurrences() can find and restore it once snoozedUntil
+// passes), but that exclusion means an immediate regenerate() right here
+// would incorrectly treat the routine as occurrence-less and spawn a
+// SECOND occurrence alongside the snoozed one. The snoozed occurrence
+// already correctly reappears (via wakeSnoozedOccurrences, called at the
+// top of every regenerate()) the next time anything genuinely triggers a
+// regeneration — no immediate action needed here.
 function snoozeOccurrence(occId, days = 1) {
   const occ = byId(state.occurrences, occId);
   if (!occ) return;
