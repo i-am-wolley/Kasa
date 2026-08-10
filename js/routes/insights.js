@@ -23,12 +23,13 @@
 //   Today already listing overdue/due items directly, it was redundant
 //   with both rather than adding a third view of the same handful of facts.
 
-import { getState, subscribe, habitStreak, byId, updateRoutine, toggleRoutineActive, visibleSpaceIds } from "../state.js";
+import { getState, subscribe, habitStreak, byId, updateRoutine, toggleRoutineActive, visibleSpaceIds, taskState } from "../state.js";
 import { stateOf } from "../engine.js";
 import { Icon } from "../ui/icons.js";
-import { showToast } from "../ui/components.js";
+import { showToast, openSheet } from "../ui/components.js";
 import { habitGridHtml } from "../ui/habitGrid.js";
 import { snoozeSuggestions, loadBalance, seasonalBoosts, failurePredictions, consumableCoupling, neglectClusters } from "../intel.js";
+import { classifyAssetLife } from "./assets.js";
 
 let mountEl = null;
 let unsubscribe = null;
@@ -133,37 +134,67 @@ function healthCardHtml(state) {
 }
 
 // ---- Per-room health ranking (2026-08-10, user request) -------------------
-// Exact same weighting as computeHealth() above, just scoped to one space's
-// own routines/items/assets instead of the whole household — "which room
-// needs attention" answered directly, rather than only the one aggregate
-// number. Ranked worst-first, since that's the actual useful reading order
-// (where to look first), not alphabetical.
+// A genuinely different formula from computeHealth() above, not a rescoped
+// copy — shared with the user as a worked example and approved before
+// building. Same overall shape (100 minus capped penalties from three
+// buckets), each bucket redefined:
+//
+// 1. Routines/tasks, max 40 — counts DUE as well as overdue now (not just
+//    overdue), due weighted at half severity since it hasn't actually been
+//    missed yet. Routines use the existing TIER_PENALTY weights; tasks have
+//    no consequence tier, so they use a flat 3 (roughly "damaging"-severity).
+// 2. Aging assets, max 30 — reuses the exact lifecycle classification the
+//    Assets bar already computes (classifyAssetLife, Round 51), not the
+//    old "service overdue" check: 6 points for an asset already past its
+//    expected life, 3 for one with under 2 years of life left.
+// 3. Understocked, max 30 — same out×3 + low×1 weighting computeHealth()
+//    already uses for the household number.
 function computeSpaceHealth(state, spaceId) {
   const activeModeKey = state.household.activeMode;
-  const overdueByTier = { unsafe: 0, damaging: 0, unhygienic: 0, cosmetic: 0 };
+  let routineTaskPenalty = 0;
+  const routineDetail = { overdue: 0, due: 0 };
   for (const occ of state.occurrences) {
     if (occ.state === "done" || occ.state === "snoozed") continue;
     const routine = byId(state.routines, occ.routineId);
     if (!routine || isPausedNow(routine, activeModeKey) || routine.spaceId !== spaceId) continue;
-    if (stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date()) !== "overdue") continue;
-    overdueByTier[routine.consequence] = (overdueByTier[routine.consequence] || 0) + 1;
+    const st = stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, new Date());
+    const weight = TIER_PENALTY[routine.consequence] || 1;
+    if (st === "overdue") { routineTaskPenalty += weight; routineDetail.overdue += 1; }
+    else if (st === "due") { routineTaskPenalty += weight * 0.5; routineDetail.due += 1; }
   }
-  let overduePenalty = 0;
-  for (const [tier, count] of Object.entries(overdueByTier)) overduePenalty += (TIER_PENALTY[tier] || 1) * count;
-  overduePenalty = Math.min(40, overduePenalty);
+  const taskDetail = { overdue: 0, due: 0 };
+  for (const task of state.tasks) {
+    if (task.done || task.spaceId !== spaceId) continue;
+    const st = taskState(task);
+    if (st === "overdue") { routineTaskPenalty += 3; taskDetail.overdue += 1; }
+    else if (st === "due") { routineTaskPenalty += 1.5; taskDetail.due += 1; }
+  }
+  routineTaskPenalty = Math.min(40, routineTaskPenalty);
+
+  let assetPenalty = 0;
+  const assetDetail = { over: 0, nearing: 0 };
+  for (const asset of state.assets) {
+    if (asset.spaceId !== spaceId) continue;
+    const bucket = classifyAssetLife(asset);
+    if (bucket === "over") { assetPenalty += 6; assetDetail.over += 1; }
+    else if (bucket === "nearing") { assetPenalty += 3; assetDetail.nearing += 1; }
+  }
+  assetPenalty = Math.min(30, assetPenalty);
 
   const spaceItems = state.items.filter((i) => i.spaceId === spaceId);
   const outCount = spaceItems.filter((i) => i.status === "out").length;
   const lowCount = spaceItems.filter((i) => i.status === "low").length;
   const stockPenalty = Math.min(30, outCount * 3 + lowCount);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const overdueAssets = state.assets.filter((a) => a.spaceId === spaceId && a.nextServiceDue && new Date(a.nextServiceDue) < today).length;
-  const assetPenalty = Math.min(30, overdueAssets * 5);
+  // A room with zero routines AND zero tasks scores a perfect 100 under
+  // this formula (nothing to be overdue on) — which would hide it
+  // completely even though "nothing is being watched here" is arguably
+  // the more useful signal. Tracked separately so it surfaces regardless
+  // of score (see roomHealthSectionHtml's own gating).
+  const untracked = !state.routines.some((r) => r.spaceId === spaceId) && !state.tasks.some((t) => t.spaceId === spaceId);
 
-  const score = Math.max(0, Math.round(100 - overduePenalty - stockPenalty - assetPenalty));
-  return { score };
+  const score = Math.max(0, Math.round(100 - routineTaskPenalty - assetPenalty - stockPenalty));
+  return { score, untracked, routineTaskPenalty, assetPenalty, stockPenalty, routineDetail, taskDetail, assetDetail, outCount, lowCount };
 }
 
 function scoreTone(score) {
@@ -173,30 +204,100 @@ function scoreTone(score) {
   return "var(--danger)";
 }
 
+// Same "named, counted reason per lost point" shape scoreBreakdownHtml
+// already uses for the household score, just built from computeSpaceHealth's
+// per-room detail instead.
+function spaceBreakdownRows(h) {
+  const rows = [];
+  if (h.routineTaskPenalty > 0) {
+    const bits = [];
+    if (h.routineDetail.overdue) bits.push(`${h.routineDetail.overdue} routine${h.routineDetail.overdue === 1 ? "" : "s"} overdue`);
+    if (h.routineDetail.due) bits.push(`${h.routineDetail.due} due`);
+    if (h.taskDetail.overdue) bits.push(`${h.taskDetail.overdue} task${h.taskDetail.overdue === 1 ? "" : "s"} overdue`);
+    if (h.taskDetail.due) bits.push(`${h.taskDetail.due} task${h.taskDetail.due === 1 ? "" : "s"} due`);
+    rows.push({ label: "Routines & tasks", points: Math.round(h.routineTaskPenalty * 10) / 10, detail: bits.join(", ") });
+  }
+  if (h.assetPenalty > 0) {
+    const bits = [];
+    if (h.assetDetail.over) bits.push(`${h.assetDetail.over} past expected life`);
+    if (h.assetDetail.nearing) bits.push(`${h.assetDetail.nearing} nearing end of life`);
+    rows.push({ label: "Aging assets", points: h.assetPenalty, detail: bits.join(", ") });
+  }
+  if (h.stockPenalty > 0) {
+    rows.push({ label: "Stock", points: h.stockPenalty, detail: `${h.outCount} out, ${h.lowCount} low` });
+  }
+  return rows;
+}
+
+// Tapping a room pops up its own reasoning (2026-08-10, user request) —
+// same itemized "why" pattern the household score already has, just
+// scoped to this one room. Plain "Close" button (data-action="cancel")
+// reuses openSheet()'s own generic cancel wiring rather than the full
+// Save/Delete sheetActions() shape, since there's nothing to save here.
+function openSpaceHealthSheet(space, h) {
+  const rows = spaceBreakdownRows(h);
+  openSheet({
+    title: `${space.name} — ${h.untracked ? "Untracked" : h.score}`,
+    bodyHtml: `
+      ${h.untracked
+        ? `<p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:12px;">No routines or tasks are tracked in this room yet — its score reads as perfect by default, but that just means there's nothing to check it against.</p>`
+        : `<p style="color:var(--ink-muted);font-size:var(--fs-meta);margin-bottom:12px;">${scoreLabel(h.score)}</p>
+           ${rows.length
+             ? rows.map((r) => `
+                <div class="list-row" style="cursor:default;">
+                  <div class="occ-row-body">
+                    <div class="occ-row-title">${r.label}</div>
+                    <div class="occ-row-meta">${r.detail}</div>
+                  </div>
+                  <div class="list-row-right font-num" style="color:var(--tier-damaging);">-${r.points}</div>
+                </div>`).join("")
+             : `<p style="color:var(--ink-muted);font-size:var(--fs-meta);">Nothing dragging this down.</p>`}`
+      }
+      <div class="sheet-actions"><button type="button" class="btn btn-ghost" data-action="cancel" style="width:100%;">Close</button></div>
+    `,
+  });
+}
+
+// Section only appears if there's something worth surfacing — a room
+// scoring under 80, or a room with nothing tracked at all (2026-08-10,
+// user request: "let it be shown... only if there are rooms with less
+// than 80 score... also highlight spaces with no routines/tasks"). Lists
+// only the rooms that actually need a look, worst-first, not a full
+// ranking of every room including perfect scores — matches how every
+// other Insights section only surfaces what needs attention.
 function roomHealthSectionHtml(state) {
   const visible = visibleSpaceIds(state);
   const spaces = state.spaces.filter((s) => visible.has(s.id));
-  if (spaces.length < 2) return ""; // nothing to rank against with one room
-  const ranked = spaces
-    .map((s) => ({ space: s, score: computeSpaceHealth(state, s.id).score }))
-    .sort((a, b) => a.score - b.score);
+  const withHealth = spaces.map((s) => ({ space: s, h: computeSpaceHealth(state, s.id) }));
+  const lowScoring = withHealth.filter((r) => !r.h.untracked && r.h.score < 80).sort((a, b) => a.h.score - b.h.score);
+  const untracked = withHealth.filter((r) => r.h.untracked);
+  if (!lowScoring.length && !untracked.length) return "";
+
+  const scoredRow = (r) => `
+    <div class="list-row" data-space-health-id="${r.space.id}">
+      <div class="occ-row-icon">${Icon(r.space.icon || "house", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${r.space.name}</div>
+        <div class="occ-row-meta">${scoreLabel(r.h.score)}</div>
+      </div>
+      <div class="list-row-right font-num" style="color:${scoreTone(r.h.score)};font-weight:var(--fw-semibold);font-size:16px;">${r.h.score}</div>
+    </div>
+  `;
+  const untrackedRow = (r) => `
+    <div class="list-row" data-space-health-id="${r.space.id}">
+      <div class="occ-row-icon">${Icon(r.space.icon || "house", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${r.space.name}</div>
+        <div class="occ-row-meta">No routines or tasks tracked here</div>
+      </div>
+    </div>
+  `;
+
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Room health</span></div>
-      ${ranked
-        .map(
-          (r) => `
-        <div class="list-row" style="cursor:default;">
-          <div class="occ-row-icon">${Icon(r.space.icon || "house", { size: 16 })}</div>
-          <div class="occ-row-body">
-            <div class="occ-row-title">${r.space.name}</div>
-            <div class="occ-row-meta">${scoreLabel(r.score)}</div>
-          </div>
-          <div class="list-row-right font-num" style="color:${scoreTone(r.score)};font-weight:var(--fw-semibold);font-size:16px;">${r.score}</div>
-        </div>
-      `,
-        )
-        .join("")}
+      ${lowScoring.map(scoredRow).join("")}
+      ${untracked.length ? `<p style="color:var(--ink-faint);font-size:var(--fs-micro);margin:${lowScoring.length ? "10px" : "0"} 0 4px;">Nothing tracked yet</p>${untracked.map(untrackedRow).join("")}` : ""}
     </div>
   `;
 }
@@ -561,6 +662,15 @@ function wireEvents(state) {
   mountEl.querySelectorAll("[data-breakdown-nav]").forEach((row) => {
     row.addEventListener("click", () => {
       document.querySelector(`[data-tab="${row.dataset.breakdownNav}"]`)?.click();
+    });
+  });
+
+  // Tapping a room pops up its own reasoning (2026-08-10, user request).
+  mountEl.querySelectorAll("[data-space-health-id]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const space = byId(state.spaces, row.dataset.spaceHealthId);
+      if (!space) return;
+      openSpaceHealthSheet(space, computeSpaceHealth(getState(), space.id));
     });
   });
 

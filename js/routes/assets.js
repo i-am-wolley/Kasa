@@ -538,4 +538,4 @@ function mount(el, { onBack: back } = {}) {
   render();
 }
 
-export { mount, openAssetSheet };
+export { mount, openAssetSheet, classifyAssetLife };
