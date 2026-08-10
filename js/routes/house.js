@@ -37,6 +37,28 @@ let unsubscribe = null;
 let view = "grid";
 let selectedSpaceId = null;
 
+// DD-MMM-YY (2026-08-10, user request: routine rows here were showing raw
+// trigger-type text — "floating since last," "fixed calendar" — which
+// means nothing at a glance; the next occurrence date is what's actually
+// useful). Text month, not a number, so it doesn't read ambiguously as
+// DD-MM vs MM-DD.
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function formatOccurrenceDate(dateStr) {
+  const d = new Date(dateStr);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${dd}-${MONTH_ABBR[d.getMonth()]}-${yy}`;
+}
+
+// A routine's own open occurrence (not "done" — a just-completed one can
+// briefly linger in state.occurrences until the next regenerate() pass).
+// "—" for the rare case none exists yet (e.g. a paused routine has none at
+// all) rather than leaving the row silently blank.
+function nextOccurrenceLabel(routine, state) {
+  const occ = state.occurrences.find((o) => o.routineId === routine.id && o.state !== "done");
+  return occ ? formatOccurrenceDate(occ.dueAt) : "—";
+}
+
 // Whole home and Utility are mandatory PER HOUSE (2026-08-05/06) — a
 // house's last remaining space of either type can't be deleted, same
 // guard state.js's deleteSpace() enforces at the actual mutation boundary;
@@ -111,7 +133,7 @@ function detailHtml(state) {
       <div class="list-row" style="opacity:${r.active ? 1 : 0.5};">
         <div class="occ-row-body" data-edit-routine="${r.id}">
           <div class="occ-row-title named">${r.title}</div>
-          <div class="occ-row-meta">${r.trigger.type.replace(/_/g, " ")} · effort ${r.effort} · ${r.consequence}</div>
+          <div class="occ-row-meta">${nextOccurrenceLabel(r, state)} · effort ${r.effort} · ${r.consequence}</div>
         </div>
         <button class="chip" data-toggle-routine="${r.id}" style="min-height:auto;padding:6px 10px;">${r.active ? "Pause" : "Resume"}</button>
         <button class="stepper-btn" data-delete-routine="${r.id}">${Icon("trash", { size: 14 })}</button>
