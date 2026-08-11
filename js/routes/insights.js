@@ -367,6 +367,74 @@ function helpLeaveSectionHtml(state) {
   `;
 }
 
+// ---- Asset value — cost, depreciation, overdelivery (2026-08-11) ---------
+// `cost` is optional and only exists on assets edited/added since Round 54,
+// so this section is deliberately built around "of the assets that HAVE
+// cost data" rather than pretending it covers the whole household — see
+// the completeness caption in assetValueSectionHtml. Straight-line
+// depreciation only (no accelerated/declining-balance option — nothing in
+// this app's data model would justify picking a curve over the plain
+// linear one already implied by `expectedLifeYears`).
+const ASSET_VALUE_YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
+
+function computeAssetValue(state) {
+  const visible = visibleSpaceIds(state);
+  const assets = state.assets.filter((a) => visible.has(a.spaceId));
+  const costed = assets.filter((a) => a.cost != null);
+  const totalSpent = costed.reduce((sum, a) => sum + a.cost, 0);
+
+  let depreciationConsumed = 0;
+  let overdelivering = 0;
+  let savings = 0;
+  for (const a of costed) {
+    if (!a.purchaseDate || !(a.expectedLifeYears > 0)) continue;
+    const ageYears = (Date.now() - new Date(a.purchaseDate).getTime()) / ASSET_VALUE_YEAR_MS;
+    const annualDep = a.cost / a.expectedLifeYears;
+    depreciationConsumed += Math.min(a.cost, annualDep * ageYears);
+    if (ageYears >= a.expectedLifeYears) {
+      overdelivering += 1;
+      savings += annualDep * (ageYears - a.expectedLifeYears);
+    }
+  }
+  const currentValue = totalSpent - depreciationConsumed;
+  const pctDepreciated = totalSpent > 0 ? Math.round((depreciationConsumed / totalSpent) * 100) : 0;
+
+  return { totalSpent, currentValue, depreciationConsumed, pctDepreciated, overdelivering, savings, trackedCount: costed.length, totalCount: assets.length };
+}
+
+function formatAssetCost(n) {
+  if (!n) return "₹0";
+  const round1 = (x) => Math.round(x * 10) / 10;
+  if (Math.abs(n) >= 100000) return `₹${round1(n / 100000)}L`;
+  if (Math.abs(n) >= 1000) return `₹${round1(n / 1000)}k`;
+  return `₹${Math.round(n)}`;
+}
+
+// Nothing to show until at least one asset has cost data — matches every
+// other Insights section's "don't render an empty/meaningless section"
+// convention.
+function assetValueSectionHtml(state) {
+  const v = computeAssetValue(state);
+  if (!v.trackedCount) return "";
+  const tiles = [
+    { value: formatAssetCost(v.totalSpent), label: "Total spent", tone: null },
+    { value: formatAssetCost(v.currentValue), label: "Current value", tone: "var(--done)" },
+    { value: formatAssetCost(v.depreciationConsumed), label: "Depreciation consumed", tone: null },
+    { value: `${v.pctDepreciated}%`, label: "Value depreciated", tone: null },
+    { value: v.overdelivering, label: "Overdelivering assets", tone: v.overdelivering ? "var(--done)" : null },
+    { value: formatAssetCost(v.savings), label: "Savings from overdelivery", tone: v.overdelivering ? "var(--done)" : null },
+  ];
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Asset value</span></div>
+      <div class="stat-row asset-value-row">
+        ${tiles.map((t) => `<div class="stat-tile"><div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div><div class="stat-tile-label">${t.label}</div></div>`).join("")}
+      </div>
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:8px;">${v.trackedCount} of ${v.totalCount} assets have cost tracked — these numbers only cover those.</p>
+    </div>
+  `;
+}
+
 // ---- Habits — 72-day grid per person's habit -------------------------
 // Pure tracking now — check-in itself happens on Today (2026-08-04, user
 // request), so this section is the streak/history view, not a second
@@ -742,6 +810,7 @@ function render() {
        here, so re-enabling later is a one-line change. */ ""}
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}
+    ${assetValueSectionHtml(state)}
     <div class="today-section">
       <p style="color:var(--ink-faint);font-size:var(--fs-micro);">Photo sweep, bill scan, and the weekly AI digest need a Cloud Function proxy (memo §5.10's own no-client-side-LLM rule) — those land with Phase 4/6's Firebase pass, not before.</p>
     </div>

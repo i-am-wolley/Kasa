@@ -399,6 +399,27 @@ h1, h2, h3, p { margin: 0; }
   .wish-stat-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
 }
 
+/* Insights' asset-value row (2026-08-11, user request) — 6 tiles (Total
+   spent/Current value/Depreciation consumed/% depreciated/Overdelivering
+   assets/Savings from overdelivery), longer labels than Today's own row so
+   it reuses .wish-stat-row's tightened sizing technique rather than
+   Today's roomier default — 3 columns (2 rows) on phone, one row of 6 from
+   tablet width up. */
+.asset-value-row {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.asset-value-row .stat-tile { padding: 7px 3px; }
+.asset-value-row .stat-tile-value { font-size: 14px; }
+.asset-value-row .stat-tile-label { font-size: 7.5px; line-height: 1.1; }
+
+@media (min-width: 600px) {
+  .asset-value-row { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .asset-value-row .stat-tile { padding: 10px 8px; }
+  .asset-value-row .stat-tile-value { font-size: 17px; }
+  .asset-value-row .stat-tile-label { font-size: 9px; line-height: 1.15; }
+}
+
 /* Assets' lifecycle bar — replaced the earlier 3-tile number row the same
    day (2026-08-10, user follow-up: "lets redo the assets metrics... show
    this visually... a single rectangle... color the % of its area"). One
