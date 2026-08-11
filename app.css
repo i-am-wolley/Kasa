@@ -456,10 +456,7 @@ h1, h2, h3, p { margin: 0; }
 /* ---- Insights — health score card, week trend --------------------------- */
 
 .insight-score-card {
-  /* Soft Sulphur Yellow glow into the surface (2026-08-11) — the one place
-     --wash gets a deliberately visible role, on the single most-looked-at
-     card on the screen, rather than sitting defined-but-unused. */
-  background: linear-gradient(155deg, var(--wash) 0%, var(--surface) 60%);
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);

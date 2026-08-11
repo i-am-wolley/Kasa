@@ -23,8 +23,12 @@
 
 :root {
   /* ---- ground — Miso's own warm-paper mechanism, nudged one shade warmer
-     toward Sulphur Yellow for cohesion with the new accent family below,
-     not replaced outright. */
+     toward Sulphur Yellow for cohesion with the accent family below, not
+     replaced outright. A full-strength Sulphur Yellow background was
+     tried live (2026-08-11, user question: "can we do sulphur yellow for
+     all the BG") and reverted on direct feedback — read as "sunlit/
+     citrus" rather than "soothing" at full page scale; this whisper-level
+     nudge is as far as that color goes into the ground itself. */
   --bg:            #F7F1E4;
   --surface:       #FFFFFF;
   --surface-sunk:  #EFE7D6;

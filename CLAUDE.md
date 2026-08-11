@@ -36,6 +36,15 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 60 — removed the score-card wash, tried full-strength Sulphur Yellow as the page background and reverted (added 2026-08-11, same session)
+
+User asked to remove the Sulphur Yellow gradient wash from Insights' score card, and separately asked what the app would look like with Sulphur Yellow as the actual page background — genuinely tried it live rather than describing it hypothetically, screenshotted Today and Insights, then asked the user to choose between keeping it full-strength, diluting it, or reverting.
+
+- **Score-card wash removed** (`app.css`'s `.insight-score-card`) — back to plain `var(--surface)`, no gradient.
+- **`--bg` tried at full-strength Sulphur Yellow** (`#F5ECC2`, was `#F7F1E4`), verified live — white cards lifted off it cleanly, but at full page scale it read as "sunlit/citrus" rather than "soothing warm paper," a genuine mood shift away from what the user had approved in Round 57. Presented the honest tradeoff plus three concrete options (dial back to a diluted blend, keep full-strength, revert) via `AskUserQuestion`.
+- **User chose revert** — `--bg` back to `#F7F1E4`. The whisper-level nudge toward Sulphur Yellow already baked into that value (from Round 57's original ground tweak) stays; a full-strength version of the color doesn't go any further into the ground itself.
+- Verified live: score card confirmed plain again; page background confirmed back to the familiar quieter cream. Zero console errors.
+
 ## Round 59 — reverted the stat-tile wash, swapped the Save button gradient for a solid fill + soft glow (added 2026-08-11, same session)
 
 User follow-up on Round 58, immediately: "stat tiles wash remove and go back to the previous... the save button - can we not do gradient instead something else?"
