@@ -273,7 +273,15 @@ function roomHealthSectionHtml(state) {
   const spaces = state.spaces.filter((s) => visible.has(s.id));
   const withHealth = spaces.map((s) => ({ space: s, h: computeSpaceHealth(state, s.id) }));
   const lowScoring = withHealth.filter((r) => !r.h.untracked && r.h.score < 80).sort((a, b) => a.h.score - b.h.score);
-  const untracked = withHealth.filter((r) => r.h.untracked);
+  // Whole home is excluded from the untracked callout specifically
+  // (2026-08-11, user request) — it's not a room in itself, it's the
+  // mandatory catch-all scope for household-wide routines that don't map
+  // to a physical space, so "nothing tracked in Whole home" reads as a
+  // false alarm about a room that was never meant to be evaluated that
+  // way. Still eligible for the scored/ranked list above if it genuinely
+  // has overdue/aging/understocked things linked to it — only the
+  // "nothing tracked at all" framing doesn't make sense for it.
+  const untracked = withHealth.filter((r) => r.h.untracked && r.space.type !== "whole_home");
   if (!lowScoring.length && !untracked.length) return "";
 
   const scoredRow = (r) => `
