@@ -434,18 +434,15 @@ function statRowHtml(state) {
     { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },
   ];
 
-  // Tone now also washes the tile's own background, not just the number
-  // (2026-08-11, user follow-up: "more pronounced... but keeping it
-  // premium and soothing") — a soft color-mix tint, same restrained
-  // technique already used for Insights' score card and consequence-tier
-  // rows, so five tiles' worth of color reads as considered rather than a
-  // wall of plain white cards with just colored digits on them.
+  // Tone colors the number only, not the tile background (2026-08-11 —
+  // the background wash tried the same day was reverted on direct
+  // follow-up).
   return `
     <div class="stat-row">
       ${tiles
         .map(
           (t) => `
-        <div class="stat-tile" ${t.action ? `data-tile-action="${t.action}" role="button" tabindex="0"` : ""} style="${t.tone ? `background:color-mix(in srgb, ${t.tone} 8%, var(--surface));border-color:color-mix(in srgb, ${t.tone} 24%, var(--line));` : ""}">
+        <div class="stat-tile" ${t.action ? `data-tile-action="${t.action}" role="button" tabindex="0"` : ""}>
           <div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div>
           <div class="stat-tile-label">${t.label}</div>
         </div>

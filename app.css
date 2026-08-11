@@ -1127,17 +1127,23 @@ h1, h2, h3, p { margin: 0; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn:disabled:active { transform: none; }
 
-/* Soft purple->coral gradient (2026-08-11, user follow-up: "more
-   pronounced... but keeping it premium and soothing") — two of the four
-   Sanzo Wada colors blended diagonally, not placed side by side, so it
-   reads as one rich color that shifts rather than a hard-edged pairing.
-   .btn-solid is the app's single most-repeated button (every sheet's own
-   Save action), so this is the highest-visibility place a gradient like
-   this can do real work — was flat var(--ink) before, which gave the
+/* Solid Eupatorium Purple, not a gradient (2026-08-11, user follow-up: a
+   gradient tried the same day was asked to be swapped for "something
+   else") — a plain rich fill is also the more logically consistent
+   choice anyway, since purple is already this app's one established
+   "primary interactive" color everywhere else (focus rings, active tab,
+   brand mark); a flat fill in that same color reads as confident rather
+   than needing a blend to feel intentional. The soft glow shadow is the
+   actual "more pronounced" lift — a gentle halo in the accent's own glow
+   color, present but easy to miss unless you're looking, matching the
+   "soothing" ask better than a gradient would have. .btn-solid is the
+   app's single most-repeated button (every sheet's own Save action, via
+   sheetActions()) — was flat var(--ink) before this round, which gave the
    accent palette no presence on the one button nearly every screen has. */
 .btn-solid, .btn-accent {
-  background: linear-gradient(135deg, var(--accent) 0%, var(--terracotta) 100%);
+  background: var(--accent);
   color: var(--surface);
+  box-shadow: 0 3px 12px var(--accent-glow);
 }
 .btn-tinted { background: var(--gold-soft); color: var(--gold); }
 .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }

@@ -114,24 +114,19 @@ function computeWishMetrics(entries) {
 // tile-label font is small enough (and free to wrap to 2 lines within its
 // own tile) that the longer text fits without pushing the row itself onto
 // a second line.
-// Tone washes each tile's own background, not just the number (2026-08-11,
-// user follow-up: "more pronounced... but keeping it premium and
-// soothing") — "in progress" numbers get the same amber "still to do" tone
-// Today's own stat row uses, "completed" numbers get --done green, same
-// soft color-mix technique throughout the app.
 function wishStatRowHtml(entries) {
   const { ideasInProgress, ideasCompleted, costRemaining, costCompleted } = computeWishMetrics(entries);
-  const tile = (value, label, tone) => `
-    <div class="stat-tile" style="${tone ? `background:color-mix(in srgb, ${tone} 8%, var(--surface));border-color:color-mix(in srgb, ${tone} 24%, var(--line));` : ""}">
-      <div class="stat-tile-value" style="${tone ? `color:${tone};` : ""}">${value}</div>
+  const tile = (value, label) => `
+    <div class="stat-tile">
+      <div class="stat-tile-value">${value}</div>
       <div class="stat-tile-label">${label}</div>
     </div>`;
   return `
     <div class="stat-row wish-stat-row">
-      ${tile(ideasInProgress, "Ideas in progress", ideasInProgress ? "var(--amber)" : null)}
-      ${tile(ideasCompleted, "Completed", ideasCompleted ? "var(--done)" : null)}
-      ${tile(formatCostCompact(costRemaining), "Cost remaining", costRemaining ? "var(--amber)" : null)}
-      ${tile(formatCostCompact(costCompleted), "Cost of completed", costCompleted ? "var(--done)" : null)}
+      ${tile(ideasInProgress, "Ideas in progress")}
+      ${tile(ideasCompleted, "Completed")}
+      ${tile(formatCostCompact(costRemaining), "Cost remaining")}
+      ${tile(formatCostCompact(costCompleted), "Cost of completed")}
     </div>
   `;
 }

@@ -36,6 +36,14 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 59 — reverted the stat-tile wash, swapped the Save button gradient for a solid fill + soft glow (added 2026-08-11, same session)
+
+User follow-up on Round 58, immediately: "stat tiles wash remove and go back to the previous... the save button - can we not do gradient instead something else?"
+
+- **Stat tiles reverted** (`js/routes/today.js`, `js/routes/wishlist.js`) — back to plain `.stat-tile` cards with only the number colored by tone; the background/border wash added in Round 58 is gone. Wishlist's tiles went back further, to their pre-Round-58 state entirely (no tone at all — they never had colored numbers before that round either).
+- **Save button: solid Eupatorium Purple + a soft glow shadow, not a gradient** (`app.css`'s `.btn-solid, .btn-accent`) — `background: var(--accent)` (flat), `box-shadow: 0 3px 12px var(--accent-glow)` for the "more pronounced" lift instead. Arguably the more consistent choice anyway: purple is already this app's one established "primary interactive" color everywhere else (focus rings, active tab, brand mark), so a plain confident fill in that same color needed no gradient to feel intentional.
+- Verified live: stat tiles confirmed back to plain white with only colored numbers; the "Add task" Save button confirmed rendering as solid purple with a visible soft halo shadow, no gradient. Zero console errors.
+
 ## Round 58 — palette pushed further: tonal stat tiles, gradient CTAs, tinted active tab (added 2026-08-11, same session)
 
 User follow-up on Round 57, same day: liked the palette rework but asked for the four colors to feel "more pronounced... but also keeping it premium and soothing." Proposed three specific, low-risk moves (reusing tone values/techniques already in the app, not new mechanisms) before implementing.
