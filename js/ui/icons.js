@@ -35,6 +35,11 @@ const PATHS = {
   // onboarding's review step.
   lock: `<rect x="5" y="10.5" width="14" height="9" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>`,
   bell: `<path d="M6 10a6 6 0 0 1 12 0c0 4 1.5 5.5 1.5 5.5H4.5S6 14 6 10z"/><path d="M10 19a2 2 0 0 0 4 0"/>`,
+  // Light/dark theme toggle (2026-08-11, user request) — shows the mode
+  // you'd switch TO, same convention most theme toggles use (a sun icon
+  // while in dark mode invites switching to light, and vice versa).
+  sun: `<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="21.5"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="21.5" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>`,
+  moon: `<path d="M20 13.8A8.5 8.5 0 1 1 10.2 4a7 7 0 0 0 9.8 9.8z" stroke-linejoin="round"/>`,
 
   // ---- spaces ---------------------------------------------------------
   bath: `<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3z"/><path d="M6 12V6a2 2 0 0 1 3.2-1.6"/><line x1="8" y1="19" x2="8" y2="21"/><line x1="16" y1="19" x2="16" y2="21"/>`,

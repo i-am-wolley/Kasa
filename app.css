@@ -119,6 +119,24 @@ h1, h2, h3, p { margin: 0; }
   margin-left: auto;
 }
 
+/* Light/dark toggle (2026-08-11, user request: "on the top, left of the
+   house selection") — same small pill shape as the House/More buttons
+   next to it, sized to just its own icon since it has no label text. */
+.app-theme-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.app-theme-btn:active { transform: scale(0.92); }
+
 /* House picker (2026-08-05, user request: "select on the top, same line as
    logo left of more") — same pill shape as More, sits just to its left.
    Hidden entirely (boot.js) for the common single-house household —
@@ -431,7 +449,10 @@ h1, h2, h3, p { margin: 0; }
 /* ---- Insights — health score card, week trend --------------------------- */
 
 .insight-score-card {
-  background: var(--surface);
+  /* Soft Sulphur Yellow glow into the surface (2026-08-11) — the one place
+     --wash gets a deliberately visible role, on the single most-looked-at
+     card on the screen, rather than sitting defined-but-unused. */
+  background: linear-gradient(155deg, var(--wash) 0%, var(--surface) 60%);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);

@@ -245,6 +245,36 @@ function openNotificationsSheet() {
   });
 }
 
+// Light/dark toggle (2026-08-11, user request: "have the light mode dark
+// mode switch on the top, left of the house selection"). A device-level
+// preference, not household data — wired once, unconditionally, at the
+// very start of boot() below, so it works on Welcome/loading screens too,
+// before any sign-in or household has resolved. The actual theme is
+// applied by the inline script in index.html's <head> (before first
+// paint, to avoid a flash of the wrong theme); this just keeps the button
+// icon in sync and handles the toggle itself. Icon shows the mode you'd
+// switch TO (sun while dark, moon while light) — the common convention.
+const THEME_COLOR = { light: "#BF5892", dark: "#D888B6" };
+function renderThemeBtn() {
+  const btn = document.getElementById("app-theme-btn");
+  if (!btn) return;
+  const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  btn.innerHTML = Icon(theme === "dark" ? "sun" : "moon", { size: 15 });
+}
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem("kasa_theme", theme);
+  document.getElementById("theme-color-meta")?.setAttribute("content", THEME_COLOR[theme]);
+  renderThemeBtn();
+}
+function wireThemeToggle() {
+  renderThemeBtn();
+  document.getElementById("app-theme-btn")?.addEventListener("click", () => {
+    const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+    applyTheme(current === "dark" ? "light" : "dark");
+  });
+}
+
 // House picker (2026-08-05, user request: "an option to select on the top,
 // same line as logo, left of more, to select one house or multiple
 // houses"). Hidden entirely for the common single-house household —
@@ -428,6 +458,7 @@ function showLoading() {
 // the household step; not signed in at all shows Welcome — there's no
 // local-only fallback anymore, sign-in is required.
 function boot() {
+  wireThemeToggle();
   loadPacks(); // fire-and-forget — cached for roomTemplates.js's sync reads
   showLoading();
   // Completes a signInWithRedirect() round trip, if this load is the

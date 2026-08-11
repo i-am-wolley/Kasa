@@ -1,59 +1,91 @@
 /* ============================================================================
    KASA — DESIGN TOKENS
-   Shared ground with Miso (Pantry-OS-App): same warm-paper mechanism, same
-   values where a value is genuinely shared (ground/ink/accent below are
-   copied from the real Miso design system — ~/.claude/skills/miso-design/ —
-   not re-guessed). Kasa is a separate deployment (own repo, own Firebase
-   project), so this file is a COPY of the shared values, not a symlink —
-   if Miso's tokens change, re-sync this file by hand.
+   Palette redone 2026-08-11 (direct user request) around four Sanzo Wada
+   colors: Eupatorium Purple #BF5892, Golden Yellow #F3A257, Sulphur Yellow
+   #F5ECC2, Grenadine Pink #F48067 — a real historical dye-color reference
+   (Sanzo Wada's "A Dictionary of Color Combinations"), not picked freehand.
+   Ground/ink/paper mechanism is still Miso's own (warm cream paper, hairline
+   borders, soft shadows) — that's the shared "Nature Distilled" foundation
+   this app is built on and stays put; what changed is the accent system on
+   top of it. Each of the four colors got one clear, non-overlapping role
+   (see below) rather than being scattered decoratively — the goal was
+   "premium and different," which reads through restraint (one strong accent
+   at a time, soft washes, nothing shouting) more than through how saturated
+   any single color is.
 
-   Earth secondaries (terracotta/sand) and the consequence-tier system below
-   are Kasa-original — build-memo §9.2 authored these for Kasa specifically,
-   they don't correspond to anything in Miso's own palette to extract.
+   --gold/--gold-soft/--gold-glow are kept as pure aliases of the new
+   --accent tokens (`--gold: var(--accent);`) rather than renamed everywhere
+   they're used — dozens of files across the whole app already reference
+   var(--gold) for what was always "the interactive accent," and re-pointing
+   the alias here is the same one-line lever the original token system was
+   built for, with zero risk of a missed reference somewhere.
    ============================================================================ */
 
 :root {
-  /* ---- ground — real Miso cream-100/white/cream-300/sand-300 ------------- */
-  --bg:            #F5F0EA;   /* warm cream paper */
+  /* ---- ground — Miso's own warm-paper mechanism, nudged one shade warmer
+     toward Sulphur Yellow for cohesion with the new accent family below,
+     not replaced outright. */
+  --bg:            #F7F1E4;
   --surface:       #FFFFFF;
-  --surface-sunk:  #ECE7E0;
-  --line:          #E2DCD5;
+  --surface-sunk:  #EFE7D6;
+  --line:          #E6DBC5;
 
-  /* ---- ink — real Miso ink-900/stone-600/sand-500 ------------------------- */
+  /* ---- ink — unchanged; text color was never part of this palette question. */
   --ink:           #18140F;
   --ink-muted:     #6B6560;
   --ink-faint:     #9E9890;
 
-  /* ---- accent — real Miso bronze-500, Kasa's "gold" -----------------------
-     In Miso this is the interactive accent (links, focus, active). Kasa's
-     memo calls it "gold" and gives it the same meaning: attention, not
-     alarm — it also carries the "degrading" consequence tier below. */
-  --gold:          #B8935A;
-  --gold-soft:     rgba(184,147,90,0.12);
-  --gold-glow:     rgba(184,147,90,0.30);
+  /* ---- accent — Eupatorium Purple, the new primary interactive color
+     (buttons, focus rings, active tab, brand mark). The single biggest
+     "premium and different" move here: a plum/mauve primary is genuinely
+     uncommon for a home-management app (most reach for blue or green),
+     while staying warm-toned enough to still belong to this app's paper-
+     and-earth mechanism rather than clashing with it. */
+  --accent:        #BF5892;
+  --accent-soft:   rgba(191,88,146,0.12);
+  --accent-glow:   rgba(191,88,146,0.30);
+  --gold:          var(--accent);
+  --gold-soft:     var(--accent-soft);
+  --gold-glow:     var(--accent-glow);
 
-  /* ---- earth secondaries — Kasa-original (memo §9.1) ---------------------- */
-  --terracotta:    #B5563C;
-  --sand:          #D9C7AE;
+  /* ---- amber — Golden Yellow, the warm "caution/attention" secondary that
+     --gold itself used to carry before it became the primary accent above.
+     Purple (brand/action) + marigold (caution) is a classic, sophisticated
+     pairing — reads as considered, not just "four bright colors." */
+  --amber:         #F3A257;
+  --amber-soft:    rgba(243,162,87,0.16);
 
-  /* ---- consequence tiers — Kasa-original (memo §9.2) ----------------------
-     Derived from the earth family above, not generic status red/amber/green.
+  /* ---- wash — Sulphur Yellow, a soft highlight tint for card backgrounds
+     and glows (e.g. Insights' score card) — too pale to read as an accent,
+     used instead for warmth without adding visual weight. */
+  --wash:          #F5ECC2;
+
+  /* ---- earth secondaries — Grenadine Pink replaces the old dusty
+     terracotta with a richer, more vivid coral from the same warm family;
+     --sand becomes literally Sulphur Yellow (its own former value #D9C7AE
+     was already close in spirit — this just uses the real reference color). */
+  --terracotta:    #F48067;
+  --sand:          #F5ECC2;
+
+  /* ---- consequence tiers — Kasa-original (memo §9.2), re-derived from the
+     palette above with the exact same severity ordering as before.
      Cosmetic gets NO colour — most routines are cosmetic; if everything is
      coloured, nothing reads as urgent. */
   --tier-cosmetic:   transparent;
-  --tier-unhygienic: var(--gold);
+  --tier-unhygienic: var(--amber);
   --tier-damaging:   var(--terracotta);
-  --tier-unsafe:     #7A3428;   /* deep ember — used ~3 times ever */
+  --tier-unsafe:     #7A3420;   /* deep, darkened Grenadine — reads as "beyond damaging" */
 
-  --done:            #6E7A56;   /* muted olive, completion state */
+  --done:            #6E7A56;   /* muted olive, completion state — kept distinct on purpose, not part of this palette (success has its own established meaning) */
   --done-soft:       rgba(110,122,86,0.12);
 
-  /* ---- danger — delete/destructive actions (2026-08-03, user request:
-     "add nice red color to delete tabs"). Deliberately its own hue, not a
-     reuse of --terracotta (that's the damaging consequence tier — reusing
-     it for "delete" would blur two different meanings). */
-  --danger:          #C0392B;
-  --danger-soft:     rgba(192,57,43,0.12);
+  /* ---- danger — delete/destructive actions. Deliberately its own hue,
+     not a reuse of --terracotta (that's the damaging consequence tier —
+     reusing it for "delete" would blur two different meanings) — softened
+     slightly from the original #C0392B for the "soothing" ask, still
+     unmistakably "stop/remove." */
+  --danger:          #C2463A;
+  --danger-soft:     rgba(194,70,58,0.12);
 
   /* ---- type — real Miso Geist + Geist Mono, NOT Playfair/Karla -----------
      (the memo's §9.1 fallback assumed Playfair Display SC + Karla; real
@@ -122,27 +154,48 @@
   --content-max-w: 1600px;
 }
 
+/* Built alongside the light palette above, not bolted on after (2026-08-11,
+   user request: "create a light and dark mode... using the same color
+   patterns"). Ground shifts from a neutral near-black to a warm near-black
+   (a whisper of the same Sulphur Yellow warmth the light ground got) so the
+   dark theme still feels like it belongs to the same warm-paper family
+   instead of reading as a generic "invert everything" dark mode. Every
+   accent below is the identical light-mode hue, lifted in lightness for
+   dark-surface contrast — same technique this file already used before
+   this round (see the original --gold/--terracotta/--danger dark lifts),
+   just now applied consistently across all four Sanzo Wada colors. */
 [data-theme="dark"] {
-  --bg:            #0D0D0D;
-  --surface:       #181818;
-  --surface-sunk:  #1E1E1E;
-  --line:          #252525;
+  --bg:            #14100D;
+  --surface:       #1C1712;
+  --surface-sunk:  #241E17;
+  --line:          #2E271E;
 
   --ink:           #F2EDE8;
-  --ink-muted:     #6A6A6A;
-  --ink-faint:     #383838;
+  --ink-muted:     #7A756E;
+  --ink-faint:     #453F37;
 
-  --gold:          #C8A96E;
-  --gold-soft:     rgba(200,169,110,0.14);
-  --gold-glow:     rgba(200,169,110,0.32);
+  --accent:        #D888B6;   /* Eupatorium Purple, lifted for dark-surface contrast */
+  --accent-soft:   rgba(216,136,182,0.16);
+  --accent-glow:   rgba(216,136,182,0.34);
+  --gold:          var(--accent);
+  --gold-soft:     var(--accent-soft);
+  --gold-glow:     var(--accent-glow);
 
-  --terracotta:    #C4664A;
-  --sand:          #8A7A64;
+  --amber:         #F5AD66;   /* Golden Yellow, lifted */
+  --amber-soft:    rgba(245,173,102,0.18);
 
-  --tier-unsafe:   #A8503E;   /* lifted slightly for dark-surface contrast */
+  /* A literal pale-yellow fill would read as an odd bright patch on a dark
+     surface, so the "wash" role becomes a low-opacity tint here instead of
+     a solid color — same Sulphur Yellow hue, just translucent. */
+  --wash:          rgba(245,236,194,0.07);
+
+  --terracotta:    #F79482;   /* Grenadine Pink, lifted */
+  --sand:          #8C7A5C;
+
+  --tier-unsafe:   #A8543F;   /* lifted slightly for dark-surface contrast */
   --done:          #8A9670;
   --done-soft:     rgba(138,150,112,0.14);
 
-  --danger:        #D9564A;   /* lifted for dark-surface contrast */
-  --danger-soft:   rgba(217,86,74,0.16);
+  --danger:        #DD6355;   /* lifted for dark-surface contrast */
+  --danger-soft:   rgba(221,99,85,0.16);
 }

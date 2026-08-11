@@ -361,7 +361,10 @@ function shoppingListSectionHtml(state) {
   }
 
   const pillHtml = (g) => {
-    const tone = g.worst === "out" ? "var(--danger)" : "var(--gold)";
+    // var(--amber), not var(--gold) — since the 2026-08-11 palette rework,
+    // --gold aliases to the new purple brand accent, not the warm "caution"
+    // tone Low stock actually needs here.
+    const tone = g.worst === "out" ? "var(--danger)" : "var(--amber)";
     return `
       <div class="shopping-pill" data-shopping-restock="${g.itemIds.join(",")}" style="background:color-mix(in srgb, ${tone} 10%, var(--surface));border-color:color-mix(in srgb, ${tone} 32%, var(--line));">
         ${g.name}${g.itemIds.length > 1 ? `<span class="shopping-pill-count">×${g.itemIds.length}</span>` : ""}
@@ -422,7 +425,10 @@ function statRowHtml(state) {
   // user request) — was Low stock before Completed.
   const tiles = [
     { id: "overdue", value: overdueCount, label: "Overdue", tone: overdueCount ? "var(--terracotta)" : null, action: "jump:section-overdue" },
-    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--gold)" : null, action: "today:section-due" },
+    // var(--amber), not var(--gold) — since the 2026-08-11 palette rework,
+    // --gold aliases to the new purple brand accent, which this tile
+    // shouldn't borrow just because something's due (not yet urgent).
+    { id: "due-today", value: dueTodayCount, label: "Due today", tone: dueTodayCount ? "var(--amber)" : null, action: "today:section-due" },
     { id: "this-week", value: weekCount, label: "This week", tone: null, action: "week:section-due" },
     { id: "completed-week", value: completedCount, label: "Completed", tone: "var(--done)", action: null },
     { id: "low-stock", value: stockAlertCount, label: "Low stock", tone: stockAlertCount ? "var(--terracotta)" : null, action: "tab:stock" },

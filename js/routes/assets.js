@@ -110,7 +110,10 @@ function classifyAssetLife(asset) {
 const LIFE_BUCKETS = [
   { key: "new", label: "New (< 2 yrs)", color: "var(--done)" },
   { key: "healthy", label: "Healthy", color: "color-mix(in srgb, var(--done) 42%, var(--surface))" },
-  { key: "nearing", label: "< 2 yrs left", color: "var(--gold)" },
+  // var(--amber), not var(--gold) — since the 2026-08-11 palette rework,
+  // --gold is aliased to the new purple brand accent, which would clash
+  // with this bar's intentional red->amber->green severity gradient.
+  { key: "nearing", label: "< 2 yrs left", color: "var(--amber)" },
   { key: "over", label: "Past expected life", color: "var(--danger)" },
   { key: "unknown", label: "No data", color: "var(--line)" },
 ];

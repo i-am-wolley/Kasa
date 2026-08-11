@@ -3,13 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#B8935A" />
+  <meta name="theme-color" content="#BF5892" id="theme-color-meta" />
   <title>Kasa</title>
   <link rel="manifest" href="./manifest.json" />
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icons/icon.svg" />
   <link rel="stylesheet" href="./tokens.css" />
   <link rel="stylesheet" href="./app.css" />
+  <!-- Applies the saved (or system-default) theme before first paint, so
+       there's no flash of the wrong theme on load (2026-08-11). Plain
+       inline script, not a module — has to run synchronously, before
+       tokens.css's [data-theme="dark"] rule can even be evaluated against
+       the DOM. boot.js's own theme-toggle wiring reads/writes the same
+       localStorage key and re-applies this same logic on toggle. -->
+  <script>
+    (function () {
+      var saved = localStorage.getItem("kasa_theme");
+      var theme = saved || (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <!--
     Build-plan Phase 4 (2026-08-05) — Google Auth + Firestore only for now
     (Apple/email-link auth and Storage deliberately not wired, per direct
@@ -44,6 +57,12 @@
         </svg>
         <span class="app-wordmark">kasa</span>
         <div class="app-mark-actions">
+          <!-- Light/dark toggle (2026-08-11, user request: "on the top,
+               left of the house selection"). Icon + persistence wired in
+               boot.js; a small inline script right after this element sets
+               the initial theme before first paint so there's no flash of
+               the wrong theme on load. -->
+          <button class="app-theme-btn" id="app-theme-btn" aria-label="Toggle light/dark theme"></button>
           <!-- House picker (2026-08-05, user request) — filled in by
                boot.js (icon + label) and shown only once a household has
                more than one house; empty/hidden shell here otherwise. -->
