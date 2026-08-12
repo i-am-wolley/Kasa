@@ -743,11 +743,12 @@ h1, h2, h3, p { margin: 0; }
 /* ---- Generic list row (House/Assets/People cards) ----------------------- */
 
 .list-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--tap-min);
-  padding: 11px 12px;
+  padding: 11px 22px 11px 12px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -756,8 +757,30 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 
+/* Trailing blue accent bar (2026-08-12, user follow-up on the mock-based
+   palette rework: "the blue was used differently... why can't we adopt
+   that") — the mock's own Assets rows each carry a rounded blue strip
+   along their right edge, on every row without exception, the same
+   uniform treatment the burgundy icon chip already got. Kept to .list-row
+   specifically, not Today's swipeable .occ-row — those already carry a
+   meaningful consequence-tier wash across the whole card, and stacking a
+   second decorative color on top of that existing signal risked visual
+   competition; .list-row cards were plain white with no color coding at
+   all, exactly the gap this fills. */
+.list-row::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: 8px;
+  width: 8px;
+  border-radius: var(--radius-full);
+  background: var(--blue);
+}
+
 @media (min-width: 600px) {
-  .list-row { gap: 12px; padding: 14px 16px; margin-bottom: 8px; }
+  .list-row { gap: 12px; padding: 14px 28px 14px 16px; margin-bottom: 8px; }
+  .list-row::after { top: 10px; bottom: 10px; right: 10px; width: 10px; }
 }
 
 .list-row-right {
