@@ -1346,15 +1346,42 @@ function toggleHabitToday(habitId) {
   notify();
 }
 
-// Current streak of consecutive done-days ending today or yesterday (a
-// miss today doesn't zero out a streak until the day is actually over —
-// checks yesterday first if today isn't logged yet).
+// Current streak of consecutive SCHEDULED done-days, ending today or
+// yesterday (a miss today doesn't zero out a streak until the day is
+// actually over). Walks backward day by day, but a day that wasn't even
+// scheduled for this habit (per its own frequency — e.g. a weekend for a
+// weekdays-only habit, or the off-days of a "custom Mon/Wed/Fri" or
+// "every 3 days" habit) is skipped rather than treated as a miss — it
+// neither adds to the streak nor breaks it. Fixed 2026-08-12 (user
+// question: "if a habit is not daily but a schedule, and it's done on
+// schedule, that should still count as a streak, right?") — the previous
+// version required literal CONSECUTIVE CALENDAR DAYS to all be done,
+// which only ever worked by construction for a daily habit; anything
+// with real gaps in its own schedule (weekdays/custom/every_n_days) broke
+// the very first time the walk hit an off-day, capping streaks at 1-2
+// regardless of how consistently the habit was actually kept.
 function habitStreak(habitId) {
+  const habit = byId(state.habits, habitId);
+  if (!habit) return 0;
   let count = 0;
+  let first = true;
   const d = new Date();
-  if (!isHabitDoneOn(habitId, todayStr())) d.setDate(d.getDate() - 1);
-  while (isHabitDoneOn(habitId, d.toISOString().slice(0, 10))) {
-    count += 1;
+  d.setHours(0, 0, 0, 0);
+  while (true) {
+    const scheduled = isHabitScheduledOn(habit, d);
+    if (scheduled) {
+      const done = isHabitDoneOn(habitId, d.toISOString().slice(0, 10));
+      if (!done) {
+        // Today specifically, not yet done: the day isn't over, so this
+        // doesn't break the streak — just skip it and keep walking back
+        // from yesterday. Any earlier scheduled-but-missed day genuinely
+        // ends the streak.
+        if (!first) break;
+      } else {
+        count += 1;
+      }
+    }
+    first = false;
     d.setDate(d.getDate() - 1);
   }
   return count;
