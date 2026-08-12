@@ -607,6 +607,8 @@ h1, h2, h3, p { margin: 0; }
   padding-right: calc(9% + 14px);
   background: var(--surface);
   border: 1px solid var(--line);
+  /* Same fix as .list-row, same round — see its own comment for why. */
+  border-right-color: var(--blue);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   transition: transform var(--dur-fast) var(--ease-std);
@@ -804,6 +806,17 @@ h1, h2, h3, p { margin: 0; }
   padding-right: calc(9% + 14px);
   background: var(--surface);
   border: 1px solid var(--line);
+  /* The block sits flush against the INSIDE of this border (overflow:
+     hidden clips at the padding edge, always leaving the border itself
+     intact around it) — so the plain --line border color read as a
+     mismatched tan/yellow ring specifically where it touches solid blue
+     (2026-08-12, user follow-up: "the outline as the same color instead
+     of some yellow there... to give a smooth feeling"). Recoloring just
+     the right edge to match blue fixes that directly; browsers already
+     blend a rounded corner smoothly between two different adjacent
+     border-side colors, so the top-right/bottom-right corners transition
+     tan-to-blue on their own rather than needing a harder edge fix. */
+  border-right-color: var(--blue);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   margin-bottom: 6px;

@@ -36,6 +36,14 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
+## Round 69 — fixed the tan/yellow border showing through around the blue block (added 2026-08-12, same session)
+
+User follow-up: "around the blue area alone... can we have the outline as the same color instead of some yellow there... only around that, to give a smooth feeling."
+
+- **Root cause**: `overflow: hidden` clips a box's content at its PADDING edge, not its border edge — the border itself always stays fully intact, painted outside whatever gets clipped. Since the blue `::after` block sits flush with the padding edge (`right:0`), it never actually reaches or covers `.list-row`/`.occ-row`'s own `1px solid var(--line)` border — that border was always still there, drawn right at the true edge, just now directly touching solid blue instead of the plain white card it used to border. `--line` (`#E6DBC5`) is a warm tan/khaki, which read as a mismatched yellow-ish ring specifically where it touched the blue.
+- **Fix**: `border-right-color: var(--blue)` on both `.list-row` and `.occ-row` (`app.css`) — the entire right edge, which is exactly where the blue block sits full-height, now matches it exactly instead of showing tan. The top/left/bottom border segments (bordering the plain white/tier-tinted portion of the card) are untouched, still `var(--line)`. Didn't need any extra corner-blend handling — browsers already interpolate a rounded corner's color smoothly between two differently-colored adjacent border sides, so the top-right/bottom-right corners transition tan-to-blue on their own.
+- **Verified live** via `getComputedStyle` rather than eyeballing a 1px border in a compressed screenshot (unreliable at that scale) — confirmed `border-right-color` resolves to the exact `--blue` value (`rgb(209,227,243)` / `#D1E3F3`) on both `.list-row` and `.occ-row`, in both light and dark mode, while `border-top-color` correctly stayed the theme's own `--line` value in each case. Zero console errors.
+
 ## Round 68 — blue block extended to Today's routine/task/habit rows, text-selection disabled on all tap targets (added 2026-08-12, same session)
 
 User follow-up, two asks: extend the flush blue block to "all routines, tasks and habits as well" (Today's swipeable rows, deliberately left out in Round 67); and stop the text inside buttons/tabs/"swipe tables" from being selectable.
