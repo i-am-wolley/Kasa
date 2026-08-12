@@ -424,13 +424,26 @@ function assetValueSectionHtml(state) {
     { value: v.overdelivering, label: "Overdelivering assets", tone: v.overdelivering ? "var(--done)" : null },
     { value: formatAssetCost(v.savings), label: "Savings from overdelivery", tone: v.overdelivering ? "var(--done)" : null },
   ];
+  // NOT nested inside a single .today-section wrapping everything — .stat-
+  // row already carries its own left/right padding (built for unwrapped
+  // use, same as Today's and Wishlist's own stat rows), so wrapping it in
+  // a .today-section too was double-padding it, sitting visibly more
+  // inset than every other section on this screen (2026-08-12, user
+  // report: "can it be aligned with rest of the strips in the top").
+  // Matches Today's own real layout instead: heading and caption each get
+  // their own .today-section, the stat-row sits as a raw sibling between
+  // them, and the trailing section's padding-top is set explicitly since
+  // the stat-row breaks the .today-section+.today-section adjacent-
+  // sibling rule that normally tightens that gap.
   return `
     <div class="today-section">
       <div class="section-head"><span class="eyebrow">Asset value</span></div>
-      <div class="stat-row asset-value-row">
-        ${tiles.map((t) => `<div class="stat-tile"><div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div><div class="stat-tile-label">${t.label}</div></div>`).join("")}
-      </div>
-      <p style="color:var(--ink-faint);font-size:var(--fs-micro);margin-top:8px;">${v.trackedCount} of ${v.totalCount} assets have cost tracked — these numbers only cover those.</p>
+    </div>
+    <div class="stat-row asset-value-row">
+      ${tiles.map((t) => `<div class="stat-tile"><div class="stat-tile-value" style="${t.tone ? `color:${t.tone};` : ""}">${t.value}</div><div class="stat-tile-label">${t.label}</div></div>`).join("")}
+    </div>
+    <div class="today-section" style="padding-top:4px;">
+      <p style="color:var(--ink-faint);font-size:var(--fs-micro);">${v.trackedCount} of ${v.totalCount} assets have cost tracked — these numbers only cover those.</p>
     </div>
   `;
 }
