@@ -36,7 +36,11 @@ Kasa is a household operating system — a model of a house that tracks what dep
 | 6 — Insights (deterministic half only — health score, week trend, attention digest, help-on-leave impact, habits) | ✅ done, 2026-08-04 — AI half (photo sweep, bill scan, weekly AI digest) still blocked on Phase 4's Cloud Function proxy, see Round 10 |
 | 7 — Remaining packs, PWA polish (`sw.js`, `manifest.json`), desktop three-pane, performance pass | packs + PWA polish ✅ done, 2026-08-05, see Round 14 — desktop three-pane deliberately deferred (user's explicit call this round), performance pass not started |
 
-## Round 64 — adopted the mock's other blue usage: a trailing accent bar on every .list-row (added 2026-08-12, same session)
+## Round 65 — reverted Round 64's trailing blue accent bar (added 2026-08-12, same session)
+
+User follow-up, immediately after seeing Round 64 live: "revert back the blues." `.list-row`'s `::after` accent bar, its extra right-padding, and `position: relative` are all removed — `.list-row` is back to its exact pre-Round-64 CSS. The rest of Round 63's palette rework (accent orange, burgundy icon chips, the lifecycle bar's blue "Healthy" segment, `--wash`, `--sand`, the severity gradient) is untouched — this reverts specifically the newest, most visible blue addition, not blue's other established roles from the round before it. If the intent was broader (drop blue from the palette entirely), flag it and it'll come out of the lifecycle bar and `--wash` too.
+
+## Round 64 — adopted the mock's other blue usage: a trailing accent bar on every .list-row, reverted next round (added 2026-08-12, same session)
 
 User follow-up, immediately after Round 63: "in the image the blue was used differently right, why can't we adopt that." Re-examined the mock and confirmed — beyond the lifecycle bar's "Healthy" segment (already adopted last round), every single Assets row in the mock also carries a rounded blue strip along its right edge, applied uniformly with no exceptions, the same "every row, no exceptions" pattern the burgundy icon chip already got.
 
