@@ -28,7 +28,22 @@ body {
 }
 
 button, input, select, textarea { font-family: inherit; }
-button { touch-action: manipulation; }
+/* No text-selection highlight or iOS long-press callout on any real
+   <button> element — every chip/tab/stepper/icon-chip-btn in the app is
+   one of these (2026-08-12, user request: "the text inside these buttons
+   and tabs... i shouldnt be able to select"). */
+button { touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+
+/* Same, for the div-based tap targets that aren't real <button> elements
+   — swipeable Today rows, tappable list rows, and grid tiles (the
+   "swipe tables" the same request named). Inputs/textareas are real
+   <input>/<textarea> elements, never matched by this, so editing text
+   inside a sheet is completely unaffected. */
+.occ-row, .list-row, .tile {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 
 h1, h2, h3, p { margin: 0; }
 
@@ -583,11 +598,13 @@ h1, h2, h3, p { margin: 0; }
 
 .occ-row {
   position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--tap-min);
   padding: 11px 12px;
+  padding-right: calc(9% + 14px);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -596,6 +613,28 @@ h1, h2, h3, p { margin: 0; }
   touch-action: pan-y;
   will-change: transform;
   cursor: grab;
+}
+
+/* Same flush blue block as .list-row (2026-08-12, user request: "add this
+   in all routines, tasks and habits as well") — Today's swipeable rows
+   were deliberately left out when this was first built, since they
+   already carry the consequence-tier wash above; extended here anyway
+   per direct instruction. The block is drawn as its own layer regardless
+   of the row's tier tint underneath, so it reads the same on a plain
+   cosmetic row and a tinted unsafe/damaging one. overflow:hidden on
+   .occ-row itself (not just its .occ-row-wrap parent) is what clips the
+   block's own corners to match this row's rounding; it slides together
+   with .occ-row during a swipe since it's that same element's own pseudo-
+   element, not a sibling. */
+.occ-row::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 9%;
+  min-width: 24px;
+  background: var(--blue);
 }
 
 /* Consequence tier reads as a soft full-card wash now, not a border stripe
@@ -647,7 +686,7 @@ h1, h2, h3, p { margin: 0; }
 }
 
 @media (min-width: 600px) {
-  .occ-row { gap: 12px; padding: 14px 16px; }
+  .occ-row { gap: 12px; padding: 14px 16px; padding-right: calc(9% + 18px); }
   .occ-row-icon { width: 36px; height: 36px; }
   /* Title/meta font sizes deliberately do NOT bump up here (2026-08-04,
      user feedback: "font size across cards seems very big") — same compact
