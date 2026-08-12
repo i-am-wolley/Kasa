@@ -453,6 +453,7 @@ h1, h2, h3, p { margin: 0; }
   width: 10px;
   height: 10px;
   border-radius: var(--radius-full);
+  border: 1px solid var(--line);
   flex-shrink: 0;
 }
 
@@ -614,13 +615,18 @@ h1, h2, h3, p { margin: 0; }
 .occ-row[data-tier="damaging"]   { background: color-mix(in srgb, var(--tier-damaging) 8%, var(--surface)); }
 .occ-row[data-tier="unsafe"]     { background: color-mix(in srgb, var(--tier-unsafe) 10%, var(--surface)); }
 
+/* Solid burgundy fill + white glyph (2026-08-12, palette rework around a
+   user-supplied mock image) — was a plain muted --surface-sunk/--ink-muted
+   square before; the mock shows this exact solid-chip treatment repeated
+   on every single row with no exception, so it's applied the same way
+   here (and on .tile-icon below) rather than only on some screens. */
 .occ-row-icon {
   flex-shrink: 0;
   width: 30px; height: 30px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-chip);
-  background: var(--surface-sunk);
-  color: var(--ink-muted);
+  background: var(--icon-fill);
+  color: var(--icon-fill-ink);
 }
 
 .occ-row-body { flex: 1; min-width: 0; }
@@ -866,13 +872,14 @@ h1, h2, h3, p { margin: 0; }
 }
 .tile-remove:active { transform: scale(0.92); }
 
+/* Same solid burgundy-chip treatment as .occ-row-icon above, same round. */
 .tile-icon {
   flex-shrink: 0;
   width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center;
   border-radius: var(--radius-full);
-  background: var(--surface-sunk);
-  color: var(--ink-muted);
+  background: var(--icon-fill);
+  color: var(--icon-fill-ink);
 }
 
 .tile-title {
@@ -1145,12 +1152,14 @@ h1, h2, h3, p { margin: 0; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn:disabled:active { transform: none; }
 
-/* Solid Eupatorium Purple, not a gradient (2026-08-11, user follow-up: a
+/* Solid accent fill, not a gradient (2026-08-11, user follow-up: a
    gradient tried the same day was asked to be swapped for "something
-   else") — a plain rich fill is also the more logically consistent
-   choice anyway, since purple is already this app's one established
-   "primary interactive" color everywhere else (focus rings, active tab,
-   brand mark); a flat fill in that same color reads as confident rather
+   else"; accent itself changed again 2026-08-12 to the mock-derived
+   orange, this rule needed no change either time since it just reads the
+   token) — a plain rich fill is also the more logically consistent
+   choice anyway, since the accent color is already this app's one
+   established "primary interactive" color everywhere else (focus rings,
+   active tab, brand mark); a flat fill in that same color reads as confident rather
    than needing a blend to feel intentional. The soft glow shadow is the
    actual "more pronounced" lift — a gentle halo in the accent's own glow
    color, present but easy to miss unless you're looking, matching the

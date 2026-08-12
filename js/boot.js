@@ -254,7 +254,7 @@ function openNotificationsSheet() {
 // paint, to avoid a flash of the wrong theme); this just keeps the button
 // icon in sync and handles the toggle itself. Icon shows the mode you'd
 // switch TO (sun while dark, moon while light) — the common convention.
-const THEME_COLOR = { light: "#BF5892", dark: "#D888B6" };
+const THEME_COLOR = { light: "#EF7B06", dark: "#FF9A44" };
 function renderThemeBtn() {
   const btn = document.getElementById("app-theme-btn");
   if (!btn) return;

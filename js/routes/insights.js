@@ -200,9 +200,9 @@ function computeSpaceHealth(state, spaceId) {
 function scoreTone(score) {
   if (score >= 90) return "var(--done)";
   if (score >= 70) return "var(--ink-muted)";
-  // var(--amber), not var(--gold) — since the 2026-08-11 palette rework,
-  // --gold aliases to the new purple brand accent, which reads as "action,"
-  // not "caution," here.
+  // var(--amber), not var(--gold) — --gold aliases to the brand accent
+  // (orange as of the 2026-08-12 mock-based rework), which reads as
+  // "action," not "caution," here.
   if (score >= 50) return "var(--amber)";
   return "var(--danger)";
 }

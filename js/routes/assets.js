@@ -101,21 +101,22 @@ function classifyAssetLife(asset) {
   return life > 0 ? "healthy" : "unknown";
 }
 
-// Colors derived from the app's own existing tokens, not new one-off hexes
-// (2026-08-10, "all colors to be in sync with the theme") — red/amber
-// reuse --danger/--gold exactly as Stock's own out/low tiles just did;
-// the two greens are both derived from --done (the app's one existing
-// "completion" green) at different color-mix strengths, rather than
-// inventing a second, unrelated green from nowhere.
+// Recolored 2026-08-12 to match the mock image the user supplied — this
+// exact screen (Assets, this exact bar) is what the mock overlays its
+// swatches on: New = burgundy, Healthy = blue, taken directly from the
+// reference. "Past expected life" deliberately stays var(--danger) rather
+// than the mock's own almond for that bucket — red is what "over" already
+// means everywhere else in this app (out-of-stock, overdue, delete), and a
+// pale calm almond here would undercut that established urgency signal
+// for no real gain; see tokens.css's own header note on this same call.
+// "No data" moved from a plain --line gray to --sand (the mock's almond)
+// instead, a better semantic fit for "quiet neutral, not urgent."
 const LIFE_BUCKETS = [
-  { key: "new", label: "New (< 2 yrs)", color: "var(--done)" },
-  { key: "healthy", label: "Healthy", color: "color-mix(in srgb, var(--done) 42%, var(--surface))" },
-  // var(--amber), not var(--gold) — since the 2026-08-11 palette rework,
-  // --gold is aliased to the new purple brand accent, which would clash
-  // with this bar's intentional red->amber->green severity gradient.
+  { key: "new", label: "New (< 2 yrs)", color: "var(--burgundy)" },
+  { key: "healthy", label: "Healthy", color: "var(--blue)" },
   { key: "nearing", label: "< 2 yrs left", color: "var(--amber)" },
   { key: "over", label: "Past expected life", color: "var(--danger)" },
-  { key: "unknown", label: "No data", color: "var(--line)" },
+  { key: "unknown", label: "No data", color: "var(--sand)" },
 ];
 
 // `assets` is always the FULL visible list, not whatever lifeFilter has
@@ -129,8 +130,14 @@ function assetLifeBarHtml(assets) {
   // something's narrowed — same "quiet unless active" convention as
   // Today's own member-filter chips.
   const dim = (key) => (lifeFilter && lifeFilter !== key ? "opacity:0.35;" : "");
+  // A thin inset divider on every segment's trailing edge (2026-08-12,
+  // added alongside the mock-based recolor above) — the new bucket colors
+  // include two genuinely pale ones (blue, sand) that can sit right next
+  // to each other when the middle buckets are empty, and without a
+  // divider two adjacent pale segments could read as one — the old
+  // all-medium-to-dark palette never had this problem.
   const segments = present
-    .map((b) => `<div data-life-bucket="${b.key}" style="cursor:pointer;flex:${counts[b.key]} 0 0;background:${b.color};${dim(b.key)}" title="${b.label}: ${counts[b.key]}"></div>`)
+    .map((b) => `<div data-life-bucket="${b.key}" style="cursor:pointer;flex:${counts[b.key]} 0 0;background:${b.color};box-shadow:inset -1px 0 0 var(--surface);${dim(b.key)}" title="${b.label}: ${counts[b.key]}"></div>`)
     .join("");
   const legend = present
     .map((b) => `
