@@ -742,12 +742,27 @@ h1, h2, h3, p { margin: 0; }
 
 /* ---- Generic list row (House/Assets/People cards) ----------------------- */
 
+/* Solid blue block flush against the row's right edge (2026-08-12,
+   corrected after direct feedback on the first attempt: "in the image
+   its covering the entire right of that swipe tile... you did bad" —
+   the mock's own block is flush to the card's top/bottom/right edges,
+   not an inset floating pill, and its corners are only rounded because
+   the card itself clips them, not because the block has its own
+   border-radius). overflow:hidden is what makes that clipping happen —
+   the block's own top-right/bottom-right corners get cut to match
+   .list-row's existing border-radius automatically. Width is a
+   percentage, not a fixed px, so the ~9% proportion the mock itself
+   shows holds at any row width rather than looking thinner on wider
+   (tablet+) rows. */
 .list-row {
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--tap-min);
   padding: 11px 12px;
+  padding-right: calc(9% + 14px);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
@@ -756,8 +771,19 @@ h1, h2, h3, p { margin: 0; }
   cursor: pointer;
 }
 
+.list-row::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 9%;
+  min-width: 24px;
+  background: var(--blue);
+}
+
 @media (min-width: 600px) {
-  .list-row { gap: 12px; padding: 14px 16px; margin-bottom: 8px; }
+  .list-row { gap: 12px; padding: 14px 16px; padding-right: calc(9% + 18px); margin-bottom: 8px; }
 }
 
 .list-row-right {
