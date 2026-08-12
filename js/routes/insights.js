@@ -448,6 +448,85 @@ function assetValueSectionHtml(state) {
   `;
 }
 
+// ---- Wishlist — aging ideas + spend velocity (2026-08-12, user request:
+// "wishlist aging and spend velocity is nice.. how can we do that") -------
+// Both derived from fields the Wishlist screen already writes on every
+// entry — `createdAt` (stamped once, at add time) and `acquiredAt`
+// (stamped only when marked acquired, Round 42/43's own mechanism) — no
+// new data model needed.
+const WISHLIST_DAY_MS = 24 * 60 * 60 * 1000;
+const WISHLIST_SPEND_WINDOW_DAYS = 30;
+// An idea only surfaces as "aging" once it's genuinely sat a while — a
+// fresh household's day-old wishlist shouldn't read every idea as stale.
+const WISHLIST_AGING_THRESHOLD_DAYS = 14;
+
+function computeWishlistInsights(state) {
+  const entries = state.wishlist || [];
+  const now = Date.now();
+
+  // Oldest still-open ideas — same "not yet acquired" population the
+  // Wishlist screen's own High/Soon/Someday sections already work over.
+  const aged = entries
+    .filter((w) => w.status !== "acquired")
+    .map((w) => ({ entry: w, ageDays: Math.floor((now - new Date(w.createdAt).getTime()) / WISHLIST_DAY_MS) }))
+    .filter((a) => a.ageDays >= WISHLIST_AGING_THRESHOLD_DAYS)
+    .sort((a, b) => b.ageDays - a.ageDays)
+    .slice(0, 2);
+
+  // Spend velocity — cost of everything actually acquired within the
+  // rolling window, using the exact same per-entry cost logic
+  // computeWishMetrics() (wishlist.js) already established: a project
+  // sums only its DONE sub-items' own costs, a plain asset/item counts
+  // its estimatedCost once acquired. Sub-items don't carry their own
+  // timestamp, so a project's done-cost is attributed to the moment the
+  // whole project itself flipped to "acquired" — the one point in time
+  // that mechanism actually records, and since a project only reaches
+  // "acquired" once every sub-item is checked, that moment IS genuinely
+  // when the spend was completed.
+  const windowStart = now - WISHLIST_SPEND_WINDOW_DAYS * WISHLIST_DAY_MS;
+  let recentSpend = 0;
+  for (const w of entries) {
+    if (w.status !== "acquired" || !w.acquiredAt) continue;
+    if (new Date(w.acquiredAt).getTime() < windowStart) continue;
+    if (w.type === "project" && w.subItems?.length) {
+      for (const s of w.subItems) if (s.done) recentSpend += s.cost || 0;
+    } else {
+      recentSpend += w.estimatedCost || 0;
+    }
+  }
+  return { aged, recentSpend };
+}
+
+function wishlistInsightSectionHtml(state) {
+  const { aged, recentSpend } = computeWishlistInsights(state);
+  if (!aged.length && !recentSpend) return "";
+  const agedRow = (a) => `
+    <div class="list-row" style="cursor:default;">
+      <div class="occ-row-icon">${Icon("wishlist", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${a.entry.title || a.entry.notes || "Untitled idea"}</div>
+        <div class="occ-row-meta">Still on the list — ${a.ageDays} days</div>
+      </div>
+    </div>`;
+  const spendRow = recentSpend
+    ? `
+    <div class="list-row" style="cursor:default;">
+      <div class="occ-row-icon">${Icon("wishlist", { size: 16 })}</div>
+      <div class="occ-row-body">
+        <div class="occ-row-title">${formatAssetCost(recentSpend)} spent via Wishlist</div>
+        <div class="occ-row-meta">In the last ${WISHLIST_SPEND_WINDOW_DAYS} days</div>
+      </div>
+    </div>`
+    : "";
+  return `
+    <div class="today-section">
+      <div class="section-head"><span class="eyebrow">Wishlist</span></div>
+      ${aged.map(agedRow).join("")}
+      ${spendRow}
+    </div>
+  `;
+}
+
 // ---- Habits — 72-day grid per person's habit -------------------------
 // Pure tracking now — check-in itself happens on Today (2026-08-04, user
 // request), so this section is the streak/history view, not a second
@@ -824,6 +903,7 @@ function render() {
     ${helpLeaveSectionHtml(state)}
     ${habitsSectionHtml(state)}
     ${assetValueSectionHtml(state)}
+    ${wishlistInsightSectionHtml(state)}
     <div class="today-section">
       <p style="color:var(--ink-faint);font-size:var(--fs-micro);">Photo sweep, bill scan, and the weekly AI digest need a Cloud Function proxy (memo §5.10's own no-client-side-LLM rule) — those land with Phase 4/6's Firebase pass, not before.</p>
     </div>

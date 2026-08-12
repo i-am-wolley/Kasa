@@ -1365,8 +1365,25 @@ function habitStreak(habitId) {
   if (!habit) return 0;
   let count = 0;
   let first = true;
+  // Deliberately NOT normalized to local midnight before use — every date
+  // string in this walk goes through the same `toISOString().slice(0,10)`
+  // conversion `todayStr()` (and therefore `toggleHabitToday()`'s actual
+  // stored log entries) already use, at whatever real time-of-day this
+  // runs. Normalizing to local midnight first (a real bug, shipped and
+  // fixed same-day, 2026-08-12: "the habit streak number didnt appear...
+  // while old data exists") shifts every lookup to the PREVIOUS UTC
+  // calendar day for any positive-UTC-offset timezone (e.g. India, +5:30
+  // — local midnight is already yesterday evening in UTC), a systematic
+  // one-day misalignment against real logged data. Harmless for a plain
+  // daily habit with an unbroken block of entries (a shifted lookup still
+  // lands on SOME logged day), which is why it wasn't caught immediately
+  // — but for any schedule with real gaps (weekdays/custom/every_n_days)
+  // the shifted date usually lands on a day that's either unscheduled or
+  // genuinely un-logged, breaking the walk almost immediately. Confirmed
+  // via a standalone Node repro under TZ=Asia/Kolkata: a weekdays habit
+  // with 3 real weeks of consistent check-ins read as a streak of 2
+  // instead of 16 with the bug, correct once this line was removed.
   const d = new Date();
-  d.setHours(0, 0, 0, 0);
   while (true) {
     const scheduled = isHabitScheduledOn(habit, d);
     if (scheduled) {
