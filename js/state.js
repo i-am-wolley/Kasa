@@ -704,13 +704,33 @@ function deleteSpace(id, { reassignToId = null } = {}) {
   notify();
 }
 
+// A same-named sibling in the same room is now allowed everywhere
+// (2026-08-15, user request: "allow duplicate routines, asset and items in
+// same room also, with a new name as_1,_2 etc") rather than blocked
+// (items, old Round 7 rule) or confirm()-nagged (assets, old Round 9
+// rule) — silently disambiguated instead, so two real, independently-
+// tracked records never read as one unlabeled duplicate in a list.
+// `key` is "name" for items/assets, "title" for routines. Only compares
+// against siblings in the same room; a name repeated across different
+// rooms was never the problem.
+function dedupeNameInSpace(entities, spaceId, name, key = "name", excludeId = null) {
+  const siblingNames = new Set(
+    entities.filter((e) => e.spaceId === spaceId && e.id !== excludeId).map((e) => e[key]),
+  );
+  if (!siblingNames.has(name)) return name;
+  let n = 1;
+  while (siblingNames.has(`${name}_${n}`)) n++;
+  return `${name}_${n}`;
+}
+
 // ---- item (Stock) CRUD (memo §2.1) -------------------------------------
 
 function addItem(fields) {
+  const name = dedupeNameInSpace(state.items, fields.spaceId, fields.name);
   const item = {
     id: genId("itm"), qty: 0, packSize: 1, parLevel: 1, burnRate: 0,
     projectedOutAt: null, expiryDate: null, status: "ok", vendorHint: null,
-    autoAddToList: true, source: "manual", lastRestockedAt: null, ...fields,
+    autoAddToList: true, source: "manual", lastRestockedAt: null, ...fields, name,
   };
   if (item.qty > 0 && !item.lastRestockedAt) item.lastRestockedAt = new Date().toISOString();
   state.items.push(item);
@@ -723,6 +743,10 @@ function updateItem(id, patch) {
   const item = byId(state.items, id);
   if (!item) return;
   const qtyIncreased = patch.qty != null && patch.qty > item.qty;
+  if (patch.name != null) {
+    const spaceId = patch.spaceId ?? item.spaceId;
+    patch = { ...patch, name: dedupeNameInSpace(state.items, spaceId, patch.name, "name", id) };
+  }
   Object.assign(item, patch);
   if (qtyIncreased) item.lastRestockedAt = new Date().toISOString();
   logActivity({ type: "item_edited", category: "stock", entityId: item.id, entityType: "item", summary: `Edited "${item.name}"` });
@@ -907,6 +931,7 @@ function computeReplacementDueAt(asset) {
 }
 
 function addAsset(fields) {
+  const name = dedupeNameInSpace(state.assets, fields.spaceId, fields.name);
   const asset = {
     id: genId("ast"), brand: null, model: null, serial: null,
     purchaseDate: null, purchasePrice: null, warrantyUntil: null, amcUntil: null,
@@ -918,7 +943,7 @@ function addAsset(fields) {
     // user request), if any — lets assets.js find/update/delete exactly
     // that one routine on later edits instead of title-matching.
     serviceRoutineId: null,
-    ...fields,
+    ...fields, name,
   };
   asset.nextServiceDue = computeNextServiceDue(asset);
   asset.replacementDueAt = computeReplacementDueAt(asset);
@@ -931,6 +956,10 @@ function addAsset(fields) {
 function updateAsset(id, patch) {
   const asset = byId(state.assets, id);
   if (!asset) return;
+  if (patch.name != null) {
+    const spaceId = patch.spaceId ?? asset.spaceId;
+    patch = { ...patch, name: dedupeNameInSpace(state.assets, spaceId, patch.name, "name", id) };
+  }
   Object.assign(asset, patch);
   if (patch.serviceIntervalDays != null) asset.nextServiceDue = computeNextServiceDue(asset);
   if (patch.purchaseDate != null || patch.expectedLifeYears != null) asset.replacementDueAt = computeReplacementDueAt(asset);
@@ -1117,11 +1146,12 @@ function addLeave(personId, { from, to, reason = "" }) {
 // ---- routine CRUD (memo §4.2) --------------------------------------------
 
 function addRoutine(fields) {
+  const title = dedupeNameInSpace(state.routines, fields.spaceId, fields.title, "title");
   const routine = {
     id: genId("rt"), assetId: null, effort: 1, consequence: "cosmetic",
     ownerClass: "either", defaultAssigneeId: null, requiresItemIds: [],
     modeFilters: { pauseIn: [], boostIn: [] }, steps: [], notes: "",
-    active: true, source: "manual", packId: null, userEdited: true, ...fields,
+    active: true, source: "manual", packId: null, userEdited: true, ...fields, title,
   };
   state.routines.push(routine);
   logActivity({
@@ -1137,6 +1167,10 @@ function updateRoutine(id, patch) {
   const routine = byId(state.routines, id);
   if (!routine) return;
   const oldStartDate = routine.trigger?.startDate;
+  if (patch.title != null) {
+    const spaceId = patch.spaceId ?? routine.spaceId;
+    patch = { ...patch, title: dedupeNameInSpace(state.routines, spaceId, patch.title, "title", id) };
+  }
   Object.assign(routine, patch, { userEdited: true });
   logActivity({ type: "routine_edited", category: "routine", entityId: routine.id, entityType: "routine", summary: `Edited "${routine.title}"` });
   // A routine that's never been completed yet has an open occurrence

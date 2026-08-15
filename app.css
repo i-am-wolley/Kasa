@@ -775,9 +775,16 @@ h1, h2, h3, p { margin: 0; }
   .chip { padding: 6px 12px; font-size: var(--fs-meta); }
 }
 
+/* Selected-chip fill (2026-08-15, user report: "the selection black across
+   things is too black" — every chip-group in every add/edit sheet, plus
+   Stock's binary in-stock toggle, used a flat var(--ink) near-black fill).
+   Switched to the accent orange, same reasoning R59 already applied to
+   .btn-solid: --accent is this app's one established "primary interactive"
+   color everywhere else (focus rings, active tab, brand mark), so a
+   selected chip reads as "chosen," not "off." */
 .chip[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--accent);
+  border-color: var(--accent);
   color: var(--surface);
 }
 

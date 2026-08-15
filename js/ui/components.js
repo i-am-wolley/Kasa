@@ -6,7 +6,7 @@
 // screens need them; this is the Phase 0-1 subset.
 
 import { Icon } from "./icons.js";
-import { findMatches, findExact, getOrCreate } from "../catalog.js";
+import { findMatches, findByKey, getOrCreate } from "../catalog.js";
 
 // Minimal, light haptic feedback (2026-08-03, user request) — a short
 // single pulse, not a pattern. navigator.vibrate is Android-Chrome-only
@@ -157,15 +157,27 @@ function wireCatalogField(root, id, type, { onSelect } = {}) {
 }
 
 // Resolves the field's current value to a catalog entry — the selected
-// suggestion if the text still matches it exactly, otherwise a fresh
-// lookup-or-create (typing an existing name without clicking a suggestion
-// still resolves to the same key via findExact inside getOrCreate).
+// suggestion (or the record's own existing link, in edit mode) if the
+// field hasn't been retyped since, otherwise a fresh lookup-or-create
+// (typing an existing name without clicking a suggestion still resolves
+// to the same key via findExact inside getOrCreate).
+//
+// Looks the surviving key up directly via findByKey rather than
+// re-deriving it from the input's current text (2026-08-15 fix) — the
+// displayed text and the catalog's own canonical name can now legitimately
+// diverge (same-room duplicate names get an auto _1/_2 suffix, see
+// state.js's dedupeNameInSpace), so re-matching by name would miss a
+// perfectly valid, still-selected entry and mint a throwaway custom one
+// instead. wireCatalogField's own "input" listener already clears
+// dataset.catalogKey the moment the user actually retypes the field, so
+// trusting a still-present key here is exactly as safe as the old
+// name-based re-check, just not fooled by a suffixed display name.
 function resolveCatalogField(root, id, type) {
   const input = root.querySelector(`#${id}`);
   if (!input || !input.value.trim()) return null;
   if (input.dataset.catalogKey) {
-    const entry = findExact(input.value, type);
-    if (entry && entry.key === input.dataset.catalogKey) return entry;
+    const entry = findByKey(input.dataset.catalogKey, type);
+    if (entry) return entry;
   }
   return getOrCreate(input.value, type);
 }

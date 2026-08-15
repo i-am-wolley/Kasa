@@ -349,18 +349,12 @@ function openAssetSheet({ asset = null, defaultSpaceId = null, defaultName = nul
     const lastServicedAt = root.querySelector("#f-asset-last-serviced")?.value || null;
     const spaceId = readChipGroup(root, "assetSpaceId");
 
-    // Soft nudge, not a block (2026-08-09 — Round 7's "no warning, add
-    // freely" call for assets stands: two ACs in one room is genuinely
-    // legitimate) — but a SAME-named asset in the SAME room is far more
-    // often an accidental double-add than a deliberate second one (see
-    // CLAUDE.md finding 4.3: an untitled duplicate "Geyser" sitting in one
-    // bathroom with zero way to tell the two apart is exactly the
-    // confusing case this catches). Only asked when adding fresh — editing
-    // an existing asset never triggers it against itself.
-    if (!asset) {
-      const dup = getState().assets.find((a) => a.spaceId === spaceId && a.name === entry.name);
-      if (dup && !confirm(`There's already a ${entry.name} in this room. Add another one anyway?`)) return;
-    }
+    // No block, no confirm (2026-08-15, user request: allow duplicate
+    // routines/assets/items in the same room) — two ACs in one room is
+    // genuinely legitimate, and a same-named one no longer needs a nag on
+    // the way in. addAsset/updateAsset auto-suffix the name (_1, _2, ...)
+    // so the list still reads as two distinct rows instead of an
+    // untitled-looking duplicate "Geyser".
 
     const fields = {
       name: entry.name,

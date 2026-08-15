@@ -372,17 +372,12 @@ function openItemSheet({ item = null, defaultSpaceId = null, defaultName = null,
     if (!entry) return;
     const spaceId = readChipGroup(root, "itemSpaceId");
 
-    // Same catalog item twice in the same room is almost always a mistake
-    // (the earlier "no warning" decision was about assets, which can
-    // legitimately repeat — e.g. two ACs — stock quantity should just be
-    // one tracked total per room instead). Assets are unaffected.
-    if (!item) {
-      const dup = state.items.find((i) => i.spaceId === spaceId && i.catalogKey === entry.key);
-      if (dup) {
-        showToast(`${entry.name} is already tracked in this room — adjust it there instead`);
-        return;
-      }
-    }
+    // A second real-world "same catalog item" in one room is legitimate
+    // (2026-08-15, user request: allow duplicate routines/assets/items in
+    // the same room) — e.g. two separately-tracked toilet cleaner bottles
+    // in different cabinets. addItem/updateItem auto-suffix the name
+    // (_1, _2, ...) instead of blocking, so the list still reads as two
+    // distinct rows.
 
     const binary = readChipGroup(root, "trackMode") === "binary";
     // Never negative — clamped here for direct typing into the field (the
