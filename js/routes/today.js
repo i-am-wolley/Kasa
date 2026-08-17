@@ -731,7 +731,7 @@ function markDone(occId) {
 function markSnoozed(occId) {
   const state = getState();
   const routine = byId(state.routines, byId(state.occurrences, occId)?.routineId);
-  snoozeOccurrence(occId, 1);
+  snoozeOccurrence(occId);
   haptic(6);
   showToast(`Snoozed${routine ? ` — ${routine.title}` : ""}`, { onUndo: undoLast });
 }

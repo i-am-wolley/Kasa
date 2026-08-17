@@ -287,6 +287,54 @@ function computeNext(routine, ctx) {
   }
 }
 
+// ---- snooze target (2026-08-17, user request: "the snooze until ideally
+// needs to be the next actual occurrence of the routine as per the routine
+// calendar" — a flat "hide it for 1 day" made snoozing a weekly/monthly
+// routine pointless, since it just went right back to overdue the very
+// next day). For trigger types with a genuine calendar/interval concept,
+// both when the occurrence reappears (`snoozedUntil`) AND its own `dueAt`
+// advance to that next cycle together, so it reappears reading as freshly
+// due rather than still carrying whatever overdue count it had when
+// snoozed (confirmed with user — snoozing effectively defers THIS instance
+// to the next real one, not just delays visibility of the same stale due
+// date). Trigger types with no independent calendar of their own
+// (usage_meter/condition/on_mode — due dates driven by a meter reading or
+// a live condition, not a schedule) keep the old flat "hide it for a day"
+// behavior; `dueAt: null` signals "leave the occurrence's own due date
+// alone" for those.
+function nextSnoozeUntil(routine, occurrence, now) {
+  const t = routine.trigger;
+  switch (t.type) {
+    case "fixed_calendar": {
+      const next = nextRRuleOccurrence(t.rrule, now) || addDays(now, 7);
+      return { snoozedUntil: next, dueAt: next };
+    }
+    case "floating_since_last": {
+      // Walk forward from the occurrence's OWN due date (not `now`) by
+      // whole intervals — same "next real cycle" reasoning as the
+      // fixed_calendar case, just interval-based instead of calendar-
+      // based. Guards against a long-overdue routine landing on a still-
+      // past date (e.g. a 2-day interval that's been overdue a week).
+      let next = new Date(occurrence.dueAt);
+      do { next = addDays(next, t.intervalDays); } while (next <= now);
+      if (t.snapToSaturday) next = snapToSaturday(next);
+      return { snoozedUntil: next, dueAt: next };
+    }
+    case "seasonal": {
+      // nextSeasonalWindow(months, now) returns the CURRENT/upcoming
+      // window if `now` is still inside or before it — exactly the window
+      // that's already due, not the next one. Feeding it "the day after
+      // this window's end month" forces it to resolve next year's window
+      // instead, mirroring the calendar case's "strictly after" semantics.
+      const afterThisWindow = new Date(now.getFullYear(), t.months[1], 1);
+      const next = nextSeasonalWindow(t.months, afterThisWindow);
+      return { snoozedUntil: next, dueAt: next };
+    }
+    default:
+      return { snoozedUntil: addDays(now, 1), dueAt: null };
+  }
+}
+
 // ---- state derivation (memo §5.1) ----------------------------------------
 // Compared at day granularity, not exact timestamps — an occurrence is
 // "due" for the whole calendar day, not just up to the millisecond it was
@@ -391,4 +439,4 @@ function generateOccurrences({
   return created;
 }
 
-export { generateOccurrences, computeNext, stateOf, overdueDays, DEFAULT_HORIZON_DAYS };
+export { generateOccurrences, computeNext, stateOf, overdueDays, nextSnoozeUntil, DEFAULT_HORIZON_DAYS };

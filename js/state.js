@@ -4,7 +4,7 @@
 // route/engine code doesn't change when the data source swaps.
 
 import { household, spaces, items, assets, routines, ledger, people, modes, wishlist, habits, habitLog, tasks, snoozeLog } from "../mock-data/index.js";
-import { generateOccurrences, stateOf } from "./engine.js";
+import { generateOccurrences, stateOf, nextSnoozeUntil } from "./engine.js";
 import { getOrCreate, findByKey } from "./catalog.js";
 import { applyLoadSmoothing } from "./intel.js";
 import { migrate } from "./migrations.js";
@@ -176,6 +176,13 @@ function regenerate() {
       occ.state = "snoozed";
       occ.snoozedUntil = snooze.snoozedUntil;
       occ.snoozeCount = snooze.snoozeCount;
+      // Also carries the advanced due date snoozeOccurrence computed for
+      // calendar/interval-driven trigger types (nextSnoozeUntil's `dueAt`,
+      // null for meter/condition/mode-driven ones) — otherwise a fresh
+      // occurrence rebuilt from scratch after a reload would recompute its
+      // own dueAt from the routine's schedule directly, losing the "skip
+      // to the next cycle" the snooze already committed to.
+      if (snooze.dueAt) occ.dueAt = snooze.dueAt;
     }
   }
   state.occurrences.push(...fresh);
@@ -428,30 +435,49 @@ function completeOccurrence(occId, doneBy = null) {
 // so no other mutation's regenerate() call spawns a duplicate for this
 // routine either) until wakeSnoozedOccurrences() genuinely restores it
 // once snoozedUntil passes.
-function snoozeOccurrence(occId, days = 1) {
+function snoozeOccurrence(occId) {
   const occ = byId(state.occurrences, occId);
   if (!occ) return;
+  const routine = byId(state.routines, occ.routineId);
   snapshotOccurrence(occ);
+  const now = new Date();
+  // Snoozes until the routine's own next natural occurrence, not a flat
+  // 1 day (2026-08-17, user request — see nextSnoozeUntil's own comment
+  // for the full reasoning: a flat 1-day snooze made snoozing a weekly/
+  // monthly routine pointless, since it just went right back to overdue
+  // the very next day). `dueAt` advances alongside `snoozedUntil` for
+  // calendar/interval-driven trigger types (confirmed with user: it should
+  // reappear reading as freshly due, not still carrying its old overdue
+  // count) — `null` for meter/condition/mode-driven ones, which have no
+  // independent calendar to advance to.
+  const { snoozedUntil, dueAt } = routine
+    ? nextSnoozeUntil(routine, occ, now)
+    : { snoozedUntil: new Date(now.getTime() + 86400000), dueAt: null };
   occ.state = "snoozed";
   occ.snoozeCount = (occ.snoozeCount || 0) + 1;
-  occ.snoozedUntil = new Date(Date.now() + days * 86400000).toISOString();
+  occ.snoozedUntil = snoozedUntil.toISOString();
+  if (dueAt) occ.dueAt = dueAt.toISOString();
   // Persisted mirror of this snooze (2026-08-17 fix) — `occurrences` itself
   // isn't saved to Firestore (see serializeState/regenerate), so without
   // this a reload lost the snooze entirely and the routine came back
   // showing overdue immediately instead of staying hidden until
-  // snoozedUntil. See wakeSnoozedOccurrences for where this gets pruned.
+  // snoozedUntil. See wakeSnoozedOccurrences for where this gets pruned,
+  // and regenerate() for where `dueAt` gets reapplied alongside it onto a
+  // freshly-regenerated occurrence after a reload.
   state.snoozes = (state.snoozes || []).filter((s) => s.routineId !== occ.routineId);
-  state.snoozes.push({ routineId: occ.routineId, snoozedUntil: occ.snoozedUntil, snoozeCount: occ.snoozeCount });
+  state.snoozes.push({
+    routineId: occ.routineId, snoozedUntil: occ.snoozedUntil, snoozeCount: occ.snoozeCount,
+    dueAt: dueAt ? occ.dueAt : null,
+  });
   // Logged for Phase 5's snooze-learning day-of-week detection (§5.4) — see
   // intel.js's snoozeSuggestions(). Not restored by the 5s undo toast (only
   // the occurrence/ledger snapshot is) — an undone snooze still happened
   // from a "did the user hesitate on this" signal standpoint.
-  const now = new Date();
   state.snoozeLog.push({ id: genId("snz"), routineId: occ.routineId, date: now.toISOString().slice(0, 10), dow: now.getDay() });
-  const routine = byId(state.routines, occ.routineId);
+  const snoozeDays = Math.max(1, Math.round((snoozedUntil.getTime() - now.getTime()) / 86400000));
   logActivity({
     type: "routine_snoozed", category: "routine", entityId: routine?.id, entityType: "routine",
-    summary: `Snoozed "${routine?.title || "routine"}" for ${days} day${days === 1 ? "" : "s"}`,
+    summary: `Snoozed "${routine?.title || "routine"}" for ${snoozeDays} day${snoozeDays === 1 ? "" : "s"}`,
   });
   notify();
 }
