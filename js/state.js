@@ -64,6 +64,11 @@ const state = {
   habitLog: habitLog.map((l) => ({ ...l })),
   tasks: tasks.map((t) => ({ ...t })),
   snoozeLog: snoozeLog.map((s) => ({ ...s })),
+  // Persisted separately from `occurrences` (see serializeState below) so a
+  // snooze survives a reload — one small record per currently-snoozed
+  // routine: { routineId, snoozedUntil, snoozeCount }. See snoozeOccurrence/
+  // wakeSnoozedOccurrences/regenerate for how this is written and consumed.
+  snoozes: [],
   lastSmoothingMoves: [],
   activityLog: [],
 };
@@ -112,6 +117,12 @@ migrate(state);
 // the memo's own "snoozed 3x in a row" signal was unreachable. Fixed by
 // waking any occurrence whose snooze window has elapsed back to its real
 // engine-computed state before anything else reads or regenerates.
+//
+// Also prunes `state.snoozes` (2026-08-17 fix) — that's the persisted
+// record regenerate() uses to reapply a still-active snooze onto a freshly
+// regenerated occurrence after a reload (see regenerate()'s own comment).
+// An expired entry has to be dropped here too, or the NEXT regenerate()
+// would immediately re-snooze an occurrence this loop just woke up.
 function wakeSnoozedOccurrences() {
   const now = new Date();
   for (const occ of state.occurrences) {
@@ -119,16 +130,25 @@ function wakeSnoozedOccurrences() {
       occ.state = stateOf({ dueAt: occ.dueAt, windowDays: occ.windowDays }, now);
     }
   }
+  state.snoozes = (state.snoozes || []).filter((s) => new Date(s.snoozedUntil) > now);
 }
 
 // Re-run the engine over current state, only creating occurrences for
 // routines that don't already have one open — same "no open occurrence
 // exists" rule the real engine.js tick uses (memo §5.1).
 function regenerate() {
-  wakeSnoozedOccurrences();
+  // wakeSnoozedOccurrences() (just above) already flips any occurrence
+  // whose snooze window has genuinely elapsed back to its real due/overdue
+  // state — so anything still `"snoozed"` by the time openRoutineIds is
+  // built below is still actively snoozed. Counting it as open (only
+  // "done" is excluded) is what stops every OTHER unrelated mutation that
+  // also calls regenerate() (add/edit/delete elsewhere in the app, not
+  // just this same routine) from treating a still-snoozed routine as
+  // occurrence-less and spawning a duplicate fresh occurrence alongside
+  // the snoozed one (2026-08-17 fix — see snoozeOccurrence's own comment).
   const openRoutineIds = new Set(
     state.occurrences
-      .filter((o) => o.state !== "done" && o.state !== "snoozed")
+      .filter((o) => o.state !== "done")
       .map((o) => o.routineId),
   );
   const fresh = generateOccurrences({
@@ -140,6 +160,24 @@ function regenerate() {
     existingOpenRoutineIds: openRoutineIds,
     now: new Date(),
   });
+  // `occurrences` is deliberately excluded from Firestore persistence (see
+  // serializeState) — it's normally fine to treat as fully re-derivable
+  // from routines/ledger/assets/items, but a snooze isn't derivable, it's a
+  // real user action. Without this, reopening the app after closing it
+  // (hydrateState wipes `occurrences` back to [] and calls regenerate())
+  // regenerated a snoozed-but-still-overdue routine straight back into its
+  // natural "overdue" state, making the snooze look like it silently
+  // undid itself. `state.snoozes` (a tiny persisted record, unlike the
+  // occurrences it's reapplied onto) is what survives the reload instead.
+  const now = new Date();
+  for (const occ of fresh) {
+    const snooze = state.snoozes.find((s) => s.routineId === occ.routineId);
+    if (snooze && new Date(snooze.snoozedUntil) > now) {
+      occ.state = "snoozed";
+      occ.snoozedUntil = snooze.snoozedUntil;
+      occ.snoozeCount = snooze.snoozeCount;
+    }
+  }
   state.occurrences.push(...fresh);
   // Phase 5 load smoothing (§5.7) — shifts flexible occurrences ±7 days if
   // a week's total effort exceeds the household ceiling. Runs as part of
@@ -311,6 +349,15 @@ function undoLast() {
   if (!lastSnapshot) return false;
   const occ = byId(state.occurrences, lastSnapshot.occ.id);
   if (occ) {
+    // Unlike snoozeLog (an intentionally-kept "it happened" analytics
+    // entry, see snoozeOccurrence's own comment), state.snoozes is live
+    // functional data — regenerate() reapplies it onto the NEXT fresh
+    // occurrence this routine gets. Undoing a snooze has to drop it too,
+    // or completing this same occurrence later would resurrect a snooze
+    // the user explicitly undid onto its replacement occurrence.
+    if (occ.state === "snoozed") {
+      state.snoozes = (state.snoozes || []).filter((s) => s.routineId !== occ.routineId);
+    }
     Object.assign(occ, lastSnapshot.occ);
     // completeOccurrence() now calls regenerate() immediately (2026-08-10,
     // see its own comment) — that may have created a FRESH occurrence for
@@ -375,14 +422,12 @@ function completeOccurrence(occId, doneBy = null) {
 }
 
 // Deliberately does NOT call regenerate() the way completeOccurrence()
-// does — a snoozed occurrence is excluded from openRoutineIds too (so
-// wakeSnoozedOccurrences() can find and restore it once snoozedUntil
-// passes), but that exclusion means an immediate regenerate() right here
-// would incorrectly treat the routine as occurrence-less and spawn a
-// SECOND occurrence alongside the snoozed one. The snoozed occurrence
-// already correctly reappears (via wakeSnoozedOccurrences, called at the
-// top of every regenerate()) the next time anything genuinely triggers a
-// regeneration — no immediate action needed here.
+// does — nothing needs to run immediately. The snoozed occurrence stays
+// exactly where it is (regenerate()'s openRoutineIds counts any non-"done"
+// occurrence, snoozed included, as open — see regenerate()'s own comment —
+// so no other mutation's regenerate() call spawns a duplicate for this
+// routine either) until wakeSnoozedOccurrences() genuinely restores it
+// once snoozedUntil passes.
 function snoozeOccurrence(occId, days = 1) {
   const occ = byId(state.occurrences, occId);
   if (!occ) return;
@@ -390,6 +435,13 @@ function snoozeOccurrence(occId, days = 1) {
   occ.state = "snoozed";
   occ.snoozeCount = (occ.snoozeCount || 0) + 1;
   occ.snoozedUntil = new Date(Date.now() + days * 86400000).toISOString();
+  // Persisted mirror of this snooze (2026-08-17 fix) — `occurrences` itself
+  // isn't saved to Firestore (see serializeState/regenerate), so without
+  // this a reload lost the snooze entirely and the routine came back
+  // showing overdue immediately instead of staying hidden until
+  // snoozedUntil. See wakeSnoozedOccurrences for where this gets pruned.
+  state.snoozes = (state.snoozes || []).filter((s) => s.routineId !== occ.routineId);
+  state.snoozes.push({ routineId: occ.routineId, snoozedUntil: occ.snoozedUntil, snoozeCount: occ.snoozeCount });
   // Logged for Phase 5's snooze-learning day-of-week detection (§5.4) — see
   // intel.js's snoozeSuggestions(). Not restored by the 5s undo toast (only
   // the occurrence/ledger snapshot is) — an undone snooze still happened
@@ -479,6 +531,7 @@ function resetForNewHousehold({ name, email }) {
   state.habitLog = [];
   state.wishlist = [];
   state.snoozeLog = [];
+  state.snoozes = [];
   const firstName = (name || "").trim().split(/\s+/)[0] || "My";
   state.household.name = `${firstName}'s home`;
   if (email) {

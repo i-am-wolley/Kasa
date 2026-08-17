@@ -24,7 +24,7 @@ function migId(prefix) {
   return `${prefix}_mig${Date.now().toString(36)}${migIdSeq}`;
 }
 
-const CURRENT_SCHEMA_VERSION = 8;
+const CURRENT_SCHEMA_VERSION = 9;
 
 // Keyed by the version a step upgrades TO — migrations[2] takes a v1
 // household to v2, etc.
@@ -130,6 +130,15 @@ const migrations = {
         if (sub.cost == null) sub.cost = 0;
       }
     }
+  },
+
+  // v8 -> v9 (2026-08-17): `state.snoozes` — the persisted record that lets
+  // a snooze survive a reload (see state.js's snoozeOccurrence/regenerate).
+  // A pre-v9 household has no snoozes field at all; a plain Object.assign
+  // in hydrateState wouldn't otherwise add one.
+  9: (state) => {
+    if (state.snoozes) return;
+    state.snoozes = [];
   },
 };
 
